@@ -1,20 +1,13 @@
 from datetime import date
 
 from database import SessionLocal
-from models import ModuleIntellectuel, Profil, Seance, Streak
+from models import ModuleIntellectuel, Seance, Streak
 
 
 def seed(db):
-    if db.query(Profil).count() == 0:
-        db.add(
-            Profil(
-                objectifs=["Force", "Discipline mentale", "Régularité"],
-                niveau_physique="Intermédiaire",
-                niveau_intellectuel="Avancé",
-                contraintes_temps="3 à 4 séances / semaine, 45 min max",
-                materiel="Salle de sport complète + haltères à domicile",
-            )
-        )
+    # Le profil n'est volontairement pas pré-rempli : la table doit rester vide
+    # tant que l'utilisateur n'a pas complété l'onboarding (voir GET /api/profil
+    # et l'écran Onboarding côté frontend, affiché uniquement si profil est null).
 
     if db.query(ModuleIntellectuel).count() == 0:
         db.add(
