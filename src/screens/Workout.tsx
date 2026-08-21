@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { todaysWorkout } from '../data/mockData';
+import { addExerciceHistorique, getTodaySeance, updateSeance } from '../api/client';
+import type { ApiSeance } from '../api/client';
 
 type SetKey = string; // `${exerciseId}-${setIndex}`
 
@@ -9,14 +10,23 @@ const REST_SECONDS = 90;
 
 export default function Workout() {
   const navigate = useNavigate();
+  const [seance, setSeance] = useState<ApiSeance | null>(null);
+  const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState<Set<SetKey>>(new Set());
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
   const [rpe, setRpe] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    getTodaySeance()
+      .then(setSeance)
+      .finally(() => setLoading(false));
+  }, []);
 
   const totalSets = useMemo(
-    () => todaysWorkout.exercises.reduce((sum, ex) => sum + ex.sets.length, 0),
-    []
+    () => seance?.exercices.reduce((sum, ex) => sum + ex.sets.length, 0) ?? 0,
+    [seance]
   );
 
   function toggleSet(key: SetKey) {
@@ -46,6 +56,47 @@ export default function Workout() {
     }, 1000);
   }
 
+  async function finishWorkout() {
+    if (!seance || rpe === null) return;
+    setSubmitting(true);
+    try {
+      await updateSeance(seance.id, { statut: 'terminee', rpe, duree_reelle: seance.duree_reelle ?? 45 });
+      await Promise.all(
+        seance.exercices.map((ex) =>
+          addExerciceHistorique({
+            seance_id: seance.id,
+            nom_exercice: ex.name,
+            series: ex.sets.length,
+            repetitions: ex.sets[0]?.reps ?? 0,
+            charge_kg: ex.sets[0]?.loadKg ?? 0,
+            date: seance.date,
+          })
+        )
+      );
+      navigate('/');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="screen">
+        <Header title="Séance en cours" />
+        <p className="subtle">Chargement…</p>
+      </div>
+    );
+  }
+
+  if (!seance) {
+    return (
+      <div className="screen">
+        <Header title="Séance en cours" />
+        <p className="subtle">Aucune séance prévue aujourd’hui.</p>
+      </div>
+    );
+  }
+
   if (finished) {
     return (
       <div className="screen">
@@ -68,11 +119,11 @@ export default function Workout() {
         </div>
         <button
           className="btn btn--primary"
-          disabled={rpe === null}
-          style={{ opacity: rpe === null ? 0.5 : 1 }}
-          onClick={() => navigate('/')}
+          disabled={rpe === null || submitting}
+          style={{ opacity: rpe === null || submitting ? 0.5 : 1 }}
+          onClick={finishWorkout}
         >
-          Terminer la séance
+          {submitting ? 'Enregistrement…' : 'Terminer la séance'}
         </button>
       </div>
     );
@@ -84,7 +135,7 @@ export default function Workout() {
       <button className="back-btn" onClick={() => navigate('/')}>
         ← Annuler
       </button>
-      <h1 className="page-title">{todaysWorkout.name}</h1>
+      <h1 className="page-title">{seance.nom}</h1>
       <p className="subtle" style={{ marginBottom: 16 }}>
         {checked.size}/{totalSets} séries validées
       </p>
@@ -96,7 +147,7 @@ export default function Workout() {
         </div>
       )}
 
-      {todaysWorkout.exercises.map((ex) => (
+      {seance.exercices.map((ex) => (
         <div className="exercise-block" key={ex.id}>
           <h3 style={{ fontSize: 16, marginBottom: 10 }}>{ex.name}</h3>
           {ex.sets.map((set, i) => {

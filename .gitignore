@@ -3,3 +3,10 @@ dist
 dist-ssr
 *.local
 .DS_Store
+*.tsbuildinfo
+
+# backend
+backend/level.db
+backend/__pycache__
+backend/.venv
+*.pyc

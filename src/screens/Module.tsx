@@ -1,23 +1,63 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { todaysModule } from '../data/mockData';
-import type { QcmQuestion } from '../types';
+import { addSessionApprentissage, getTodayModule } from '../api/client';
+import type { ApiModule } from '../api/client';
 
 export default function Module() {
   const navigate = useNavigate();
+  const [learningModule, setLearningModule] = useState<ApiModule | null>(null);
+  const [loading, setLoading] = useState(true);
   const [openAnswer, setOpenAnswer] = useState('');
   const [openSubmitted, setOpenSubmitted] = useState(false);
   const [qcmAnswers, setQcmAnswers] = useState<Record<string, number>>({});
+  const [saved, setSaved] = useState(false);
 
-  function selectQcm(question: QcmQuestion, index: number) {
-    if (qcmAnswers[question.id] !== undefined) return;
-    setQcmAnswers((prev) => ({ ...prev, [question.id]: index }));
+  useEffect(() => {
+    getTodayModule()
+      .then(setLearningModule)
+      .finally(() => setLoading(false));
+  }, []);
+
+  function selectQcm(questionId: string, index: number) {
+    if (qcmAnswers[questionId] !== undefined) return;
+    setQcmAnswers((prev: Record<string, number>) => ({ ...prev, [questionId]: index }));
   }
 
-  const allAnswered =
-    openSubmitted &&
-    todaysModule.questions.filter((q) => q.type === 'qcm').every((q) => qcmAnswers[q.id] !== undefined);
+  const qcmQuestions = learningModule?.questions.filter((q) => q.type === 'qcm') ?? [];
+  const allAnswered = openSubmitted && qcmQuestions.every((q) => qcmAnswers[q.id] !== undefined);
+
+  async function finishModule() {
+    if (!learningModule) return;
+    const correctCount = qcmQuestions.filter((q) => qcmAnswers[q.id] === q.correctIndex).length;
+    const score = qcmQuestions.length > 0 ? (correctCount / qcmQuestions.length) * 100 : 100;
+    await addSessionApprentissage({
+      module_id: learningModule.id,
+      date: new Date().toISOString().slice(0, 10),
+      reponses: { open: openAnswer, qcm: qcmAnswers },
+      score,
+    });
+    setSaved(true);
+    navigate('/');
+  }
+
+  if (loading) {
+    return (
+      <div className="screen">
+        <Header title="Module" />
+        <p className="subtle">Chargement…</p>
+      </div>
+    );
+  }
+
+  if (!learningModule) {
+    return (
+      <div className="screen">
+        <Header title="Module" />
+        <p className="subtle">Aucun module disponible.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="screen">
@@ -25,20 +65,20 @@ export default function Module() {
       <button className="back-btn" onClick={() => navigate('/')}>
         ← Retour
       </button>
-      <span className="tag">{todaysModule.category}</span>
+      <span className="tag">{learningModule.categorie}</span>
       <h1 className="page-title" style={{ marginTop: 10 }}>
-        {todaysModule.title}
+        {learningModule.titre}
       </h1>
 
       <div className="module-text">
-        {todaysModule.content.split('\n\n').map((para, i) => (
+        {learningModule.contenu.split('\n\n').map((para, i) => (
           <p key={i} style={{ marginBottom: 14 }}>
             {para}
           </p>
         ))}
       </div>
 
-      {todaysModule.questions.map((q) => {
+      {learningModule.questions.map((q) => {
         if (q.type === 'open') {
           return (
             <div className="question-block" key={q.id}>
@@ -74,14 +114,19 @@ export default function Module() {
         return (
           <div className="question-block" key={q.id}>
             <p className="question-block__prompt">{q.prompt}</p>
-            {q.options.map((opt, i) => {
+            {q.options?.map((opt, i) => {
               let cls = 'qcm-option';
               if (answered !== undefined) {
                 if (i === q.correctIndex) cls += ' correct';
                 else if (i === answered) cls += ' incorrect';
               }
               return (
-                <button key={i} className={cls} onClick={() => selectQcm(q, i)} disabled={answered !== undefined}>
+                <button
+                  key={i}
+                  className={cls}
+                  onClick={() => selectQcm(q.id, i)}
+                  disabled={answered !== undefined}
+                >
                   {opt}
                 </button>
               );
@@ -96,7 +141,12 @@ export default function Module() {
         );
       })}
 
-      <button className="btn btn--primary" disabled={!allAnswered} style={{ opacity: allAnswered ? 1 : 0.5 }} onClick={() => navigate('/')}>
+      <button
+        className="btn btn--primary"
+        disabled={!allAnswered || saved}
+        style={{ opacity: allAnswered && !saved ? 1 : 0.5 }}
+        onClick={finishModule}
+      >
         Terminer le module
       </button>
     </div>

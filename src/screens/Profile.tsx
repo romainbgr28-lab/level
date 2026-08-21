@@ -1,7 +1,40 @@
+import { useEffect, useState } from 'react';
 import Header from '../components/Header';
-import { userProfile, userStats } from '../data/mockData';
+import { getProfil, getStats } from '../api/client';
+import type { ApiProfil, ApiStats } from '../api/client';
 
 export default function Profile() {
+  const [profil, setProfil] = useState<ApiProfil | null>(null);
+  const [stats, setStats] = useState<ApiStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([getProfil(), getStats()])
+      .then(([p, s]) => {
+        setProfil(p);
+        setStats(s);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="screen">
+        <Header title="Profil" />
+        <p className="subtle">Chargement…</p>
+      </div>
+    );
+  }
+
+  if (!profil) {
+    return (
+      <div className="screen">
+        <Header title="Profil" />
+        <p className="subtle">Aucun profil enregistré.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="screen">
       <Header title="Profil" />
@@ -9,7 +42,7 @@ export default function Profile() {
 
       <div className="section-title">Objectifs</div>
       <div className="tag-row">
-        {userProfile.goals.map((g) => (
+        {profil.objectifs.map((g) => (
           <span className="tag" key={g}>
             {g}
           </span>
@@ -19,41 +52,43 @@ export default function Profile() {
       <div className="section-title">Niveaux actuels</div>
       <div className="info-row">
         <span className="info-row__label">Physique</span>
-        <span className="info-row__value">{userProfile.levelPhysical}</span>
+        <span className="info-row__value">{profil.niveau_physique}</span>
       </div>
       <div className="info-row">
         <span className="info-row__label">Intellectuel</span>
-        <span className="info-row__value">{userProfile.levelIntellectual}</span>
+        <span className="info-row__value">{profil.niveau_intellectuel}</span>
       </div>
 
       <div className="section-title">Contraintes & matériel</div>
       <div className="info-row">
         <span className="info-row__label">Temps disponible</span>
-        <span className="info-row__value">{userProfile.timeConstraints}</span>
+        <span className="info-row__value">{profil.contraintes_temps}</span>
       </div>
       <div className="info-row">
         <span className="info-row__label">Matériel</span>
-        <span className="info-row__value">{userProfile.equipment}</span>
+        <span className="info-row__value">{profil.materiel}</span>
       </div>
 
       <button className="btn btn--ghost" style={{ margin: '20px 0' }}>
         Modifier mes objectifs
       </button>
 
-      <div className="stat-grid">
-        <div className="stat-tile">
-          <div className="stat-tile__value">{userStats.totalSeances}</div>
-          <div className="stat-tile__label">Séances</div>
+      {stats && (
+        <div className="stat-grid">
+          <div className="stat-tile">
+            <div className="stat-tile__value">{stats.total_seances}</div>
+            <div className="stat-tile__label">Séances</div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-tile__value">{stats.total_modules}</div>
+            <div className="stat-tile__label">Modules</div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-tile__value">{stats.record_streak}</div>
+            <div className="stat-tile__label">Record streak</div>
+          </div>
         </div>
-        <div className="stat-tile">
-          <div className="stat-tile__value">{userStats.totalModules}</div>
-          <div className="stat-tile__label">Modules</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-tile__value">{userStats.recordStreak}</div>
-          <div className="stat-tile__label">Record streak</div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
