@@ -50,6 +50,18 @@ def upsert_profil(payload: schemas.ProfilCreate, db: Session = Depends(get_db)):
     return profil
 
 
+@app.delete("/api/profil", status_code=204)
+def delete_profil(db: Session = Depends(get_db)):
+    """Supprime le(s) profil(s) enregistré(s) pour forcer un nouvel onboarding.
+
+    Endpoint temporaire, exposé via un bouton de reset dans l'écran Profil,
+    tant qu'il n'existe pas de vrai flux d'édition de profil.
+    """
+    db.query(models.Profil).delete()
+    db.commit()
+    return None
+
+
 # ---------- Seances ----------
 
 @app.get("/api/seances", response_model=list[schemas.SeanceOut])

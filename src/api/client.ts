@@ -8,6 +8,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`API ${path} → ${res.status}`);
   }
+  if (res.status === 204) {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -92,6 +95,7 @@ export interface ApiStreakDay {
 export const getProfil = () => request<ApiProfil | null>('/api/profil');
 export const saveProfil = (payload: Omit<ApiProfil, 'id' | 'date_creation'>) =>
   request<ApiProfil>('/api/profil', { method: 'POST', body: JSON.stringify(payload) });
+export const deleteProfil = () => request<void>('/api/profil', { method: 'DELETE' });
 
 // ---------- Séances ----------
 

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
-import { getProfil, getStats } from '../api/client';
+import { deleteProfil, getProfil, getStats } from '../api/client';
 import type { ApiProfil, ApiStats } from '../api/client';
 
 export default function Profile() {
   const [profil, setProfil] = useState<ApiProfil | null>(null);
   const [stats, setStats] = useState<ApiStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     Promise.all([getProfil(), getStats()])
@@ -16,6 +17,17 @@ export default function Profile() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleReset() {
+    if (!window.confirm('Supprimer le profil et relancer l’onboarding ?')) return;
+    setResetting(true);
+    try {
+      await deleteProfil();
+      window.location.reload();
+    } catch {
+      setResetting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -89,6 +101,19 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      <div className="section-title">Développement</div>
+      <p className="subtle" style={{ marginBottom: 10 }}>
+        Bouton temporaire, le temps qu'un vrai flux d'édition de profil existe.
+      </p>
+      <button
+        className="btn btn--ghost"
+        style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+        disabled={resetting}
+        onClick={handleReset}
+      >
+        {resetting ? 'Suppression…' : 'Réinitialiser le profil (relance l’onboarding)'}
+      </button>
     </div>
   );
 }
