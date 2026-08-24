@@ -26,7 +26,8 @@ class Seance(Base):
     date = Column(Date, nullable=False)
     nom = Column(String, nullable=False)
     exercices = Column(JSON, nullable=False, default=list)
-    statut = Column(String, nullable=False, default="planifiee")  # planifiee | terminee
+    statut = Column(String, nullable=False, default="planifiee")  # planifiee | prévue | terminee
+    type_seance = Column(String, nullable=True)  # force | explosivité_vitesse | esthétique | décharge (moteur de règles)
     rpe = Column(Integer, nullable=True)
     duree_reelle = Column(Integer, nullable=True)  # minutes
 
@@ -85,5 +86,8 @@ class HistoriqueSeance(Base):
     exercices_prevus = Column(JSON, nullable=False, default=list)
     exercices_realises = Column(JSON, nullable=False, default=list)
     rpe = Column(Integer, nullable=True)
+    pourcentage_complete = Column(Float, nullable=True)
+    zone_sensible_signalee = Column(String, nullable=True)
+    xp_gagne = Column(Integer, nullable=True)
     notes = Column(String, nullable=True)
-    etat_declare_avant = Column(JSON, nullable=False, default=dict)  # {sommeil, motivation, temps_dispo, envie_texte}
+    etat_declare_avant = Column(JSON, nullable=False, default=dict)  # {sommeil, motivation, temps_dispo, envie_texte, entrainement_club_semaine}

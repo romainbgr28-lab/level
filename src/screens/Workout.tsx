@@ -10,6 +10,11 @@ type Phase = 'checkin' | 'exercices' | 'ressenti';
 const REST_SECONDS = 90;
 const SOMMEIL_OPTIONS = ['Mauvais', 'Moyen', 'Bon', 'Excellent'];
 const MOTIVATION_OPTIONS = ['Faible', 'Correcte', 'Élevée'];
+const CLUB_SEMAINE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'non', label: 'Non' },
+  { value: '1_fois', label: 'Oui, 1 fois' },
+  { value: '2_fois_ou_plus', label: 'Oui, 2 fois ou plus' },
+];
 
 export default function Workout() {
   const navigate = useNavigate();
@@ -26,6 +31,7 @@ export default function Workout() {
   const [motivation, setMotivation] = useState('');
   const [tempsDispo, setTempsDispo] = useState('');
   const [envieTexte, setEnvieTexte] = useState('');
+  const [clubSemaine, setClubSemaine] = useState('');
 
   useEffect(() => {
     getTodaySeance()
@@ -106,6 +112,7 @@ export default function Workout() {
           motivation: motivation || null,
           temps_dispo: tempsDispo || null,
           envie_texte: envieTexte.trim() || null,
+          entrainement_club_semaine: clubSemaine || null,
         },
       });
 
@@ -172,6 +179,22 @@ export default function Workout() {
                 onClick={() => setMotivation(o)}
               >
                 {o}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="onboarding-theme">
+          <div className="section-title">As-tu eu un entraînement club cette semaine ?</div>
+          <div className="tag-row tag-row--select">
+            {CLUB_SEMAINE_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`tag tag--selectable ${clubSemaine === o.value ? 'tag--active' : ''}`}
+                onClick={() => setClubSemaine(o.value)}
+              >
+                {o.label}
               </button>
             ))}
           </div>

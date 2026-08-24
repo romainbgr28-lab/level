@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import date, timedelta
 from typing import Optional
@@ -7,11 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import mistral_client
 import models
+import regles_seance
 import schemas
 from calendrier import compute_phase
 from database import Base, SessionLocal, engine, get_db
 from seed import seed
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("level")
 
 Base.metadata.create_all(bind=engine)
 
@@ -207,6 +213,237 @@ def create_historique_seance(payload: schemas.HistoriqueSeanceCreate, db: Sessio
     return entry
 
 
+# ---------- Génération de séance assistée (moteur de règles + Mistral) ----------
+
+
+def _construire_contexte_historique(db: Session) -> dict:
+    """Construit le contexte d'historique attendu par regles_seance.generer_recommandation :
+    les 3 dernières séances par type, les 3 dernières toutes confondues, et les zones
+    sensibles signalées récemment.
+
+    Note : type_seance n'est renseigné avec les catégories canoniques (force,
+    explosivité_vitesse, esthétique, décharge) que pour les séances créées via
+    /api/seance/generer. Les entrées historiques créées manuellement avant cet
+    endpoint (type_seance = nom libre de la séance) ne matcheront simplement
+    aucune catégorie et seront ignorées par le regroupement par type.
+    """
+    rows = db.query(models.HistoriqueSeance).order_by(models.HistoriqueSeance.date.desc()).limit(30).all()
+
+    par_type: dict[str, list[dict]] = {}
+    recent: list[dict] = []
+    zones_sensibles_recentes: list[str] = []
+
+    for r in rows:
+        entry = {"date": r.date, "rpe": r.rpe, "pourcentage_complete": r.pourcentage_complete}
+        par_type.setdefault(r.type_seance, []).append(entry)
+        if len(recent) < 3:
+            recent.append(entry)
+        if r.zone_sensible_signalee and r.zone_sensible_signalee not in zones_sensibles_recentes:
+            zones_sensibles_recentes.append(r.zone_sensible_signalee)
+
+    par_type = {k: v[:3] for k, v in par_type.items()}
+
+    return {
+        "par_type": par_type,
+        "recent": recent,
+        "zones_sensibles_recentes": zones_sensibles_recentes[:5],
+    }
+
+
+def _construire_prompt_generation(profil: dict, recommandation: dict, etat_du_jour: dict) -> str:
+    exclusions = recommandation.get("exclusions") or []
+    exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
+    raisons_txt = "; ".join(recommandation.get("raisons") or []) or "aucune"
+
+    return f"""Tu es un coach sportif qui construit une séance de sport concrète pour un joueur de football amateur.
+
+PROFIL
+- Poste : {profil.get('poste')}
+- Niveau physique global : {profil.get('niveau_physique')}
+- Qualités physiques déclarées (1 à 5) : {profil.get('niveaux_qualites_physiques')}
+- Matériel disponible : {profil.get('materiel')}
+- Contraintes de temps habituelles : {profil.get('contraintes_temps')}
+
+ÉTAT DU JOUR (déclaré par le joueur)
+- Sommeil : {etat_du_jour.get('sommeil') or 'non renseigné'}
+- Motivation : {etat_du_jour.get('motivation') or 'non renseignée'}
+- Temps disponible aujourd'hui : {etat_du_jour.get('temps_dispo') or 'non renseigné'}
+- Entraînements club cette semaine : {etat_du_jour.get('entrainement_club_semaine') or 'non renseigné'}
+- Envie du moment : {etat_du_jour.get('envie_texte') or 'aucune précision'}
+
+RECOMMANDATION CALCULÉE PAR LE MOTEUR DE RÈGLES (contrainte à respecter impérativement,
+ne dépend pas de l'envie du joueur ci-dessus)
+- Phase calendaire : {recommandation['phase_calendaire']}
+- Intensité maximale autorisée : {recommandation['intensite_max']} — NE PAS LA DÉPASSER, quelle que soit l'envie exprimée par le joueur.
+- Priorités liées au poste : {', '.join(recommandation['priorites_poste']) or 'aucune priorité spécifique'}
+- Type de séance à produire : {recommandation['type_seance_suggere']}
+- Ajustement à appliquer par rapport à la dernière séance de ce type : charge {recommandation['ajustement_charge_pct']:+.0f}%, volume {recommandation.get('ajustement_volume_pct', 0):+.0f}%
+- Zones à exclure impérativement de la séance (aucun exercice ne doit les solliciter) : {exclusions_txt}
+- Raisons de ces contraintes : {raisons_txt}
+
+CONSIGNE
+Construis une séance concrète respectant strictement l'intensité maximale et les exclusions
+ci-dessus, cohérente avec le poste et le matériel disponible.
+Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, au format exact
+suivant :
+{{
+  "nom_seance": "string",
+  "duree_min": nombre entier de minutes,
+  "exercices": [
+    {{"nom": "string", "series": nombre entier, "repetitions": "string", "charge_indicative": "string", "notes": "string"}}
+  ],
+  "explication": "texte en français expliquant le pourquoi de cette séance (phase calendaire, poste, état du jour)"
+}}"""
+
+
+def _construire_prompt_extraction(seance: models.Seance, compte_rendu: str) -> str:
+    return f"""Tu extrais des données structurées à partir du compte-rendu libre d'un joueur après une séance de sport.
+
+SÉANCE PRÉVUE
+- Nom : {seance.nom}
+- Exercices prévus : {seance.exercices}
+
+COMPTE-RENDU DU JOUEUR (texte libre)
+\"\"\"{compte_rendu}\"\"\"
+
+CONSIGNE
+Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, au format exact
+suivant :
+{{
+  "exercices_realises": [{{"nom": "string", "series": nombre entier, "repetitions": "string", "charge": "string"}}],
+  "rpe": nombre entier de 1 à 10 (déduit du compte-rendu, ta meilleure estimation si non explicite),
+  "pourcentage_complete": nombre de 0 à 100 (pourcentage de la séance prévue réellement réalisé),
+  "notes": "résumé court en français du compte-rendu",
+  "zone_sensible_signalee": "nom de la zone/du groupe musculaire si le joueur signale une gêne ou douleur, sinon null"
+}}"""
+
+
+def _calculer_xp(rpe: Optional[int], pourcentage_complete: Optional[float], streak_actuel: int) -> int:
+    """Calcule l'XP gagné pour une séance terminée. Calcul Python simple, pas Mistral."""
+    xp = 10  # base
+
+    if pourcentage_complete is not None:
+        if pourcentage_complete >= 100:
+            xp += 10
+        elif pourcentage_complete >= 80:
+            xp += 5
+
+    if streak_actuel >= 7:
+        xp += 10
+    elif streak_actuel >= 3:
+        xp += 5
+
+    return xp
+
+
+@app.post("/api/seance/generer", response_model=schemas.SeanceGenereeOut)
+def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
+    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    if not profil:
+        raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer une séance.")
+
+    profil_dict = schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
+    historique_ctx = _construire_contexte_historique(db)
+    etat_du_jour = payload.model_dump()
+
+    recommandation = regles_seance.generer_recommandation(profil_dict, historique_ctx, etat_du_jour)
+    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour)
+
+    try:
+        data = mistral_client.appeler_mistral_json(prompt)
+    except mistral_client.MistralError as exc:
+        logger.error("Échec de la génération de séance via Mistral : %s", exc)
+        raise HTTPException(status_code=502, detail=f"Le générateur de séance a échoué : {exc}") from exc
+
+    required_keys = {"nom_seance", "duree_min", "exercices", "explication"}
+    if not required_keys.issubset(data) or not isinstance(data.get("exercices"), list):
+        logger.error("Réponse Mistral incomplète ou invalide (génération séance) : %s", data)
+        raise HTTPException(status_code=502, detail="La séance générée par l'IA est incomplète ou mal formée.")
+
+    seance = models.Seance(
+        date=date.today(),
+        nom=data["nom_seance"],
+        exercices=data["exercices"],
+        statut="prévue",
+        type_seance=recommandation["type_seance_suggere"],
+        duree_reelle=None,
+    )
+    db.add(seance)
+    db.commit()
+    db.refresh(seance)
+
+    return schemas.SeanceGenereeOut(
+        id=seance.id,
+        nom_seance=data["nom_seance"],
+        duree_min=int(data.get("duree_min") or 45),
+        exercices=data["exercices"],
+        explication=data.get("explication", ""),
+        recommandation=recommandation,
+    )
+
+
+@app.post("/api/seance/terminer", response_model=schemas.TerminerSeanceOut)
+def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depends(get_db)):
+    seance = db.get(models.Seance, payload.seance_id)
+    if not seance:
+        raise HTTPException(status_code=404, detail="Séance introuvable")
+
+    prompt = _construire_prompt_extraction(seance, payload.compte_rendu)
+
+    try:
+        data = mistral_client.appeler_mistral_json(prompt)
+    except mistral_client.MistralError as exc:
+        logger.error("Échec de l'extraction du compte-rendu via Mistral : %s", exc)
+        raise HTTPException(status_code=502, detail=f"L'analyse du compte-rendu a échoué : {exc}") from exc
+
+    required_keys = {"exercices_realises", "rpe", "pourcentage_complete"}
+    if not required_keys.issubset(data):
+        logger.error("Réponse Mistral incomplète ou invalide (extraction compte-rendu) : %s", data)
+        raise HTTPException(status_code=502, detail="L'extraction du compte-rendu par l'IA est incomplète ou mal formée.")
+
+    rpe = data.get("rpe")
+    rpe = int(rpe) if isinstance(rpe, (int, float)) else None
+    pourcentage_complete = data.get("pourcentage_complete")
+    pourcentage_complete = float(pourcentage_complete) if isinstance(pourcentage_complete, (int, float)) else None
+
+    seance.statut = "terminee"
+    seance.rpe = rpe
+    db.commit()
+
+    today_streak = db.get(models.Streak, seance.date)
+    if not today_streak:
+        today_streak = models.Streak(date=seance.date, sport_fait=1, apprentissage_fait=0)
+        db.add(today_streak)
+    else:
+        today_streak.sport_fait = 1
+    db.commit()
+
+    xp_gagne = _calculer_xp(rpe, pourcentage_complete, _current_streak(db))
+
+    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    calendrier = profil.calendrier_matchs if profil else None
+    phase = compute_phase(seance.date, calendrier)
+
+    historique = models.HistoriqueSeance(
+        date=seance.date,
+        phase_calendaire=phase,
+        type_seance=seance.type_seance or seance.nom,
+        exercices_prevus=seance.exercices,
+        exercices_realises=data.get("exercices_realises") or [],
+        rpe=rpe,
+        pourcentage_complete=pourcentage_complete,
+        zone_sensible_signalee=data.get("zone_sensible_signalee") or None,
+        xp_gagne=xp_gagne,
+        notes=data.get("notes"),
+        etat_declare_avant={},
+    )
+    db.add(historique)
+    db.commit()
+    db.refresh(historique)
+
+    return schemas.TerminerSeanceOut(resume=data, xp_gagne=xp_gagne, historique_id=historique.id)
+
+
 # ---------- Streaks ----------
 
 @app.get("/api/streaks", response_model=list[schemas.StreakOut])
@@ -230,6 +467,21 @@ def list_streaks(days: int = 35, db: Session = Depends(get_db)):
 
 # ---------- Stats (agrégats pour le tableau de bord) ----------
 
+def _active_streak_dates(db: Session) -> set[date]:
+    rows = db.query(models.Streak).filter((models.Streak.sport_fait == 1) | (models.Streak.apprentissage_fait == 1)).all()
+    return {r.date for r in rows}
+
+
+def _current_streak(db: Session) -> int:
+    active_dates = _active_streak_dates(db)
+    current_streak = 0
+    cursor = date.today()
+    while cursor in active_dates:
+        current_streak += 1
+        cursor -= timedelta(days=1)
+    return current_streak
+
+
 @app.get("/api/stats", response_model=schemas.StatsOut)
 def get_stats(db: Session = Depends(get_db)):
     total_seances = db.query(models.Seance).filter(models.Seance.statut == "terminee").count()
@@ -237,19 +489,8 @@ def get_stats(db: Session = Depends(get_db)):
 
     rpe_avg = db.query(func.avg(models.Seance.rpe)).filter(models.Seance.rpe.isnot(None)).scalar()
 
-    streak_rows = (
-        db.query(models.Streak)
-        .filter((models.Streak.sport_fait == 1) | (models.Streak.apprentissage_fait == 1))
-        .order_by(models.Streak.date.desc())
-        .all()
-    )
-    active_dates = {r.date for r in streak_rows}
-
-    current_streak = 0
-    cursor = date.today()
-    while cursor in active_dates:
-        current_streak += 1
-        cursor -= timedelta(days=1)
+    active_dates = _active_streak_dates(db)
+    current_streak = _current_streak(db)
 
     record_streak = 0
     running = 0

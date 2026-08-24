@@ -172,6 +172,7 @@ export interface ApiEtatDeclareAvant {
   motivation?: string | null;
   temps_dispo?: string | null;
   envie_texte?: string | null;
+  entrainement_club_semaine?: string | null;
 }
 
 export interface ApiHistoriqueSeance {
@@ -182,14 +183,48 @@ export interface ApiHistoriqueSeance {
   exercices_prevus: unknown[];
   exercices_realises: unknown[];
   rpe: number | null;
+  pourcentage_complete?: number | null;
+  zone_sensible_signalee?: string | null;
+  xp_gagne?: number | null;
   notes: string | null;
   etat_declare_avant: ApiEtatDeclareAvant;
 }
 
 export const getHistoriqueSeances = () => request<ApiHistoriqueSeance[]>('/api/historique_seances');
 export const addHistoriqueSeance = (
-  payload: Omit<ApiHistoriqueSeance, 'id' | 'phase_calendaire'>
+  payload: Omit<ApiHistoriqueSeance, 'id' | 'phase_calendaire' | 'xp_gagne'>
 ) => request<ApiHistoriqueSeance>('/api/historique_seances', { method: 'POST', body: JSON.stringify(payload) });
+
+// ---------- Génération de séance assistée (moteur de règles + Mistral) ----------
+
+export interface ApiEtatDuJour {
+  sommeil?: string | null;
+  motivation?: string | null;
+  temps_dispo?: string | null;
+  envie_texte?: string | null;
+  entrainement_club_semaine?: string | null;
+}
+
+export interface ApiSeanceGeneree {
+  id: number;
+  nom_seance: string;
+  duree_min: number;
+  exercices: unknown[];
+  explication: string;
+  recommandation: Record<string, unknown>;
+}
+
+export interface ApiTerminerSeanceResult {
+  resume: Record<string, unknown>;
+  xp_gagne: number;
+  historique_id: number;
+}
+
+export const genererSeance = (payload: ApiEtatDuJour) =>
+  request<ApiSeanceGeneree>('/api/seance/generer', { method: 'POST', body: JSON.stringify(payload) });
+
+export const terminerSeanceIA = (payload: { seance_id: number; compte_rendu: string }) =>
+  request<ApiTerminerSeanceResult>('/api/seance/terminer', { method: 'POST', body: JSON.stringify(payload) });
 
 // ---------- Stats & progression ----------
 
