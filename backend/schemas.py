@@ -279,6 +279,10 @@ class EtatDuJour(BaseModel):
     envie_texte: Optional[str] = None
     entrainement_club_semaine: Optional[str] = None  # "non" | "1_fois" | "2_fois_ou_plus"
     type_seance_force: Optional[str] = None  # override manuel : "force" | "explosivité_vitesse" | "esthétique" | "décharge"
+    # Si le programme actif prévoit "repos" aujourd'hui, /api/seance/generer refuse par défaut
+    # (409) : ce flag, positionné par le bouton "Je veux quand même faire une séance légère" côté
+    # écran Aujourd'hui, force malgré tout une génération (type de séance ramené à "décharge").
+    forcer_seance_legere: Optional[bool] = False
 
 
 class SeanceGenereeOut(BaseModel):

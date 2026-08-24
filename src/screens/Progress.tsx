@@ -4,17 +4,7 @@ import Header from '../components/Header';
 import LineChart from '../components/LineChart';
 import { genererProgramme, getChargeProgress, getProgrammeActif, getStats, getStreaks } from '../api/client';
 import type { ApiChargePoint, ApiProgramme, ApiStats, ApiStreakDay } from '../api/client';
-
-function semaineActuelle(programme: ApiProgramme): number {
-  const debut = new Date(programme.date_debut);
-  const jours = Math.floor((Date.now() - debut.getTime()) / (1000 * 60 * 60 * 24));
-  const semaine = Math.floor(jours / 7) + 1;
-  return Math.min(Math.max(semaine, 1), programme.duree_semaines);
-}
-
-function phaseCourante(programme: ApiProgramme, semaine: number) {
-  return programme.phases.find((p) => semaine >= p.semaine_debut && semaine <= p.semaine_fin);
-}
+import { phaseCourante, semaineActuelle } from '../utils/programme';
 
 function tronquer(texte: string, max: number): string {
   return texte.length > max ? `${texte.slice(0, max).trimEnd()}…` : texte;

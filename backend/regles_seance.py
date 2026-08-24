@@ -33,6 +33,7 @@ GROUPES_PAR_TYPE_SEANCE: dict[str, list[str]] = {
     "force": ["jambes", "dos", "épaules", "bras"],
     "explosivité_vitesse": ["jambes", "mollets"],
     "esthétique": ["bras", "épaules", "abdos", "dos", "jambes"],
+    "endurance": ["jambes"],
     "décharge": [],
 }
 
@@ -205,16 +206,29 @@ def _dates_matchs_proches(calendrier: Optional[dict[str, Any]], aujourdhui: date
     return (prochains[0] if prochains else None), (passes[0] if passes else None)
 
 
-def _suggerer_type_seance(phase: str, priorites: list[str], objectif_esthetique: Optional[dict[str, Any]]) -> str:
-    """Choisit un type de séance parmi force / explosivité_vitesse / esthétique / décharge.
+def _suggerer_type_seance(
+    phase: str,
+    priorites: list[str],
+    objectif_esthetique: Optional[dict[str, Any]],
+    type_seance_gabarit: Optional[str] = None,
+) -> str:
+    """Choisit un type de séance parmi force / explosivité_vitesse / esthétique / endurance / décharge.
 
-    Le cahier des charges ne fixe pas cette règle de sélection à la lettre : heuristique
-    simple basée sur la phase calendaire en priorité, puis l'objectif esthétique déclaré.
+    Priorité (la plus haute d'abord) :
+    1. Phase calendaire contraignante (lendemain/veille/approche de match) — l'emporte
+       toujours, y compris sur ce que prévoit le gabarit hebdomadaire d'un programme actif.
+    2. type_seance_gabarit : ce que prévoit le gabarit hebdomadaire du programme actif pour
+       aujourd'hui, s'il y en a un (remplace l'ancienne heuristique par défaut).
+    3. À défaut de programme actif, heuristique de repli : objectif esthétique déclaré,
+       sinon force par défaut. Le cahier des charges ne fixe pas cette dernière règle à la
+       lettre — elle ne sert que de filet de sécurité quand aucun programme n'encadre la séance.
     """
     if phase == "lendemain_match":
         return "décharge"
     if phase in ("veille_match", "approche_match"):
         return "explosivité_vitesse"
+    if type_seance_gabarit:
+        return type_seance_gabarit
     if objectif_esthetique and (objectif_esthetique.get("tags") or objectif_esthetique.get("texte_libre")):
         return "esthétique"
     return "force"
@@ -224,6 +238,7 @@ def generer_recommandation(
     profil: dict[str, Any],
     historique: dict[str, Any],
     etat_du_jour: dict[str, Any],
+    type_seance_gabarit: Optional[str] = None,
 ) -> dict[str, Any]:
     """Fonction principale : combine les règles ci-dessus en une recommandation structurée.
 
@@ -235,13 +250,16 @@ def generer_recommandation(
         "zones_sensibles_recentes": [str, ...],
     }
     etat_du_jour : {"sommeil", "motivation", "temps_dispo", "envie_texte", "entrainement_club_semaine"}
+    type_seance_gabarit : type de séance prévu aujourd'hui par le gabarit hebdomadaire du
+        programme actif, s'il y en a un (voir main.py::generer_seance) — cadre la séance,
+        mais reste subordonné à la phase calendaire (cf. _suggerer_type_seance).
     """
     aujourdhui = date.today()
     date_prochain_match, date_dernier_match = _dates_matchs_proches(profil.get("calendrier_matchs"), aujourdhui)
 
     phase, intensite_max = calculer_phase_calendaire(aujourdhui, date_prochain_match, date_dernier_match)
     priorites = obtenir_priorites_poste(profil.get("poste", ""))
-    type_seance_suggere = _suggerer_type_seance(phase, priorites, profil.get("objectif_esthetique"))
+    type_seance_suggere = _suggerer_type_seance(phase, priorites, profil.get("objectif_esthetique"), type_seance_gabarit)
 
     historique_meme_type = (historique.get("par_type") or {}).get(type_seance_suggere, [])
     ajustement = calculer_ajustement_charge(historique_meme_type, profil.get("niveau_physique"))

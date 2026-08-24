@@ -6,6 +6,7 @@ import {
   genererSeance,
   getDernierePerformance,
   getExercicesBibliotheque,
+  getProgrammeActif,
   getSeriesLoggees,
   getTodaySeance,
   terminerSeanceIA,
@@ -16,12 +17,14 @@ import type {
   ApiDifficulte,
   ApiEtatDuJour,
   ApiExerciceBibliotheque,
+  ApiProgramme,
   ApiSeance,
   ApiSeanceExercice,
   ApiSeanceGeneree,
   ApiSerieLoggee,
   ApiTerminerSeanceResult,
 } from '../api/client';
+import { phaseCourante, semaineActuelle, typeSeanceGabaritAujourdhui } from '../utils/programme';
 
 const dateLabel = new Date().toLocaleDateString('fr-FR', {
   weekday: 'long',
@@ -41,8 +44,17 @@ const TYPE_SEANCE_OPTIONS: { value: string; label: string }[] = [
   { value: 'force', label: 'Force' },
   { value: 'explosivité_vitesse', label: 'Explosivité / vitesse' },
   { value: 'esthétique', label: 'Esthétique' },
+  { value: 'endurance', label: 'Endurance' },
   { value: 'décharge', label: 'Décharge / récupération' },
 ];
+
+const TYPE_SEANCE_LABELS: Record<string, string> = Object.fromEntries(
+  TYPE_SEANCE_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
+);
+
+function labelTypeSeance(value: string): string {
+  return TYPE_SEANCE_LABELS[value] ?? value;
+}
 
 const REST_SECONDS = 90;
 
@@ -78,6 +90,7 @@ export default function Today() {
 
   const [seance, setSeance] = useState<ApiSeance | ApiSeanceGeneree | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [programme, setProgramme] = useState<ApiProgramme | null>(null);
 
   const [sommeil, setSommeil] = useState('');
   const [motivation, setMotivation] = useState('');
@@ -85,6 +98,7 @@ export default function Today() {
   const [envieTexte, setEnvieTexte] = useState('');
   const [clubSemaine, setClubSemaine] = useState('');
   const [typeSeanceForce, setTypeSeanceForce] = useState('');
+  const [forcerSeanceLegere, setForcerSeanceLegere] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // ---- Logging temps réel façon Hevy ----
@@ -107,6 +121,9 @@ export default function Today() {
   const [resultat, setResultat] = useState<ApiTerminerSeanceResult | null>(null);
 
   useEffect(() => {
+    getProgrammeActif()
+      .then(setProgramme)
+      .catch(() => setProgramme(null));
     getTodaySeance().then((s) => {
       if (s) {
         setSeance(s);
@@ -116,6 +133,15 @@ export default function Today() {
       }
     });
   }, []);
+
+  const planDuJour = useMemo(() => {
+    if (!programme) return null;
+    const typeGabarit = typeSeanceGabaritAujourdhui(programme);
+    if (!typeGabarit) return null; // jour non couvert par le gabarit (ex : jour indisponible déclaré)
+    const semaine = semaineActuelle(programme);
+    const phase = phaseCourante(programme, semaine);
+    return { typeGabarit, semaine, phase };
+  }, [programme]);
 
   // Charge la bibliothèque + les séries déjà loguées quand on entre dans la séance.
   useEffect(() => {
@@ -288,6 +314,7 @@ export default function Today() {
         envie_texte: envieTexte.trim() || null,
         entrainement_club_semaine: clubSemaine || null,
         type_seance_force: typeSeanceForce || null,
+        forcer_seance_legere: forcerSeanceLegere,
       };
       const generee = await genererSeance(payload);
       setSeance(generee);
@@ -326,6 +353,7 @@ export default function Today() {
     try {
       await deleteTodaySeance();
       setSeance(null);
+      setForcerSeanceLegere(false);
       setView('no-seance');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur lors de la réinitialisation.');
@@ -352,7 +380,41 @@ export default function Today() {
         {dateLabel}
       </h1>
 
-      {view === 'no-seance' && (
+      {view === 'no-seance' && planDuJour?.typeGabarit === 'repos' && (
+        <section className="card">
+          <div className="card__eyebrow">Séance du jour</div>
+          <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour de repos prévu par ton programme</p>
+          <p className="subtle" style={{ margin: '0 0 14px' }}>
+            Semaine {planDuJour.semaine}/{programme?.duree_semaines}
+            {planDuJour.phase ? ` — phase ${planDuJour.phase.nom}` : ''}.
+          </p>
+          <button
+            className="btn btn--ghost"
+            onClick={() => {
+              setForcerSeanceLegere(true);
+              setView('form');
+            }}
+          >
+            Je veux quand même faire une séance légère
+          </button>
+        </section>
+      )}
+
+      {view === 'no-seance' && planDuJour && planDuJour.typeGabarit !== 'repos' && (
+        <section className="card">
+          <div className="card__eyebrow">Séance du jour</div>
+          <p className="subtle" style={{ margin: '4px 0 14px' }}>
+            Aujourd’hui : séance {labelTypeSeance(planDuJour.typeGabarit)}, semaine {planDuJour.semaine}/
+            {programme?.duree_semaines}
+            {planDuJour.phase ? ` — phase ${planDuJour.phase.nom}` : ''}.
+          </p>
+          <button className="btn btn--primary" onClick={() => setView('form')}>
+            Générer ma séance du jour
+          </button>
+        </section>
+      )}
+
+      {view === 'no-seance' && !planDuJour && (
         <section className="card">
           <div className="card__eyebrow">Séance du jour</div>
           <p className="subtle" style={{ margin: '4px 0 14px' }}>
@@ -367,6 +429,11 @@ export default function Today() {
       {view === 'form' && (
         <section className="card">
           <div className="card__eyebrow">État du jour</div>
+          {forcerSeanceLegere && (
+            <p className="subtle" style={{ margin: '4px 0 14px' }}>
+              Jour de repos prévu par ton programme — séance légère malgré tout.
+            </p>
+          )}
 
           <div className="onboarding-theme">
             <div className="section-title">Sommeil de la nuit dernière</div>

@@ -288,6 +288,7 @@ export interface ApiEtatDuJour {
   envie_texte?: string | null;
   entrainement_club_semaine?: string | null;
   type_seance_force?: string | null;
+  forcer_seance_legere?: boolean;
 }
 
 export interface ApiSeanceGeneree {

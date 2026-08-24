@@ -429,6 +429,10 @@ TYPES_PAR_TYPE_SEANCE: dict[str, list[str]] = {
     "force": ["force", "force_esthetique", "technique", "gainage_prevention", "échauffement"],
     "explosivité_vitesse": ["explosivité", "vitesse", "agilité", "technique", "gainage_prevention", "échauffement"],
     "esthétique": ["esthetique", "force_esthetique", "gainage_prevention", "échauffement"],
+    # Type de séance prévu par le gabarit hebdomadaire d'un programme actif quand l'objectif
+    # Endurance / Perte de poids est déclaré (voir generer_programme) — absent du cahier des
+    # charges initial du moteur de règles, ajouté pour rester cohérent avec le programme.
+    "endurance": ["endurance", "technique", "gainage_prevention", "échauffement"],
     "décharge": ["mobilite_recuperation", "gainage_prevention", "technique", "endurance", "échauffement"],
 }
 
@@ -574,6 +578,45 @@ def _appliquer_calibrage_temps(exercices: list[dict], plan: list[dict], rpe_cibl
             item["rpe_cible"] = rpe_cible
 
 
+# Type de séance du gabarit hebdomadaire (voir generer_programme) -> clé correspondante dans
+# trajectoire_progression. Les deux vocabulaires diffèrent volontairement (accents, découpage) :
+# la génération de programme (Mistral) produit trajectoire_progression avec ces clés précises.
+TRAJECTOIRE_CLE_PAR_TYPE_SEANCE_GABARIT: dict[str, str] = {
+    "force": "force",
+    "explosivité_vitesse": "explosivite",
+    "esthétique": "esthetique",
+    "endurance": "endurance",
+}
+
+
+def _semaine_courante_programme(programme: models.Programme, aujourdhui: date) -> int:
+    """Semaine en cours du programme (1-indexée, plafonnée à duree_semaines) — même formule
+    que semaineActuelle() côté frontend (src/utils/programme.ts), à garder synchronisée."""
+    jours = (aujourdhui - programme.date_debut).days
+    semaine = jours // 7 + 1
+    return min(max(semaine, 1), programme.duree_semaines)
+
+
+def _phase_programme_pour_semaine(programme: models.Programme, semaine: int) -> Optional[dict]:
+    for phase in programme.phases or []:
+        if phase.get("semaine_debut") <= semaine <= phase.get("semaine_fin"):
+            return phase
+    return None
+
+
+def _charge_cible_programme(programme: models.Programme, type_seance_gabarit: Optional[str], semaine: int) -> Optional[float]:
+    """Charge/volume cible (en % relatif à la semaine 1) prévu par trajectoire_progression
+    pour ce type de séance et cette semaine, ou None si non défini (ex: type non suivi par la
+    trajectoire, ou semaine hors bornes des valeurs générées)."""
+    cle = TRAJECTOIRE_CLE_PAR_TYPE_SEANCE_GABARIT.get(type_seance_gabarit or "")
+    if not cle:
+        return None
+    valeurs = (programme.trajectoire_progression or {}).get(cle) or []
+    if 1 <= semaine <= len(valeurs):
+        return valeurs[semaine - 1]
+    return None
+
+
 def _construire_system_prompt() -> str:
     notes = connaissances.get_notes_generation_ia()
     notes_txt = "\n".join(f"- {n}" for n in notes)
@@ -600,6 +643,21 @@ def _construire_prompt_generation(
     exclusions = recommandation.get("exclusions") or []
     exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
     raisons_txt = "; ".join(recommandation.get("raisons") or []) or "aucune"
+
+    programme_ctx = recommandation.get("programme")
+    programme_txt = ""
+    if programme_ctx:
+        charge_cible = programme_ctx.get("charge_cible_pct")
+        charge_cible_txt = f"{charge_cible:+.0f}% (relatif à la semaine 1)" if charge_cible is not None else "non définie pour ce type de séance"
+        programme_txt = f"""
+
+CONTEXTE DU PROGRAMME EN COURS (trame de moyen terme sur {programme_ctx['duree_semaines']} semaines — la
+RECOMMANDATION CALCULÉE PAR LE MOTEUR DE RÈGLES ci-dessous garde la priorité en cas de conflit,
+mais respecte cette trame sinon)
+- Semaine {programme_ctx['semaine_courante']}/{programme_ctx['duree_semaines']}
+- Phase actuelle du programme : {programme_ctx.get('phase_nom') or 'non définie'} — {programme_ctx.get('phase_description') or ''}
+- Type de séance prévu par le gabarit hebdomadaire pour aujourd'hui : {programme_ctx.get('type_seance_gabarit') or 'non défini'}
+- Charge/volume cible de la trajectoire de progression pour cette semaine et ce type de séance : {charge_cible_txt}"""
 
     charges_depart = charges_depart or {}
 
@@ -673,6 +731,7 @@ ne dépend pas de l'envie du joueur ci-dessus)
 - Ajustement à appliquer par rapport à la dernière séance de ce type : charge {recommandation['ajustement_charge_pct']:+.0f}%, volume {recommandation.get('ajustement_volume_pct', 0):+.0f}%
 - Zones à exclure impérativement de la séance (aucun exercice ne doit les solliciter) : {exclusions_txt}
 - Raisons de ces contraintes : {raisons_txt}
+{programme_txt}
 
 CONNAISSANCES THÉORIQUES DE RÉFÉRENCE (à utiliser pour enrichir l'explication de la séance,
 jamais pour contredire la recommandation calculée ci-dessus)
@@ -729,7 +788,60 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     historique_ctx = _construire_contexte_historique(db)
     etat_du_jour = payload.model_dump()
 
-    recommandation = regles_seance.generer_recommandation(profil_dict, historique_ctx, etat_du_jour)
+    # ---- Programme actif : cadre hebdomadaire (gabarit + trajectoire + phase) ----
+    # Sert de base au type de séance du jour ; le moteur de règles calendaire (phase match,
+    # historique récent, garde-fous) reste appliqué par-dessus et garde la priorité en cas de
+    # conflit (cf. regles_seance._suggerer_type_seance). Sans programme actif (edge case), ce
+    # bloc ne fait rien et le comportement retombe sur l'ancien flux (génération libre).
+    programme = (
+        db.query(models.Programme).filter(models.Programme.statut == "actif").order_by(models.Programme.id.desc()).first()
+    )
+    type_seance_gabarit: Optional[str] = None
+    programme_ctx: Optional[dict] = None
+
+    if programme:
+        semaine_courante = _semaine_courante_programme(programme, date.today())
+        phase_programme = _phase_programme_pour_semaine(programme, semaine_courante)
+        jour_fr = regles_seance.JOURS_SEMAINE[date.today().weekday()]
+        type_seance_gabarit = (programme.gabarit_hebdomadaire or {}).get(jour_fr)
+
+        if type_seance_gabarit == "repos" and not etat_du_jour.get("forcer_seance_legere"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Jour de repos prévu par ton programme aujourd'hui "
+                    f"(semaine {semaine_courante}/{programme.duree_semaines}). "
+                    "Renvoie forcer_seance_legere=true pour générer quand même une séance légère."
+                ),
+            )
+
+        if type_seance_gabarit == "repos":
+            # forcer_seance_legere=true : repos prévu mais séance légère demandée malgré tout.
+            type_seance_gabarit = "décharge"
+
+        charge_cible_pct = _charge_cible_programme(programme, type_seance_gabarit, semaine_courante)
+        programme_ctx = {
+            "semaine_courante": semaine_courante,
+            "duree_semaines": programme.duree_semaines,
+            "phase_nom": phase_programme.get("nom") if phase_programme else None,
+            "phase_description": phase_programme.get("description") if phase_programme else None,
+            "type_seance_gabarit": type_seance_gabarit,
+            "charge_cible_pct": charge_cible_pct,
+        }
+
+    recommandation = regles_seance.generer_recommandation(
+        profil_dict, historique_ctx, etat_du_jour, type_seance_gabarit=type_seance_gabarit
+    )
+
+    if programme_ctx is not None:
+        recommandation["programme"] = programme_ctx
+        if type_seance_gabarit and recommandation["type_seance_suggere"] != type_seance_gabarit:
+            # Transparence : le moteur de règles calendaire a supplanté ce que prévoyait le gabarit.
+            recommandation["raisons"].append(
+                f"Programme actif (semaine {programme_ctx['semaine_courante']}/{programme_ctx['duree_semaines']}) prévoyait "
+                f"« {type_seance_gabarit} » aujourd'hui, mais le moteur de règles calendaire impose "
+                f"« {recommandation['type_seance_suggere']} » (priorité au calendrier)."
+            )
 
     type_force = etat_du_jour.get("type_seance_force")
     decharge_securite = recommandation["type_seance_suggere"] == "décharge" and any(
