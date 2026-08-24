@@ -2,23 +2,21 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LineChart from '../components/LineChart';
-import { getChargeProgress, getStats, getStreaks, getThemeScores } from '../api/client';
-import type { ApiChargePoint, ApiStats, ApiStreakDay, ApiThemeScore } from '../api/client';
+import { getChargeProgress, getStats, getStreaks } from '../api/client';
+import type { ApiChargePoint, ApiStats, ApiStreakDay } from '../api/client';
 
 export default function Progress() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<ApiStats | null>(null);
   const [charge, setCharge] = useState<ApiChargePoint[]>([]);
-  const [themes, setThemes] = useState<ApiThemeScore[]>([]);
   const [streaks, setStreaks] = useState<ApiStreakDay[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getStats(), getChargeProgress(), getThemeScores(), getStreaks()])
-      .then(([s, c, t, streakDays]) => {
+    Promise.all([getStats(), getChargeProgress(), getStreaks()])
+      .then(([s, c, streakDays]) => {
         setStats(s);
         setCharge(c);
-        setThemes(t);
         setStreaks(streakDays);
       })
       .finally(() => setLoading(false));
@@ -72,22 +70,6 @@ export default function Progress() {
             <p className="subtle">Pas encore assez de données pour ce graphique.</p>
           )}
         </div>
-      </section>
-
-      <section className="card">
-        <div className="card__eyebrow">Score par thème</div>
-        {themes.length === 0 && <p className="subtle">Aucun quiz complété pour l’instant.</p>}
-        {themes.map((t) => (
-          <div className="theme-row" key={t.theme}>
-            <div className="theme-row__head">
-              <span className="theme-row__label">{t.theme}</span>
-              <span className="theme-row__pct">{t.percent}%</span>
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${t.percent}%` }} />
-            </div>
-          </div>
-        ))}
       </section>
 
       <section className="card">

@@ -366,6 +366,7 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
         exercices=data["exercices"],
         statut="prévue",
         type_seance=recommandation["type_seance_suggere"],
+        explication=data.get("explication"),
         duree_reelle=None,
     )
     db.add(seance)

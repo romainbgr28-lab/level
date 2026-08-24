@@ -28,6 +28,7 @@ class Seance(Base):
     exercices = Column(JSON, nullable=False, default=list)
     statut = Column(String, nullable=False, default="planifiee")  # planifiee | prévue | terminee
     type_seance = Column(String, nullable=True)  # force | explosivité_vitesse | esthétique | décharge (moteur de règles)
+    explication = Column(String, nullable=True)  # explication IA associée à la séance générée
     rpe = Column(Integer, nullable=True)
     duree_reelle = Column(Integer, nullable=True)  # minutes
 

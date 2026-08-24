@@ -28,12 +28,21 @@ export interface ApiExercise {
   sets: ApiExerciseSet[];
 }
 
+export interface ApiSeanceExercice {
+  nom: string;
+  series: number;
+  repetitions: string;
+  charge_indicative?: string;
+  notes?: string;
+}
+
 export interface ApiSeance {
   id: number;
   date: string;
   nom: string;
-  exercices: ApiExercise[];
-  statut: 'planifiee' | 'terminee';
+  exercices: ApiSeanceExercice[];
+  statut: 'planifiee' | 'prévue' | 'terminee';
+  explication: string | null;
   rpe: number | null;
   duree_reelle: number | null;
 }
@@ -209,7 +218,7 @@ export interface ApiSeanceGeneree {
   id: number;
   nom_seance: string;
   duree_min: number;
-  exercices: unknown[];
+  exercices: ApiSeanceExercice[];
   explication: string;
   recommandation: Record<string, unknown>;
 }

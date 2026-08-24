@@ -59,6 +59,7 @@ class SeanceBase(BaseModel):
     exercices: list[dict[str, Any]]
     statut: str = "planifiee"
     type_seance: Optional[str] = None
+    explication: Optional[str] = None
     rpe: Optional[int] = None
     duree_reelle: Optional[int] = None
 
