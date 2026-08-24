@@ -55,11 +55,37 @@ export interface ApiModule {
   questions: ApiModuleQuestion[];
 }
 
+export interface ApiQualitesPhysiques {
+  force: number;
+  explosivite: number;
+  vitesse: number;
+  endurance: number;
+}
+
+export interface ApiCalendrierException {
+  date: string;
+  label?: string | null;
+}
+
+export interface ApiCalendrierMatchs {
+  jour_habituel: string | null;
+  exceptions: ApiCalendrierException[];
+}
+
+export interface ApiObjectifEsthetique {
+  tags: string[];
+  texte_libre?: string | null;
+}
+
 export interface ApiProfil {
   id: number;
   objectifs: string[];
+  poste: string;
   niveau_physique: string;
+  niveaux_qualites_physiques: ApiQualitesPhysiques;
   niveau_intellectuel: string;
+  calendrier_matchs: ApiCalendrierMatchs;
+  objectif_esthetique: ApiObjectifEsthetique | null;
   contraintes_temps: string;
   materiel: string;
   date_creation: string | null;
@@ -132,6 +158,32 @@ export const addSessionApprentissage = (payload: {
 // ---------- Streaks ----------
 
 export const getStreaks = (days = 35) => request<ApiStreakDay[]>(`/api/streaks?days=${days}`);
+
+// ---------- Historique de séances (prévu vs réalisé, contexte, phase calendaire) ----------
+
+export interface ApiEtatDeclareAvant {
+  sommeil?: string | null;
+  motivation?: string | null;
+  temps_dispo?: string | null;
+  envie_texte?: string | null;
+}
+
+export interface ApiHistoriqueSeance {
+  id: number;
+  date: string;
+  phase_calendaire: string;
+  type_seance: string;
+  exercices_prevus: Record<string, unknown>[];
+  exercices_realises: Record<string, unknown>[];
+  rpe: number | null;
+  notes: string | null;
+  etat_declare_avant: ApiEtatDeclareAvant;
+}
+
+export const getHistoriqueSeances = () => request<ApiHistoriqueSeance[]>('/api/historique_seances');
+export const addHistoriqueSeance = (
+  payload: Omit<ApiHistoriqueSeance, 'id' | 'phase_calendaire'>
+) => request<ApiHistoriqueSeance>('/api/historique_seances', { method: 'POST', body: JSON.stringify(payload) });
 
 // ---------- Stats & progression ----------
 

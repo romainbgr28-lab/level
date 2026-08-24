@@ -61,15 +61,74 @@ export default function Profile() {
         ))}
       </div>
 
+      <div className="section-title">Poste</div>
+      <div className="info-row">
+        <span className="info-row__label">Poste joué</span>
+        <span className="info-row__value">{profil.poste}</span>
+      </div>
+
       <div className="section-title">Niveaux actuels</div>
       <div className="info-row">
         <span className="info-row__label">Physique</span>
         <span className="info-row__value">{profil.niveau_physique}</span>
       </div>
       <div className="info-row">
+        <span className="info-row__label">Force</span>
+        <span className="info-row__value">{profil.niveaux_qualites_physiques.force}/5</span>
+      </div>
+      <div className="info-row">
+        <span className="info-row__label">Explosivité</span>
+        <span className="info-row__value">{profil.niveaux_qualites_physiques.explosivite}/5</span>
+      </div>
+      <div className="info-row">
+        <span className="info-row__label">Vitesse</span>
+        <span className="info-row__value">{profil.niveaux_qualites_physiques.vitesse}/5</span>
+      </div>
+      <div className="info-row">
+        <span className="info-row__label">Endurance</span>
+        <span className="info-row__value">{profil.niveaux_qualites_physiques.endurance}/5</span>
+      </div>
+      <div className="info-row">
         <span className="info-row__label">Intellectuel</span>
         <span className="info-row__value">{profil.niveau_intellectuel}</span>
       </div>
+
+      <div className="section-title">Calendrier des matchs</div>
+      <div className="info-row">
+        <span className="info-row__label">Jour habituel</span>
+        <span className="info-row__value">{profil.calendrier_matchs.jour_habituel ?? '—'}</span>
+      </div>
+      {profil.calendrier_matchs.exceptions.length > 0 && (
+        <ul className="exception-list">
+          {profil.calendrier_matchs.exceptions.map((e, i) => (
+            <li key={`${e.date}-${i}`} className="exception-list__item">
+              <span>
+                {new Date(e.date).toLocaleDateString('fr-FR')}
+                {e.label ? ` — ${e.label}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {profil.objectif_esthetique &&
+        (profil.objectif_esthetique.tags.length > 0 || profil.objectif_esthetique.texte_libre) && (
+          <>
+            <div className="section-title">Objectif esthétique</div>
+            {profil.objectif_esthetique.tags.length > 0 && (
+              <div className="tag-row">
+                {profil.objectif_esthetique.tags.map((t) => (
+                  <span className="tag" key={t}>
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+            {profil.objectif_esthetique.texte_libre && (
+              <p className="subtle">{profil.objectif_esthetique.texte_libre}</p>
+            )}
+          </>
+        )}
 
       <div className="section-title">Contraintes & matériel</div>
       <div className="info-row">

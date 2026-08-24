@@ -9,8 +9,12 @@ class Profil(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     objectifs = Column(JSON, nullable=False, default=list)
-    niveau_physique = Column(String, nullable=False)
+    poste = Column(String, nullable=False)  # Gardien | Défenseur | Milieu | Attaquant
+    niveau_physique = Column(String, nullable=False)  # résumé auto (Débutant/Intermédiaire/Avancé)
+    niveaux_qualites_physiques = Column(JSON, nullable=False, default=dict)  # {force, explosivite, vitesse, endurance}: 1-5
     niveau_intellectuel = Column(String, nullable=False)
+    calendrier_matchs = Column(JSON, nullable=False, default=dict)  # {jour_habituel, exceptions: [{date, label}]}
+    objectif_esthetique = Column(JSON, nullable=True)  # {tags: [...], texte_libre: str} | null
     contraintes_temps = Column(String, nullable=False)
     materiel = Column(String, nullable=False)
     date_creation = Column(DateTime, server_default=func.now())
@@ -67,3 +71,20 @@ class Streak(Base):
     date = Column(Date, primary_key=True)
     sport_fait = Column(Integer, nullable=False, default=0)  # 0/1 bool
     apprentissage_fait = Column(Integer, nullable=False, default=0)  # 0/1 bool
+
+
+class HistoriqueSeance(Base):
+    """Journal détaillé d'une séance : ce qui était prévu vs réalisé, contexte déclaré
+    avant la séance, et la phase du calendrier de matchs au moment de la séance."""
+
+    __tablename__ = "historique_seances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False)
+    phase_calendaire = Column(String, nullable=False)  # calculée serveur (cf. calendrier.py)
+    type_seance = Column(String, nullable=False)
+    exercices_prevus = Column(JSON, nullable=False, default=list)
+    exercices_realises = Column(JSON, nullable=False, default=list)
+    rpe = Column(Integer, nullable=True)
+    notes = Column(String, nullable=True)
+    etat_declare_avant = Column(JSON, nullable=False, default=dict)  # {sommeil, motivation, temps_dispo, envie_texte}

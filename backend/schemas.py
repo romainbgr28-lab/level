@@ -4,10 +4,36 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict
 
 
+class QualitesPhysiques(BaseModel):
+    force: int
+    explosivite: int
+    vitesse: int
+    endurance: int
+
+
+class CalendrierException(BaseModel):
+    date: date
+    label: Optional[str] = None
+
+
+class CalendrierMatchs(BaseModel):
+    jour_habituel: Optional[str] = None
+    exceptions: list[CalendrierException] = []
+
+
+class ObjectifEsthetique(BaseModel):
+    tags: list[str] = []
+    texte_libre: Optional[str] = None
+
+
 class ProfilBase(BaseModel):
     objectifs: list[str]
+    poste: str
     niveau_physique: str
+    niveaux_qualites_physiques: QualitesPhysiques
     niveau_intellectuel: str
+    calendrier_matchs: CalendrierMatchs
+    objectif_esthetique: Optional[ObjectifEsthetique] = None
     contraintes_temps: str
     materiel: str
 
@@ -106,6 +132,33 @@ class StreakBase(BaseModel):
 
 class StreakOut(StreakBase):
     model_config = ConfigDict(from_attributes=True)
+
+
+class EtatDeclareAvant(BaseModel):
+    sommeil: Optional[str] = None
+    motivation: Optional[str] = None
+    temps_dispo: Optional[str] = None
+    envie_texte: Optional[str] = None
+
+
+class HistoriqueSeanceBase(BaseModel):
+    date: date
+    type_seance: str
+    exercices_prevus: list[dict[str, Any]] = []
+    exercices_realises: list[dict[str, Any]] = []
+    rpe: Optional[int] = None
+    notes: Optional[str] = None
+    etat_declare_avant: EtatDeclareAvant = EtatDeclareAvant()
+
+
+class HistoriqueSeanceCreate(HistoriqueSeanceBase):
+    pass  # phase_calendaire n'est pas fourni par le client : calculé côté serveur
+
+
+class HistoriqueSeanceOut(HistoriqueSeanceBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    phase_calendaire: str
 
 
 class StatsOut(BaseModel):

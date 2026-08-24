@@ -4,7 +4,9 @@ PWA de coaching personnel (force physique + développement intellectuel), instal
 
 ## Stack
 
-React + Vite + TypeScript, `react-router-dom` pour la navigation, `vite-plugin-pwa` pour le manifest et le service worker. Backend FastAPI + SQLite (`backend/`) pour le profil, les séances, l'historique d'exercices, les modules d'apprentissage et les streaks. Le bilan hebdomadaire et l'actu n'ont pas de table dédiée et restent mockés (`src/data/mockData.ts`).
+React + Vite + TypeScript, `react-router-dom` pour la navigation, `vite-plugin-pwa` pour le manifest et le service worker. Backend FastAPI + SQLite (`backend/`) pour le profil, les séances, l'historique d'exercices, l'historique de séances (prévu/réalisé + contexte + phase calendaire), les modules d'apprentissage et les streaks. Le bilan hebdomadaire et l'actu n'ont pas de table dédiée et restent mockés (`src/data/mockData.ts`).
+
+⚠️ SQLite ne migre pas automatiquement un changement de schéma : après avoir tiré une modification des modèles (`backend/models.py`), supprime `backend/level.db` avant de relancer `uvicorn`, sinon les anciennes colonnes/tables restent en place et l'API renverra des erreurs de validation.
 
 ## Démarrer
 
@@ -44,9 +46,11 @@ npm run preview
 backend/
   main.py       endpoints REST FastAPI
   models.py     tables SQLAlchemy (profil, seances, exercices_historique, modules_intellectuels,
-                 sessions_apprentissage, streaks)
+                 sessions_apprentissage, streaks, historique_seances)
   schemas.py    schémas Pydantic
-  seed.py       données initiales (profil, module, séance du jour)
+  calendrier.py calcul de la phase calendaire (jour_de_match / veille / lendemain / developpement)
+                 à partir du calendrier_matchs du profil
+  seed.py       données initiales (module, séance du jour — le profil reste vide pour déclencher l'onboarding)
 src/
   api/          client.ts — appels fetch vers le backend
   types/        types partagés (contrat de données)

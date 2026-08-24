@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from calendrier import compute_phase
 from database import Base, SessionLocal, engine, get_db
 from seed import seed
 
@@ -36,14 +37,17 @@ def get_profil(db: Session = Depends(get_db)):
 
 @app.post("/api/profil", response_model=schemas.ProfilOut)
 def upsert_profil(payload: schemas.ProfilCreate, db: Session = Depends(get_db)):
+    # mode="json" : les dates imbriquées dans calendrier_matchs.exceptions doivent être
+    # sérialisées en str avant stockage dans une colonne JSON (sqlite ne sait pas encoder `date`).
+    data = payload.model_dump(mode="json")
     existing = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
     if existing:
-        for key, value in payload.model_dump().items():
+        for key, value in data.items():
             setattr(existing, key, value)
         db.commit()
         db.refresh(existing)
         return existing
-    profil = models.Profil(**payload.model_dump())
+    profil = models.Profil(**data)
     db.add(profil)
     db.commit()
     db.refresh(profil)
@@ -172,6 +176,26 @@ def create_session_apprentissage(payload: schemas.SessionApprentissageCreate, db
         db.add(today_streak)
     else:
         today_streak.apprentissage_fait = 1
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+# ---------- Historique de séances (prévu vs réalisé, contexte, phase calendaire) ----------
+
+@app.get("/api/historique_seances", response_model=list[schemas.HistoriqueSeanceOut])
+def list_historique_seances(db: Session = Depends(get_db)):
+    return db.query(models.HistoriqueSeance).order_by(models.HistoriqueSeance.date.desc()).all()
+
+
+@app.post("/api/historique_seances", response_model=schemas.HistoriqueSeanceOut)
+def create_historique_seance(payload: schemas.HistoriqueSeanceCreate, db: Session = Depends(get_db)):
+    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    calendrier = profil.calendrier_matchs if profil else None
+    phase = compute_phase(payload.date, calendrier)
+
+    entry = models.HistoriqueSeance(**payload.model_dump(), phase_calendaire=phase)
+    db.add(entry)
     db.commit()
     db.refresh(entry)
     return entry

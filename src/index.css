@@ -684,6 +684,53 @@ p {
   margin: 28px 0;
 }
 
+.exception-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.exception-form__date {
+  flex: 0 0 150px;
+  min-height: unset;
+  padding: 10px;
+}
+
+.exception-form__label {
+  flex: 1;
+  min-width: 140px;
+  min-height: unset;
+  padding: 10px;
+}
+
+.exception-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exception-list__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.exception-list__item button {
+  color: var(--text-faint);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
 .back-btn {
   display: inline-flex;
   align-items: center;
