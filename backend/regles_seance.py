@@ -11,6 +11,13 @@ from typing import Any, Optional
 
 JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
+# Onboarding (src/screens/Onboarding.tsx) collecte les jours disponibles sous forme abrégée
+# ("Lun", "Mar", ...), et generer_programme (main.py) construit contraintes_temps et
+# gabarit_hebdomadaire avec ces mêmes abréviations comme clés — distinct de JOURS_SEMAINE
+# ci-dessus (noms complets), utilisé uniquement pour calendrier_matchs.jour_habituel. Ne pas
+# confondre les deux listes lors d'un lookup par date.today().weekday().
+JOURS_SEMAINE_ABBREV = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+
 PHASES_INTENSITE = {
     "lendemain_match": "récupération",
     "veille_match": "activation_légère",

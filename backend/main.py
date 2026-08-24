@@ -802,8 +802,13 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     if programme:
         semaine_courante = _semaine_courante_programme(programme, date.today())
         phase_programme = _phase_programme_pour_semaine(programme, semaine_courante)
-        jour_fr = regles_seance.JOURS_SEMAINE[date.today().weekday()]
-        type_seance_gabarit = (programme.gabarit_hebdomadaire or {}).get(jour_fr)
+        # gabarit_hebdomadaire est keyé par jour ABRÉGÉ ("Lun", "Mer", ...), pas le nom complet
+        # ("Lundi") utilisé pour calendrier_matchs.jour_habituel — voir regles_seance.py.
+        jour_abbrev = regles_seance.JOURS_SEMAINE_ABBREV[date.today().weekday()]
+        type_seance_gabarit_brut = (programme.gabarit_hebdomadaire or {}).get(jour_abbrev)
+        # Tolère une valeur renvoyée par Mistral légèrement différente de la casse/des accents
+        # canoniques (déjà observé en production) plutôt que de la traiter comme absente.
+        type_seance_gabarit = _normaliser_type_seance_programme(type_seance_gabarit_brut)
 
         if type_seance_gabarit == "repos" and not etat_du_jour.get("forcer_seance_legere"):
             raise HTTPException(
@@ -1049,6 +1054,28 @@ DUREE_SEMAINES_PROGRAMME_DEFAUT = 8
 TYPES_SEANCE_PROGRAMME = ["force", "explosivité_vitesse", "esthétique", "endurance", "repos"]
 
 
+def _normaliser_type_seance_programme(valeur: Optional[str]) -> Optional[str]:
+    """Fait correspondre une valeur de gabarit_hebdomadaire à un type canonique de
+    TYPES_SEANCE_PROGRAMME, tolérant une casse ou des accents légèrement différents de ce
+    que demande le prompt (déjà observé en pratique dans les réponses Mistral). Retourne None
+    si aucune correspondance, y compris si la valeur est absente (jour non couvert par le
+    gabarit) — à distinguer d'une vraie valeur invalide au moment de la génération (voir
+    generer_programme, qui rejette et retente plutôt que de stocker une valeur non reconnue)."""
+    if not isinstance(valeur, str) or not valeur.strip():
+        return None
+
+    def _sans_accents(s: str) -> str:
+        for a, b in (("é", "e"), ("è", "e"), ("ê", "e"), ("à", "a")):
+            s = s.replace(a, b)
+        return s
+
+    cible = _sans_accents(valeur.strip().lower())
+    for type_ in TYPES_SEANCE_PROGRAMME:
+        if cible == _sans_accents(type_.lower()):
+            return type_
+    return None
+
+
 def _construire_system_prompt_programme() -> str:
     return (
         "Tu es un préparateur physique spécialisé en football qui construit un programme "
@@ -1177,6 +1204,34 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
             logger.warning("Réponse Mistral incomplète ou invalide pour le programme (tentative %s) : %s", tentative + 1, reponse)
             continue
 
+        # Valide et normalise gabarit_hebdomadaire : chaque valeur doit correspondre à un type
+        # canonique de TYPES_SEANCE_PROGRAMME (une casse/accentuation légèrement différente est
+        # tolérée et corrigée), sinon la réponse est rejetée et une nouvelle tentative est faite
+        # plutôt que de stocker une valeur qui n'apparaîtra jamais correctement à l'écran.
+        gabarit_brut = reponse.get("gabarit_hebdomadaire")
+        if not isinstance(gabarit_brut, dict) or not gabarit_brut:
+            logger.warning("gabarit_hebdomadaire absent ou vide pour le programme (tentative %s) : %s", tentative + 1, reponse)
+            continue
+
+        gabarit_normalise: dict[str, str] = {}
+        gabarit_valide = True
+        for jour, type_brut in gabarit_brut.items():
+            type_norm = _normaliser_type_seance_programme(type_brut)
+            if type_norm is None:
+                logger.warning(
+                    "Type de séance non reconnu dans gabarit_hebdomadaire (tentative %s) : jour=%r valeur=%r",
+                    tentative + 1,
+                    jour,
+                    type_brut,
+                )
+                gabarit_valide = False
+                break
+            gabarit_normalise[jour] = type_norm
+
+        if not gabarit_valide:
+            continue
+
+        reponse["gabarit_hebdomadaire"] = gabarit_normalise
         data = reponse
         break
 

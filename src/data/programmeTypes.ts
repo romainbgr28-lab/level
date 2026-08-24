@@ -18,6 +18,19 @@ export const TYPE_SEANCE_META: Record<string, TypeSeanceMeta> = {
 
 const FALLBACK_META: TypeSeanceMeta = { label: 'Séance', icon: '•', color: 'var(--text-dim)' };
 
+function sansAccents(s: string): string {
+  return s
+    .replace(/é|è|ê/g, 'e')
+    .replace(/à/g, 'a');
+}
+
+// Tolère une valeur légèrement différente de la casse/des accents canoniques (déjà observé
+// dans des programmes générés avant la normalisation appliquée côté backend à la génération —
+// voir backend/main.py::_normaliser_type_seance_programme) plutôt que de retomber sur le
+// FALLBACK_META générique pour un type par ailleurs parfaitement valide.
 export function typeSeanceMeta(type: string): TypeSeanceMeta {
-  return TYPE_SEANCE_META[type] ?? FALLBACK_META;
+  if (TYPE_SEANCE_META[type]) return TYPE_SEANCE_META[type];
+  const cible = sansAccents(type.trim().toLowerCase());
+  const cle = Object.keys(TYPE_SEANCE_META).find((k) => sansAccents(k.toLowerCase()) === cible);
+  return cle ? TYPE_SEANCE_META[cle] : FALLBACK_META;
 }

@@ -25,6 +25,7 @@ import type {
   ApiTerminerSeanceResult,
 } from '../api/client';
 import { phaseCourante, semaineActuelle, typeSeanceGabaritAujourdhui } from '../utils/programme';
+import { typeSeanceMeta } from '../data/programmeTypes';
 
 const dateLabel = new Date().toLocaleDateString('fr-FR', {
   weekday: 'long',
@@ -48,13 +49,6 @@ const TYPE_SEANCE_OPTIONS: { value: string; label: string }[] = [
   { value: 'décharge', label: 'Décharge / récupération' },
 ];
 
-const TYPE_SEANCE_LABELS: Record<string, string> = Object.fromEntries(
-  TYPE_SEANCE_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
-);
-
-function labelTypeSeance(value: string): string {
-  return TYPE_SEANCE_LABELS[value] ?? value;
-}
 
 const REST_SECONDS = 90;
 
@@ -404,7 +398,7 @@ export default function Today() {
         <section className="card">
           <div className="card__eyebrow">Séance du jour</div>
           <p className="subtle" style={{ margin: '4px 0 14px' }}>
-            Aujourd’hui : séance {labelTypeSeance(planDuJour.typeGabarit)}, semaine {planDuJour.semaine}/
+            Aujourd’hui : séance {typeSeanceMeta(planDuJour.typeGabarit).label}, semaine {planDuJour.semaine}/
             {programme?.duree_semaines}
             {planDuJour.phase ? ` — phase ${planDuJour.phase.nom}` : ''}.
           </p>

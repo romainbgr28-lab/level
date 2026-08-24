@@ -1,7 +1,10 @@
 import type { ApiProgramme, ApiProgrammePhase } from '../api/client';
 
-// Doit rester synchronisé avec regles_seance.JOURS_SEMAINE côté backend.
-export const JOURS_SEMAINE = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+// gabarit_hebdomadaire est keyé par jour ABRÉGÉ ("Lun", "Mer", ...), pas le nom complet —
+// mêmes abréviations que src/screens/Onboarding.tsx (JOURS) et backend/regles_seance.py
+// (JOURS_SEMAINE_ABBREV). Ne pas confondre avec le nom complet utilisé pour
+// calendrier_matchs.jour_habituel (JOURS_SEMAINE dans Onboarding.tsx).
+export const JOURS_SEMAINE_ABBREV = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 /** Semaine en cours du programme (1-indexée, plafonnée à duree_semaines) — même formule
  * que _semaine_courante_programme() côté backend (backend/main.py), à garder synchronisée. */
@@ -16,14 +19,14 @@ export function phaseCourante(programme: ApiProgramme, semaine: number): ApiProg
   return programme.phases.find((p) => semaine >= p.semaine_debut && semaine <= p.semaine_fin);
 }
 
-export function jourFrancaisAujourdhui(): string {
-  // getDay() : 0 = dimanche ... 6 = samedi -> décalage vers JOURS_SEMAINE (0 = lundi).
+export function jourAbbrevAujourdhui(): string {
+  // getDay() : 0 = dimanche ... 6 = samedi -> décalage vers JOURS_SEMAINE_ABBREV (0 = lundi).
   const index = (new Date().getDay() + 6) % 7;
-  return JOURS_SEMAINE[index];
+  return JOURS_SEMAINE_ABBREV[index];
 }
 
 /** Type de séance prévu par le gabarit hebdomadaire pour aujourd'hui, ou undefined si le
  * jour courant n'est pas couvert par le gabarit (jour non disponible déclaré à l'onboarding). */
 export function typeSeanceGabaritAujourdhui(programme: ApiProgramme): string | undefined {
-  return programme.gabarit_hebdomadaire[jourFrancaisAujourdhui()];
+  return programme.gabarit_hebdomadaire[jourAbbrevAujourdhui()];
 }
