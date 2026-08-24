@@ -173,8 +173,8 @@ export interface ApiHistoriqueSeance {
   date: string;
   phase_calendaire: string;
   type_seance: string;
-  exercices_prevus: Record<string, unknown>[];
-  exercices_realises: Record<string, unknown>[];
+  exercices_prevus: unknown[];
+  exercices_realises: unknown[];
   rpe: number | null;
   notes: string | null;
   etat_declare_avant: ApiEtatDeclareAvant;
