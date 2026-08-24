@@ -41,9 +41,10 @@ def get_exercices_musculation_base() -> list[dict]:
 
 
 def get_exercices_bibliotheque_extension() -> list[dict]:
-    """25 exercices complémentaires (échauffement, explosivité, agilité, gainage_prevention,
+    """46 exercices complémentaires (échauffement, explosivité, agilité, gainage_prevention,
     force, esthétique, technique, endurance, mobilité/récupération) destinés à compléter les
-    4 exercices de musculation de base dans la bibliothèque (seed.py)."""
+    4 exercices de musculation de base dans la bibliothèque (seed.py). Le squat n'y est pas
+    dupliqué : il reste porté par la fiche "Squat (back squat / squat libre)" de la base."""
     return _load_extension()["exercices"]
 
 
