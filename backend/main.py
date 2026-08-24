@@ -1,3 +1,4 @@
+import os
 from datetime import date, timedelta
 from typing import Optional
 
@@ -19,9 +20,14 @@ with SessionLocal() as _db:
 
 app = FastAPI(title="LEVEL API")
 
+# CORS_ORIGINS: liste d'origines séparées par des virgules (ex: https://level.vercel.app).
+# Sans variable définie, on autorise tout (pratique en local / avant configuration).
+_cors_origins_env = os.environ.get("CORS_ORIGINS")
+allow_origins = [o.strip() for o in _cors_origins_env.split(",")] if _cors_origins_env else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
