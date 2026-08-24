@@ -36,7 +36,8 @@ class Seance(Base):
     type_seance = Column(String, nullable=True)  # force | explosivité_vitesse | esthétique | décharge (moteur de règles)
     explication = Column(String, nullable=True)  # explication IA associée à la séance générée
     rpe = Column(Integer, nullable=True)
-    duree_reelle = Column(Integer, nullable=True)  # minutes
+    duree_prevue = Column(Integer, nullable=True)  # minutes, estimée par le calibrage temps_dispo à la génération
+    duree_reelle = Column(Integer, nullable=True)  # minutes, déclarée par le joueur en fin de séance
     note = Column(String, nullable=True)  # ressenti général en fin de séance, texte libre optionnel
 
 
@@ -78,6 +79,11 @@ class SerieLoggee(Base):
     poids_kg = Column(Float, nullable=True)
     repetitions = Column(Integer, nullable=True)
     coche = Column(Integer, nullable=False, default=0)  # 0/1 bool
+    # Validation rapide par bouton : "facile" | "comme_prevu" | "dur" -> rpe_approx
+    # calculé côté serveur (voir main.py::DIFFICULTE_RPE_APPROX). L'utilisateur peut
+    # rester sur ce bouton ou affiner poids_kg/repetitions/rpe_approx via "Modifier".
+    difficulte = Column(String, nullable=True)
+    rpe_approx = Column(Integer, nullable=True)
     horodatage = Column(DateTime, server_default=func.now())
 
 

@@ -65,6 +65,10 @@ class SeanceExerciceItem(BaseModel):
     repetitions: str
     charge_indicative: Optional[str] = None
     notes: Optional[str] = None
+    # Pré-remplissage calculé côté serveur (garde-fou temps + moteur de règles) : le
+    # joueur n'a rien à saisir pour démarrer une série.
+    rpe_cible: Optional[int] = None
+    temps_repos_recommande_s: Optional[int] = None
 
 
 class SeanceBase(BaseModel):
@@ -75,6 +79,7 @@ class SeanceBase(BaseModel):
     type_seance: Optional[str] = None
     explication: Optional[str] = None
     rpe: Optional[int] = None
+    duree_prevue: Optional[int] = None
     duree_reelle: Optional[int] = None
     note: Optional[str] = None
 
@@ -86,6 +91,7 @@ class SeanceCreate(SeanceBase):
 class SeanceUpdate(BaseModel):
     statut: Optional[str] = None
     rpe: Optional[int] = None
+    duree_prevue: Optional[int] = None
     duree_reelle: Optional[int] = None
     exercices: Optional[list[dict[str, Any]]] = None
     note: Optional[str] = None
@@ -131,6 +137,10 @@ class SerieLoggeeBase(BaseModel):
     poids_kg: Optional[float] = None
     repetitions: Optional[int] = None
     coche: bool = False
+    # Validation rapide par bouton (facile / comme_prevu / dur) : rpe_approx est
+    # calculé côté serveur depuis difficulte si non fourni explicitement.
+    difficulte: Optional[str] = None
+    rpe_approx: Optional[int] = None
 
 
 class SerieLoggeeCreate(SerieLoggeeBase):
@@ -141,6 +151,8 @@ class SerieLoggeeUpdate(BaseModel):
     poids_kg: Optional[float] = None
     repetitions: Optional[int] = None
     coche: Optional[bool] = None
+    difficulte: Optional[str] = None
+    rpe_approx: Optional[int] = None
 
 
 class SerieLoggeeOut(SerieLoggeeBase):
@@ -280,8 +292,11 @@ class SeanceGenereeOut(BaseModel):
 
 class TerminerSeancePayload(BaseModel):
     seance_id: int
-    rpe: Optional[int] = None  # ressenti d'intensité (1-10), déclaré directement par le joueur
+    # Override manuel optionnel : si absent, le RPE est déduit automatiquement de la
+    # moyenne des rpe_approx (facile/comme prévu/dur) des séries validées.
+    rpe: Optional[int] = None
     note: Optional[str] = None  # ressenti général en texte libre, optionnel
+    duree_reelle_min: Optional[int] = None  # durée réellement écoulée, déclarée par le joueur
 
 
 class TerminerSeanceOut(BaseModel):

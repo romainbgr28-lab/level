@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import connaissances
+import duree_seance
 import mistral_client
 import models
 import regles_seance
@@ -205,6 +206,17 @@ def get_derniere_performance(exercice_id: int, seance_id: Optional[int] = None, 
 
 # ---------- Séries loguées (logging temps réel façon Hevy) ----------
 
+# Validation rapide par bouton (facile / comme prévu / dur) -> RPE approximatif stocké
+# dans series_loggees.rpe_approx, utilisé par le moteur de règles pour la charge de la
+# prochaine séance du même type (voir regles_seance.calculer_ajustement_charge : rpe >= 8
+# réduit charge/volume, rpe <= 6 sur 2 séances maîtrisées l'augmente).
+DIFFICULTE_RPE_APPROX = {"facile": 5, "comme_prevu": 7, "dur": 9}
+
+
+def _rpe_approx_depuis_difficulte(difficulte: Optional[str]) -> Optional[int]:
+    return DIFFICULTE_RPE_APPROX.get(difficulte) if difficulte else None
+
+
 @app.get("/api/series_loggees", response_model=list[schemas.SerieLoggeeOut])
 def list_series_loggees(seance_id: int, db: Session = Depends(get_db)):
     return (
@@ -219,6 +231,8 @@ def list_series_loggees(seance_id: int, db: Session = Depends(get_db)):
 def create_serie_loggee(payload: schemas.SerieLoggeeCreate, db: Session = Depends(get_db)):
     data = payload.model_dump()
     data["coche"] = int(data["coche"])
+    if data.get("rpe_approx") is None:
+        data["rpe_approx"] = _rpe_approx_depuis_difficulte(data.get("difficulte"))
     serie = models.SerieLoggee(**data)
     db.add(serie)
     db.commit()
@@ -231,7 +245,10 @@ def update_serie_loggee(serie_id: int, payload: schemas.SerieLoggeeUpdate, db: S
     serie = db.get(models.SerieLoggee, serie_id)
     if not serie:
         raise HTTPException(status_code=404, detail="Série introuvable")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if "difficulte" in updates and "rpe_approx" not in updates:
+        updates["rpe_approx"] = _rpe_approx_depuis_difficulte(updates["difficulte"])
+    for key, value in updates.items():
         setattr(serie, key, int(value) if key == "coche" else value)
     db.commit()
     db.refresh(serie)
@@ -485,31 +502,33 @@ def _selectionner_exercices_candidats(
 
 
 def _construire_seance_secours(
-    candidats: list[models.ExerciceBibliotheque], type_seance_suggere: str
+    plan: list[dict], type_seance_suggere: str, rpe_cible: int
 ) -> dict:
-    """Séance de repli, construite sans IA à partir des candidats déjà filtrés, utilisée
+    """Séance de repli, construite sans IA à partir du plan déjà calibré en temps, utilisée
     quand Mistral échoue à renvoyer des exercice_id valides après une nouvelle tentative."""
-    autres = [ex for ex in candidats if ex.type != "gainage_prevention"][:4]
-    gainage = next((ex for ex in candidats if ex.type == "gainage_prevention"), None)
+    autres = [p for p in plan if p["exercice"].type != "gainage_prevention"][:4]
+    gainage = next((p for p in plan if p["exercice"].type == "gainage_prevention"), None)
 
-    choisis = autres or list(candidats)[:4]
+    choisis = autres or list(plan)[:4]
     if gainage and gainage not in choisis:
         choisis.append(gainage)
 
     exercices = [
         {
-            "exercice_id": ex.id,
-            "series": 3,
+            "exercice_id": p["exercice"].id,
+            "series": p["series"],
             "repetitions": "10-12",
-            "charge_indicative": "à ajuster selon ressenti",
+            "charge_indicative": "poids du corps" if p["exercice"].charge_recommandee == "poids_du_corps" else "à ajuster selon ressenti",
             "notes": None,
+            "rpe_cible": rpe_cible,
+            "temps_repos_recommande_s": p["temps_repos_recommande_s"],
         }
-        for ex in choisis
+        for p in choisis
     ]
 
     return {
         "nom_seance": f"Séance {type_seance_suggere} (générée automatiquement)",
-        "duree_min": 40,
+        "duree_min": duree_seance.duree_totale_estimee_min(choisis),
         "exercices": exercices,
         "explication": (
             "Séance de secours générée automatiquement à partir de la bibliothèque d'exercices : "
@@ -540,6 +559,21 @@ def _corriger_charges_poids_du_corps(exercices: list[dict], charge_recommandee_p
         item["charge_indicative"] = "poids du corps"
 
 
+def _appliquer_calibrage_temps(exercices: list[dict], plan: list[dict], rpe_cible: int) -> None:
+    """Garde-fou post-génération : impose series / temps_repos_recommande_s à partir du plan
+    calculé côté serveur (duree_seance.calibrer_exercices) et rpe_cible par défaut, plutôt que
+    de laisser Mistral décider seul du respect du temps disponible."""
+    plan_par_id = {item["exercice"].id: item for item in plan}
+    for item in exercices:
+        p = plan_par_id.get(item.get("exercice_id"))
+        if p is None:
+            continue
+        item["series"] = p["series"]
+        item["temps_repos_recommande_s"] = p["temps_repos_recommande_s"]
+        if not isinstance(item.get("rpe_cible"), int):
+            item["rpe_cible"] = rpe_cible
+
+
 def _construire_system_prompt() -> str:
     notes = connaissances.get_notes_generation_ia()
     notes_txt = "\n".join(f"- {n}" for n in notes)
@@ -558,9 +592,10 @@ def _construire_prompt_generation(
     profil: dict,
     recommandation: dict,
     etat_du_jour: dict,
-    bibliotheque: list[models.ExerciceBibliotheque],
+    plan: list[dict],
     fiches_theoriques: list[str],
     charges_depart: Optional[dict[int, float]] = None,
+    rpe_cible: int = duree_seance.RPE_CIBLE_DEFAUT,
 ) -> str:
     exclusions = recommandation.get("exclusions") or []
     exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
@@ -568,27 +603,37 @@ def _construire_prompt_generation(
 
     charges_depart = charges_depart or {}
 
-    def _ligne_bibliotheque(ex: models.ExerciceBibliotheque) -> str:
+    def _ligne_bibliotheque(item: dict) -> str:
+        ex: models.ExerciceBibliotheque = item["exercice"]
         ligne = (
             f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type}, "
-            f"charge_recommandee : {ex.charge_recommandee})"
+            f"charge_recommandee : {ex.charge_recommandee}) — nombre de séries imposé : {item['series']} "
+            f"(déjà calibré selon le temps disponible, ne pas le modifier)"
         )
         charge = charges_depart.get(ex.id)
         if charge is not None:
             ligne += f" — {formater_recommandation_charge(charge)}"
         return ligne
 
-    bibliotheque_txt = "\n".join(_ligne_bibliotheque(ex) for ex in bibliotheque)
+    bibliotheque_txt = "\n".join(_ligne_bibliotheque(item) for item in plan)
 
     fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
 
     return f"""Tu es un coach sportif qui construit une séance de sport concrète pour un joueur de football amateur.
 
 EXERCICES DISPONIBLES (présélection déjà filtrée pour ce joueur selon le type de séance, le matériel
-disponible et ses zones sensibles — tu dois obligatoirement choisir les exercices de la séance
-UNIQUEMENT parmi cette liste, en référençant leur id ; interdiction stricte d'inventer un exercice
-ou de référencer un id qui n'y figure pas)
+disponible, ses zones sensibles ET le temps disponible aujourd'hui — tu dois obligatoirement choisir
+les exercices de la séance UNIQUEMENT parmi cette liste, en référençant leur id ; interdiction
+stricte d'inventer un exercice ou de référencer un id qui n'y figure pas)
 {bibliotheque_txt}
+
+CONTRAINTE DE TEMPS DÉJÀ CALCULÉE : le nombre de séries de chaque exercice ci-dessus a déjà été
+calculé côté serveur pour que la séance tienne dans le temps disponible déclaré par le joueur
+(échauffement + exécution + repos entre séries). Reprends exactement ce nombre de séries dans
+"series" pour chaque exercice — ne l'augmente ni ne le diminue.
+
+RPE cible pour cette séance (indicatif, à reprendre tel quel pour le champ "rpe_cible" de chaque
+exercice, sauf raison technique particulière propre à un exercice) : {rpe_cible}/10.
 
 Chaque exercice ci-dessus porte un champ charge_recommandee (poids_du_corps, charge_legere,
 charge_moderee ou charge_lourde_progressive) qui indique la nature de charge adaptée à cet
@@ -643,7 +688,7 @@ suivant :
   "nom_seance": "string",
   "duree_min": nombre entier de minutes,
   "exercices": [
-    {{"exercice_id": nombre entier (id pris dans la liste EXERCICES DISPONIBLES), "series": nombre entier, "repetitions": "string", "charge_indicative": "string", "notes": "string"}}
+    {{"exercice_id": nombre entier (id pris dans la liste EXERCICES DISPONIBLES), "series": nombre entier (celui imposé ci-dessus), "repetitions": "string", "charge_indicative": "string", "rpe_cible": nombre entier, "notes": "string"}}
   ],
   "explication": "texte en français expliquant le pourquoi de cette séance (phase calendaire, poste, état du jour)"
 }}"""
@@ -706,26 +751,31 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
         zones_sensibles,
     )
 
+    temps_dispo_min = duree_seance.parser_temps_dispo_minutes(etat_du_jour.get("temps_dispo"))
+    plan = duree_seance.calibrer_exercices(candidats, temps_dispo_min)
+    rpe_cible = duree_seance.rpe_cible_pour_intensite(recommandation.get("intensite_max"))
+
     logger.info(
-        "Génération séance : type_seance_suggere=%s -> %d candidat(s) envoyé(s) à Mistral : %s",
+        "Génération séance : type_seance_suggere=%s, temps_dispo=%s min -> %d candidat(s) calibré(s) envoyé(s) à Mistral : %s",
         recommandation["type_seance_suggere"],
-        len(candidats),
-        [(ex.id, ex.type, ex.nom) for ex in candidats],
+        temps_dispo_min,
+        len(plan),
+        [(p["exercice"].id, p["exercice"].type, p["series"]) for p in plan],
     )
 
     fiches_theoriques = connaissances.selectionner_fiches_pertinentes(
         recommandation["type_seance_suggere"], profil_dict.get("poste"), zone_sensible
     )
     charges_depart = _construire_charges_depart(
-        candidats, profil_dict.get("poids_kg"), profil_dict.get("niveau_physique"), db
+        [p["exercice"] for p in plan], profil_dict.get("poids_kg"), profil_dict.get("niveau_physique"), db
     )
     system_prompt = _construire_system_prompt()
     prompt = _construire_prompt_generation(
-        profil_dict, recommandation, etat_du_jour, candidats, fiches_theoriques, charges_depart
+        profil_dict, recommandation, etat_du_jour, plan, fiches_theoriques, charges_depart, rpe_cible
     )
 
-    ids_valides = {ex.id for ex in candidats}
-    charge_recommandee_par_id = {ex.id: ex.charge_recommandee for ex in candidats}
+    ids_valides = {p["exercice"].id for p in plan}
+    charge_recommandee_par_id = {p["exercice"].id: p["exercice"].charge_recommandee for p in plan}
     required_keys = {"nom_seance", "duree_min", "exercices", "explication"}
     data: Optional[dict] = None
 
@@ -745,12 +795,15 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
             continue
 
         _corriger_charges_poids_du_corps(reponse["exercices"], charge_recommandee_par_id)
+        _appliquer_calibrage_temps(reponse["exercices"], plan, rpe_cible)
         data = reponse
         break
 
     if data is None:
         logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
-        data = _construire_seance_secours(candidats, recommandation["type_seance_suggere"])
+        data = _construire_seance_secours(plan, recommandation["type_seance_suggere"], rpe_cible)
+
+    duree_calibree_min = duree_seance.duree_totale_estimee_min(plan)
 
     seance = models.Seance(
         date=date.today(),
@@ -759,6 +812,7 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
         statut="prévue",
         type_seance=recommandation["type_seance_suggere"],
         explication=data.get("explication"),
+        duree_prevue=duree_calibree_min,
         duree_reelle=None,
     )
     db.add(seance)
@@ -768,7 +822,10 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     return schemas.SeanceGenereeOut(
         id=seance.id,
         nom_seance=data["nom_seance"],
-        duree_min=int(data.get("duree_min") or 45),
+        # Durée calculée en code à partir du calibrage temps_dispo, pas la valeur libre renvoyée
+        # par Mistral (voir duree_seance.py) : c'est cette estimation qui a servi à limiter les
+        # exercices/séries, donc c'est elle qui doit être affichée et comparée à la durée réelle.
+        duree_min=duree_calibree_min,
         exercices=data["exercices"],
         explication=data.get("explication", ""),
         recommandation=recommandation,
@@ -778,8 +835,9 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
 @app.post("/api/seance/terminer", response_model=schemas.TerminerSeanceOut)
 def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depends(get_db)):
     """Calcule la fin de séance à partir des vraies données de series_loggees
-    (plus d'IA pour interpréter un compte-rendu texte libre). Le RPE est déclaré
-    directement par le joueur ; `note` reste un texte libre optionnel pour le
+    (plus d'IA pour interpréter un compte-rendu texte libre). Le RPE est déduit de la
+    moyenne des validations rapides (facile/comme prévu/dur) de chaque série, sauf
+    override manuel explicite ; `note` reste un texte libre optionnel pour le
     ressenti général, conservé tel quel sans traitement IA."""
     seance = db.get(models.Seance, payload.seance_id)
     if not seance:
@@ -810,10 +868,18 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
             }
         )
 
-    rpe = payload.rpe
+    # RPE de la séance : moyenne des rpe_approx (facile/comme prévu/dur) des séries validées,
+    # sauf override manuel explicite dans le payload. C'est cette valeur qui alimente le
+    # moteur de règles pour la charge de la prochaine séance du même type.
+    rpe_approx_valeurs = [s.rpe_approx for s in series_validees if s.rpe_approx is not None]
+    rpe_calcule = round(sum(rpe_approx_valeurs) / len(rpe_approx_valeurs)) if rpe_approx_valeurs else None
+    rpe = payload.rpe if payload.rpe is not None else rpe_calcule
+
     seance.statut = "terminee"
     seance.rpe = rpe
     seance.note = payload.note
+    if payload.duree_reelle_min is not None:
+        seance.duree_reelle = payload.duree_reelle_min
     db.commit()
 
     today_streak = db.get(models.Streak, seance.date)
@@ -837,6 +903,10 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
         "volume_total_kg": volume_total,
         "nb_series_validees": nb_series_validees,
         "notes": payload.note,
+        # Comparaison temps prévu vs temps réel, pour affiner les estimations de durée
+        # par exercice au fil du temps (duree_seance.py).
+        "duree_prevue_min": seance.duree_prevue,
+        "duree_reelle_min": seance.duree_reelle,
     }
 
     historique = models.HistoriqueSeance(

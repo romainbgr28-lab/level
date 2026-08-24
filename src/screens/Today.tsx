@@ -15,10 +15,12 @@ import {
 } from '../api/client';
 import type {
   ApiDernierePerformance,
+  ApiDifficulte,
   ApiEtatDuJour,
   ApiExerciceBibliotheque,
   ApiModule,
   ApiSeance,
+  ApiSeanceExercice,
   ApiSeanceGeneree,
   ApiSerieLoggee,
   ApiTerminerSeanceResult,
@@ -47,12 +49,31 @@ const TYPE_SEANCE_OPTIONS: { value: string; label: string }[] = [
 
 const REST_SECONDS = 90;
 
+const DIFFICULTE_OPTIONS: { value: ApiDifficulte; label: string }[] = [
+  { value: 'facile', label: 'Facile' },
+  { value: 'comme_prevu', label: 'Comme prévu' },
+  { value: 'dur', label: 'Dur' },
+];
+
 type View = 'loading' | 'no-seance' | 'form' | 'seance' | 'fin-seance' | 'terminee';
 
 function formatDuree(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// Cible de répétitions ("10-12" -> 10) et de charge ("20 kg" -> 20, "poids du corps" -> null)
+// pré-remplies pour valider une série en 1 tap sans que l'utilisateur ait à taper quoi que ce soit.
+function repsCible(repetitions: string): number | null {
+  const m = repetitions.match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+function chargeCible(chargeIndicative?: string | null): number | null {
+  if (!chargeIndicative || /corps/i.test(chargeIndicative)) return null;
+  const m = chargeIndicative.match(/\d+([.,]\d+)?/);
+  return m ? Number(m[0].replace(',', '.')) : null;
 }
 
 export default function Today() {
@@ -82,6 +103,8 @@ export default function Today() {
   const [sessionStart, setSessionStart] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
+  const [editingSerieId, setEditingSerieId] = useState<number | null>(null);
+  const [editDraftParSerie, setEditDraftParSerie] = useState<Record<number, { poids: string; reps: string }>>({});
 
   const [rpe, setRpe] = useState<number | null>(null);
   const [note, setNote] = useState('');
@@ -160,8 +183,13 @@ export default function Today() {
     setDraftParExercice((prev) => ({ ...prev, [exerciceId]: { ...draftFor(exerciceId), ...patch } }));
   }
 
-  async function handleValiderSerie(exerciceId: number) {
+  function reposPourExercice(item: ApiSeanceExercice): number {
+    return item.temps_repos_recommande_s ?? REST_SECONDS;
+  }
+
+  async function handleValiderSerie(item: ApiSeanceExercice) {
     if (!seance) return;
+    const exerciceId = item.exercice_id;
     const draft = draftFor(exerciceId);
     const poids = draft.poids.trim() ? Number(draft.poids) : null;
     const reps = draft.reps.trim() ? Number(draft.reps) : null;
@@ -178,7 +206,50 @@ export default function Today() {
 
     setSeriesParExercice((prev) => ({ ...prev, [exerciceId]: [...(prev[exerciceId] ?? []), created] }));
     setDraft(exerciceId, { poids: '', reps: '' });
-    setRestSecondsLeft(REST_SECONDS);
+    setRestSecondsLeft(reposPourExercice(item));
+  }
+
+  // Validation rapide en 1 tap : facile / comme prévu / dur — poids et répétitions sont
+  // pré-remplis depuis la cible calculée par la génération, aucune saisie nécessaire.
+  async function handleValiderRapide(item: ApiSeanceExercice, difficulte: ApiDifficulte) {
+    if (!seance) return;
+    const exerciceId = item.exercice_id;
+    const numero = (seriesParExercice[exerciceId]?.length ?? 0) + 1;
+
+    const created = await createSerieLoggee({
+      seance_id: seance.id,
+      exercice_id: exerciceId,
+      numero_serie: numero,
+      poids_kg: chargeCible(item.charge_indicative),
+      repetitions: repsCible(item.repetitions),
+      coche: true,
+      difficulte,
+    });
+
+    setSeriesParExercice((prev) => ({ ...prev, [exerciceId]: [...(prev[exerciceId] ?? []), created] }));
+    setRestSecondsLeft(reposPourExercice(item));
+  }
+
+  function editDraftFor(serie: ApiSerieLoggee) {
+    return editDraftParSerie[serie.id] ?? { poids: serie.poids_kg?.toString() ?? '', reps: serie.repetitions?.toString() ?? '' };
+  }
+
+  function ouvrirEditionSerie(serie: ApiSerieLoggee) {
+    setEditingSerieId(serie.id);
+    setEditDraftParSerie((prev) => ({ ...prev, [serie.id]: editDraftFor(serie) }));
+  }
+
+  async function handleEnregistrerEditionSerie(exerciceId: number, serie: ApiSerieLoggee) {
+    const draft = editDraftFor(serie);
+    const updated = await updateSerieLoggee(serie.id, {
+      poids_kg: draft.poids.trim() ? Number(draft.poids) : null,
+      repetitions: draft.reps.trim() ? Number(draft.reps) : null,
+    });
+    setSeriesParExercice((prev) => ({
+      ...prev,
+      [exerciceId]: (prev[exerciceId] ?? []).map((s) => (s.id === updated.id ? updated : s)),
+    }));
+    setEditingSerieId(null);
   }
 
   async function handleToggleSerie(exerciceId: number, serie: ApiSerieLoggee) {
@@ -221,7 +292,12 @@ export default function Today() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await terminerSeanceIA({ seance_id: seance.id, rpe, note: note.trim() || null });
+      const res = await terminerSeanceIA({
+        seance_id: seance.id,
+        rpe,
+        note: note.trim() || null,
+        duree_reelle_min: Math.round(elapsedSec / 60),
+      });
       setResultat(res);
       setView('terminee');
     } catch (e) {
@@ -403,7 +479,19 @@ export default function Today() {
             <div className="rest-timer">
               <span>Temps de repos</span>
               <span>{formatDuree(restSecondsLeft)}</span>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRestSecondsLeft((s) => (s ?? 0) + 30)}>
+                +30s
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRestSecondsLeft(null)}>
+                Passer
+              </button>
             </div>
+          )}
+
+          {(('duree_prevue' in seance ? seance.duree_prevue : seance.duree_min) ?? null) !== null && (
+            <p className="subtle" style={{ margin: '0 0 12px' }}>
+              Durée prévue : environ {'duree_prevue' in seance ? seance.duree_prevue : seance.duree_min} min
+            </p>
           )}
 
           <h2 className="card__title" style={{ marginBottom: 12 }}>
@@ -416,6 +504,9 @@ export default function Today() {
             const precedent = precedentParExercice[item.exercice_id];
             const draft = draftFor(item.exercice_id);
             const draftVisible = item.exercice_id in draftParExercice;
+            const cible = item.series ?? series.length;
+            const prochaineNumero = series.length + 1;
+            const seanceTerminee = 'statut' in seance && seance.statut === 'terminee';
 
             return (
               <div className="exercise-block" key={item.exercice_id}>
@@ -436,25 +527,98 @@ export default function Today() {
                         .join(', ')}`
                     : `Objectif : ${item.series}x${item.repetitions}${
                         item.charge_indicative ? ` · ${item.charge_indicative}` : ''
-                      }`}
+                      }${item.rpe_cible ? ` · RPE ${item.rpe_cible}` : ''}`}
                 </div>
 
                 {series.map((s) => (
                   <div className="set-row" key={s.id}>
                     <span className="set-row__num">{s.numero_serie}</span>
-                    <span className="set-row__load">
-                      {s.poids_kg ?? '–'} kg × {s.repetitions ?? '–'}
-                    </span>
-                    <button
-                      type="button"
-                      className={`checkbox ${s.coche ? 'checked' : ''}`}
-                      onClick={() => handleToggleSerie(item.exercice_id, s)}
-                      aria-label="Valider la série"
-                    >
-                      {s.coche ? '✓' : ''}
-                    </button>
+                    {editingSerieId === s.id ? (
+                      <>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          className="set-row__input"
+                          placeholder="kg"
+                          value={editDraftFor(s).poids}
+                          onChange={(e) =>
+                            setEditDraftParSerie((prev) => ({ ...prev, [s.id]: { ...editDraftFor(s), poids: e.target.value } }))
+                          }
+                        />
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          className="set-row__input"
+                          placeholder="reps"
+                          value={editDraftFor(s).reps}
+                          onChange={(e) =>
+                            setEditDraftParSerie((prev) => ({ ...prev, [s.id]: { ...editDraftFor(s), reps: e.target.value } }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="checkbox"
+                          onClick={() => handleEnregistrerEditionSerie(item.exercice_id, s)}
+                          aria-label="Enregistrer"
+                        >
+                          ✓
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="set-row__load">
+                          {s.poids_kg ?? '–'} kg × {s.repetitions ?? '–'}
+                          {s.difficulte && (
+                            <span className="subtle" style={{ marginLeft: 6 }}>
+                              ({DIFFICULTE_OPTIONS.find((d) => d.value === s.difficulte)?.label})
+                            </span>
+                          )}
+                        </span>
+                        <button type="button" className="link-discreet" onClick={() => ouvrirEditionSerie(s)}>
+                          Modifier
+                        </button>
+                        <button
+                          type="button"
+                          className={`checkbox ${s.coche ? 'checked' : ''}`}
+                          onClick={() => handleToggleSerie(item.exercice_id, s)}
+                          aria-label="Valider la série"
+                        >
+                          {s.coche ? '✓' : ''}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
+
+                {!seanceTerminee && prochaineNumero <= cible && !draftVisible && (
+                  <div className="set-row set-row--cible">
+                    <span className="set-row__num">{prochaineNumero}</span>
+                    <span className="set-row__load">
+                      {repsCible(item.repetitions) ?? item.repetitions} reps
+                      {item.charge_indicative ? ` · ${item.charge_indicative}` : ''}
+                    </span>
+                    <div className="tag-row tag-row--select" style={{ margin: 0 }}>
+                      {DIFFICULTE_OPTIONS.map((o) => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          className="tag tag--selectable"
+                          onClick={() => handleValiderRapide(item, o.value)}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="link-discreet"
+                      style={{ marginLeft: 8 }}
+                      onClick={() => handleAjouterSerie(item.exercice_id)}
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                )}
 
                 {draftVisible && (
                   <div className="set-row">
@@ -478,7 +642,7 @@ export default function Today() {
                     <button
                       type="button"
                       className="checkbox"
-                      onClick={() => handleValiderSerie(item.exercice_id)}
+                      onClick={() => handleValiderSerie(item)}
                       aria-label="Valider la série"
                     >
                       ✓
@@ -486,7 +650,7 @@ export default function Today() {
                   </div>
                 )}
 
-                {!draftVisible && (
+                {!draftVisible && prochaineNumero > cible && !seanceTerminee && (
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm"
@@ -524,9 +688,10 @@ export default function Today() {
         <section className="card">
           <div className="card__eyebrow">Fin de séance</div>
           <p className="subtle" style={{ margin: '4px 0 12px' }}>
-            {totaux.nbValidees} séries validées · {Math.round(totaux.volume)} kg de volume total
+            {totaux.nbValidees} séries validées · {Math.round(totaux.volume)} kg de volume total ·{' '}
+            {formatDuree(elapsedSec)} écoulées
           </p>
-          <div className="section-title">RPE (ressenti d’intensité)</div>
+          <div className="section-title">RPE (calculé automatiquement depuis tes validations rapides — ajuster si besoin)</div>
           <div className="rpe-grid">
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
               <button
@@ -569,6 +734,16 @@ export default function Today() {
           <p className="subtle" style={{ marginTop: 14 }}>
             Séance terminée{resultat ? ` · +${resultat.xp_gagne} XP` : ' pour aujourd’hui.'}
           </p>
+          {resultat && (() => {
+            const prevue = resultat.resume.duree_prevue_min as number | null | undefined;
+            const reelle = resultat.resume.duree_reelle_min as number | null | undefined;
+            if (prevue == null || reelle == null) return null;
+            return (
+              <p className="subtle" style={{ marginTop: 6 }}>
+                Durée réelle : {reelle} min (prévue : {prevue} min)
+              </p>
+            );
+          })()}
         </section>
       )}
 

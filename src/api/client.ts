@@ -34,6 +34,8 @@ export interface ApiSeanceExercice {
   repetitions: string;
   charge_indicative?: string;
   notes?: string;
+  rpe_cible?: number | null;
+  temps_repos_recommande_s?: number | null;
 }
 
 export interface ApiSeance {
@@ -44,6 +46,7 @@ export interface ApiSeance {
   statut: 'planifiee' | 'prévue' | 'terminee';
   explication: string | null;
   rpe: number | null;
+  duree_prevue: number | null;
   duree_reelle: number | null;
   note?: string | null;
 }
@@ -65,6 +68,8 @@ export interface ApiExerciceBibliotheque {
 
 // ---------- Séries loguées (logging temps réel façon Hevy) ----------
 
+export type ApiDifficulte = 'facile' | 'comme_prevu' | 'dur';
+
 export interface ApiSerieLoggee {
   id: number;
   seance_id: number;
@@ -73,6 +78,8 @@ export interface ApiSerieLoggee {
   poids_kg: number | null;
   repetitions: number | null;
   coche: boolean;
+  difficulte?: ApiDifficulte | null;
+  rpe_approx?: number | null;
   horodatage: string | null;
 }
 
@@ -205,10 +212,11 @@ export const createSerieLoggee = (payload: {
   poids_kg: number | null;
   repetitions: number | null;
   coche: boolean;
+  difficulte?: ApiDifficulte | null;
 }) => request<ApiSerieLoggee>('/api/series_loggees', { method: 'POST', body: JSON.stringify(payload) });
 export const updateSerieLoggee = (
   id: number,
-  payload: Partial<Pick<ApiSerieLoggee, 'poids_kg' | 'repetitions' | 'coche'>>
+  payload: Partial<Pick<ApiSerieLoggee, 'poids_kg' | 'repetitions' | 'coche' | 'difficulte'>>
 ) => request<ApiSerieLoggee>(`/api/series_loggees/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 export const deleteSerieLoggee = (id: number) =>
   request<void>(`/api/series_loggees/${id}`, { method: 'DELETE' });
@@ -300,8 +308,12 @@ export interface ApiTerminerSeanceResult {
 export const genererSeance = (payload: ApiEtatDuJour) =>
   request<ApiSeanceGeneree>('/api/seance/generer', { method: 'POST', body: JSON.stringify(payload) });
 
-export const terminerSeanceIA = (payload: { seance_id: number; rpe: number | null; note: string | null }) =>
-  request<ApiTerminerSeanceResult>('/api/seance/terminer', { method: 'POST', body: JSON.stringify(payload) });
+export const terminerSeanceIA = (payload: {
+  seance_id: number;
+  rpe: number | null;
+  note: string | null;
+  duree_reelle_min?: number | null;
+}) => request<ApiTerminerSeanceResult>('/api/seance/terminer', { method: 'POST', body: JSON.stringify(payload) });
 
 // ---------- Stats & progression ----------
 

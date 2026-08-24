@@ -424,10 +424,27 @@ p {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   font-family: var(--font-display);
   font-weight: 600;
   margin-bottom: 16px;
   box-shadow: 0 8px 24px rgba(124, 92, 255, 0.35);
+}
+
+.rest-timer .btn--ghost {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.set-row--cible {
+  flex-wrap: wrap;
+}
+
+.link-discreet {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-decoration: underline;
+  flex-shrink: 0;
 }
 
 /* Workout live totals bar */
