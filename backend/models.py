@@ -25,12 +25,49 @@ class Seance(Base):
     id = Column(Integer, primary_key=True, index=True)
     date = Column(Date, nullable=False)
     nom = Column(String, nullable=False)
+    # Chaque item : {"exercice_id": int, "series": int, "repetitions": str,
+    # "charge_indicative": str|None, "notes": str|None} — exercice_id référence
+    # exercices_bibliotheque.id (plus de nom texte libre inventé par l'IA).
     exercices = Column(JSON, nullable=False, default=list)
     statut = Column(String, nullable=False, default="planifiee")  # planifiee | prévue | terminee
     type_seance = Column(String, nullable=True)  # force | explosivité_vitesse | esthétique | décharge (moteur de règles)
     explication = Column(String, nullable=True)  # explication IA associée à la séance générée
     rpe = Column(Integer, nullable=True)
     duree_reelle = Column(Integer, nullable=True)  # minutes
+    note = Column(String, nullable=True)  # ressenti général en fin de séance, texte libre optionnel
+
+
+class ExerciceBibliotheque(Base):
+    """Catalogue d'exercices dans lequel Mistral doit puiser pour générer une séance
+    (voir main.py::_construire_prompt_generation) plutôt que d'en inventer.
+
+    Structure prête, volontairement non peuplée pour l'instant : le contenu réel
+    (instructions détaillées, images) sera fourni séparément.
+    """
+
+    __tablename__ = "exercices_bibliotheque"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nom = Column(String, nullable=False)
+    groupe_musculaire = Column(String, nullable=False)
+    instructions = Column(JSON, nullable=False, default=list)  # liste de points (str)
+    image_url = Column(String, nullable=True)  # placeholder pour l'instant
+    type = Column(String, nullable=False)  # force | explosivite | technique | récupération
+
+
+class SerieLoggee(Base):
+    """Une série effectivement loguée en temps réel pendant une séance (façon Hevy)."""
+
+    __tablename__ = "series_loggees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    seance_id = Column(Integer, ForeignKey("seances.id"), nullable=False)
+    exercice_id = Column(Integer, ForeignKey("exercices_bibliotheque.id"), nullable=False)
+    numero_serie = Column(Integer, nullable=False)
+    poids_kg = Column(Float, nullable=True)
+    repetitions = Column(Integer, nullable=True)
+    coche = Column(Integer, nullable=False, default=0)  # 0/1 bool
+    horodatage = Column(DateTime, server_default=func.now())
 
 
 class ExerciceHistorique(Base):

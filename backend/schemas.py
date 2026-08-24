@@ -53,6 +53,17 @@ class ProfilOut(ProfilBase):
     date_creation: Optional[datetime] = None
 
 
+class SeanceExerciceItem(BaseModel):
+    """Item de la liste `exercices` d'une séance : référence un exercice de la
+    bibliothèque par id (Mistral doit choisir parmi l'existant, pas inventer)."""
+
+    exercice_id: int
+    series: int
+    repetitions: str
+    charge_indicative: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class SeanceBase(BaseModel):
     date: date
     nom: str
@@ -62,6 +73,7 @@ class SeanceBase(BaseModel):
     explication: Optional[str] = None
     rpe: Optional[int] = None
     duree_reelle: Optional[int] = None
+    note: Optional[str] = None
 
 
 class SeanceCreate(SeanceBase):
@@ -73,11 +85,67 @@ class SeanceUpdate(BaseModel):
     rpe: Optional[int] = None
     duree_reelle: Optional[int] = None
     exercices: Optional[list[dict[str, Any]]] = None
+    note: Optional[str] = None
 
 
 class SeanceOut(SeanceBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+# ---------- Bibliothèque d'exercices ----------
+
+
+class ExerciceBibliothequeBase(BaseModel):
+    nom: str
+    groupe_musculaire: str
+    instructions: list[str] = []
+    image_url: Optional[str] = None
+    type: str  # force | explosivite | technique | récupération
+
+
+class ExerciceBibliothequeCreate(ExerciceBibliothequeBase):
+    pass
+
+
+class ExerciceBibliothequeOut(ExerciceBibliothequeBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+# ---------- Séries loguées en temps réel (façon Hevy) ----------
+
+
+class SerieLoggeeBase(BaseModel):
+    seance_id: int
+    exercice_id: int
+    numero_serie: int
+    poids_kg: Optional[float] = None
+    repetitions: Optional[int] = None
+    coche: bool = False
+
+
+class SerieLoggeeCreate(SerieLoggeeBase):
+    pass
+
+
+class SerieLoggeeUpdate(BaseModel):
+    poids_kg: Optional[float] = None
+    repetitions: Optional[int] = None
+    coche: Optional[bool] = None
+
+
+class SerieLoggeeOut(SerieLoggeeBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    horodatage: Optional[datetime] = None
+
+
+class DernierePerformanceOut(BaseModel):
+    """« Précédent » façon Hevy : les séries de la dernière fois où cet exercice a été loggé."""
+
+    date: Optional[date] = None
+    series: list[SerieLoggeeOut] = []
 
 
 class ExerciceHistoriqueBase(BaseModel):
@@ -203,10 +271,11 @@ class SeanceGenereeOut(BaseModel):
 
 class TerminerSeancePayload(BaseModel):
     seance_id: int
-    compte_rendu: str
+    rpe: Optional[int] = None  # ressenti d'intensité (1-10), déclaré directement par le joueur
+    note: Optional[str] = None  # ressenti général en texte libre, optionnel
 
 
 class TerminerSeanceOut(BaseModel):
-    resume: dict[str, Any]  # JSON extrait par Mistral à partir du compte-rendu libre
+    resume: dict[str, Any]  # calculé à partir des series_loggees réelles (plus d'interprétation IA)
     xp_gagne: int
     historique_id: int

@@ -29,7 +29,7 @@ export interface ApiExercise {
 }
 
 export interface ApiSeanceExercice {
-  nom: string;
+  exercice_id: number;
   series: number;
   repetitions: string;
   charge_indicative?: string;
@@ -45,6 +45,36 @@ export interface ApiSeance {
   explication: string | null;
   rpe: number | null;
   duree_reelle: number | null;
+  note?: string | null;
+}
+
+// ---------- Bibliothèque d'exercices ----------
+
+export interface ApiExerciceBibliotheque {
+  id: number;
+  nom: string;
+  groupe_musculaire: string;
+  instructions: string[];
+  image_url: string | null;
+  type: string;
+}
+
+// ---------- Séries loguées (logging temps réel façon Hevy) ----------
+
+export interface ApiSerieLoggee {
+  id: number;
+  seance_id: number;
+  exercice_id: number;
+  numero_serie: number;
+  poids_kg: number | null;
+  repetitions: number | null;
+  coche: boolean;
+  horodatage: string | null;
+}
+
+export interface ApiDernierePerformance {
+  date: string | null;
+  series: ApiSerieLoggee[];
 }
 
 export interface ApiModuleQuestion {
@@ -144,8 +174,37 @@ export const getTodaySeance = () => request<ApiSeance | null>('/api/seances/toda
 export const deleteTodaySeance = () => request<void>('/api/seances/today', { method: 'DELETE' });
 export const updateSeance = (
   id: number,
-  payload: Partial<Pick<ApiSeance, 'statut' | 'rpe' | 'duree_reelle' | 'exercices'>>
+  payload: Partial<Pick<ApiSeance, 'statut' | 'rpe' | 'duree_reelle' | 'exercices' | 'note'>>
 ) => request<ApiSeance>(`/api/seances/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+
+// ---------- Bibliothèque d'exercices ----------
+
+export const getExercicesBibliotheque = () => request<ApiExerciceBibliotheque[]>('/api/exercices_bibliotheque');
+export const getExerciceBibliotheque = (id: number) =>
+  request<ApiExerciceBibliotheque>(`/api/exercices_bibliotheque/${id}`);
+export const getDernierePerformance = (exerciceId: number, seanceId?: number) =>
+  request<ApiDernierePerformance>(
+    `/api/exercices_bibliotheque/${exerciceId}/derniere_performance${seanceId ? `?seance_id=${seanceId}` : ''}`
+  );
+
+// ---------- Séries loguées ----------
+
+export const getSeriesLoggees = (seanceId: number) =>
+  request<ApiSerieLoggee[]>(`/api/series_loggees?seance_id=${seanceId}`);
+export const createSerieLoggee = (payload: {
+  seance_id: number;
+  exercice_id: number;
+  numero_serie: number;
+  poids_kg: number | null;
+  repetitions: number | null;
+  coche: boolean;
+}) => request<ApiSerieLoggee>('/api/series_loggees', { method: 'POST', body: JSON.stringify(payload) });
+export const updateSerieLoggee = (
+  id: number,
+  payload: Partial<Pick<ApiSerieLoggee, 'poids_kg' | 'repetitions' | 'coche'>>
+) => request<ApiSerieLoggee>(`/api/series_loggees/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+export const deleteSerieLoggee = (id: number) =>
+  request<void>(`/api/series_loggees/${id}`, { method: 'DELETE' });
 
 // ---------- Historique d'exercices ----------
 
@@ -233,7 +292,7 @@ export interface ApiTerminerSeanceResult {
 export const genererSeance = (payload: ApiEtatDuJour) =>
   request<ApiSeanceGeneree>('/api/seance/generer', { method: 'POST', body: JSON.stringify(payload) });
 
-export const terminerSeanceIA = (payload: { seance_id: number; compte_rendu: string }) =>
+export const terminerSeanceIA = (payload: { seance_id: number; rpe: number | null; note: string | null }) =>
   request<ApiTerminerSeanceResult>('/api/seance/terminer', { method: 'POST', body: JSON.stringify(payload) });
 
 // ---------- Stats & progression ----------

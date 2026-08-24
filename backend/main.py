@@ -142,6 +142,110 @@ def update_seance(seance_id: int, payload: schemas.SeanceUpdate, db: Session = D
     return seance
 
 
+# ---------- Bibliothèque d'exercices ----------
+
+@app.get("/api/exercices_bibliotheque", response_model=list[schemas.ExerciceBibliothequeOut])
+def list_exercices_bibliotheque(db: Session = Depends(get_db)):
+    return db.query(models.ExerciceBibliotheque).order_by(models.ExerciceBibliotheque.nom.asc()).all()
+
+
+@app.get("/api/exercices_bibliotheque/{exercice_id}", response_model=schemas.ExerciceBibliothequeOut)
+def get_exercice_bibliotheque(exercice_id: int, db: Session = Depends(get_db)):
+    exercice = db.get(models.ExerciceBibliotheque, exercice_id)
+    if not exercice:
+        raise HTTPException(status_code=404, detail="Exercice introuvable")
+    return exercice
+
+
+@app.post("/api/exercices_bibliotheque", response_model=schemas.ExerciceBibliothequeOut)
+def create_exercice_bibliotheque(payload: schemas.ExerciceBibliothequeCreate, db: Session = Depends(get_db)):
+    exercice = models.ExerciceBibliotheque(**payload.model_dump())
+    db.add(exercice)
+    db.commit()
+    db.refresh(exercice)
+    return exercice
+
+
+@app.get("/api/exercices_bibliotheque/{exercice_id}/derniere_performance", response_model=schemas.DernierePerformanceOut)
+def get_derniere_performance(exercice_id: int, seance_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """« Précédent » façon Hevy : les séries cochées de la dernière séance (autre que
+    `seance_id`, la séance en cours) où cet exercice a été loggé."""
+    query = db.query(models.SerieLoggee).filter(
+        models.SerieLoggee.exercice_id == exercice_id,
+        models.SerieLoggee.coche == 1,
+    )
+    if seance_id is not None:
+        query = query.filter(models.SerieLoggee.seance_id != seance_id)
+
+    derniere_seance_id = (
+        query.join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
+        .order_by(models.Seance.date.desc(), models.SerieLoggee.horodatage.desc())
+        .with_entities(models.SerieLoggee.seance_id)
+        .first()
+    )
+    if not derniere_seance_id:
+        return schemas.DernierePerformanceOut(date=None, series=[])
+
+    derniere_seance_id = derniere_seance_id[0]
+    seance = db.get(models.Seance, derniere_seance_id)
+    series = (
+        db.query(models.SerieLoggee)
+        .filter(
+            models.SerieLoggee.exercice_id == exercice_id,
+            models.SerieLoggee.seance_id == derniere_seance_id,
+            models.SerieLoggee.coche == 1,
+        )
+        .order_by(models.SerieLoggee.numero_serie.asc())
+        .all()
+    )
+    return schemas.DernierePerformanceOut(date=seance.date if seance else None, series=series)
+
+
+# ---------- Séries loguées (logging temps réel façon Hevy) ----------
+
+@app.get("/api/series_loggees", response_model=list[schemas.SerieLoggeeOut])
+def list_series_loggees(seance_id: int, db: Session = Depends(get_db)):
+    return (
+        db.query(models.SerieLoggee)
+        .filter(models.SerieLoggee.seance_id == seance_id)
+        .order_by(models.SerieLoggee.exercice_id.asc(), models.SerieLoggee.numero_serie.asc())
+        .all()
+    )
+
+
+@app.post("/api/series_loggees", response_model=schemas.SerieLoggeeOut)
+def create_serie_loggee(payload: schemas.SerieLoggeeCreate, db: Session = Depends(get_db)):
+    data = payload.model_dump()
+    data["coche"] = int(data["coche"])
+    serie = models.SerieLoggee(**data)
+    db.add(serie)
+    db.commit()
+    db.refresh(serie)
+    return serie
+
+
+@app.patch("/api/series_loggees/{serie_id}", response_model=schemas.SerieLoggeeOut)
+def update_serie_loggee(serie_id: int, payload: schemas.SerieLoggeeUpdate, db: Session = Depends(get_db)):
+    serie = db.get(models.SerieLoggee, serie_id)
+    if not serie:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(serie, key, int(value) if key == "coche" else value)
+    db.commit()
+    db.refresh(serie)
+    return serie
+
+
+@app.delete("/api/series_loggees/{serie_id}", status_code=204)
+def delete_serie_loggee(serie_id: int, db: Session = Depends(get_db)):
+    serie = db.get(models.SerieLoggee, serie_id)
+    if not serie:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+    db.delete(serie)
+    db.commit()
+    return None
+
+
 # ---------- Exercices historique ----------
 
 @app.get("/api/exercices_historique", response_model=list[schemas.ExerciceHistoriqueOut])
@@ -263,12 +367,28 @@ def _construire_contexte_historique(db: Session) -> dict:
     }
 
 
-def _construire_prompt_generation(profil: dict, recommandation: dict, etat_du_jour: dict) -> str:
+def _construire_liste_bibliotheque(db: Session) -> list[models.ExerciceBibliotheque]:
+    return db.query(models.ExerciceBibliotheque).order_by(models.ExerciceBibliotheque.id.asc()).all()
+
+
+def _construire_prompt_generation(
+    profil: dict, recommandation: dict, etat_du_jour: dict, bibliotheque: list[models.ExerciceBibliotheque]
+) -> str:
     exclusions = recommandation.get("exclusions") or []
     exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
     raisons_txt = "; ".join(recommandation.get("raisons") or []) or "aucune"
 
+    bibliotheque_txt = "\n".join(
+        f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type})"
+        for ex in bibliotheque
+    )
+
     return f"""Tu es un coach sportif qui construit une séance de sport concrète pour un joueur de football amateur.
+
+EXERCICES DISPONIBLES (bibliothèque — tu dois obligatoirement choisir les exercices de la séance
+UNIQUEMENT parmi cette liste, en référençant leur id ; interdiction stricte d'inventer un exercice
+qui n'y figure pas)
+{bibliotheque_txt}
 
 PROFIL
 - Poste : {profil.get('poste')}
@@ -296,38 +416,17 @@ ne dépend pas de l'envie du joueur ci-dessus)
 
 CONSIGNE
 Construis une séance concrète respectant strictement l'intensité maximale et les exclusions
-ci-dessus, cohérente avec le poste et le matériel disponible.
+ci-dessus, cohérente avec le poste et le matériel disponible, en choisissant exclusivement des
+exercices dont l'id figure dans la liste EXERCICES DISPONIBLES ci-dessus.
 Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, au format exact
 suivant :
 {{
   "nom_seance": "string",
   "duree_min": nombre entier de minutes,
   "exercices": [
-    {{"nom": "string", "series": nombre entier, "repetitions": "string", "charge_indicative": "string", "notes": "string"}}
+    {{"exercice_id": nombre entier (id pris dans la liste EXERCICES DISPONIBLES), "series": nombre entier, "repetitions": "string", "charge_indicative": "string", "notes": "string"}}
   ],
   "explication": "texte en français expliquant le pourquoi de cette séance (phase calendaire, poste, état du jour)"
-}}"""
-
-
-def _construire_prompt_extraction(seance: models.Seance, compte_rendu: str) -> str:
-    return f"""Tu extrais des données structurées à partir du compte-rendu libre d'un joueur après une séance de sport.
-
-SÉANCE PRÉVUE
-- Nom : {seance.nom}
-- Exercices prévus : {seance.exercices}
-
-COMPTE-RENDU DU JOUEUR (texte libre)
-\"\"\"{compte_rendu}\"\"\"
-
-CONSIGNE
-Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, au format exact
-suivant :
-{{
-  "exercices_realises": [{{"nom": "string", "series": nombre entier, "repetitions": "string", "charge": "string"}}],
-  "rpe": nombre entier de 1 à 10 (déduit du compte-rendu, ta meilleure estimation si non explicite),
-  "pourcentage_complete": nombre de 0 à 100 (pourcentage de la séance prévue réellement réalisé),
-  "notes": "résumé court en français du compte-rendu",
-  "zone_sensible_signalee": "nom de la zone/du groupe musculaire si le joueur signale une gêne ou douleur, sinon null"
 }}"""
 
 
@@ -355,12 +454,19 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     if not profil:
         raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer une séance.")
 
+    bibliotheque = _construire_liste_bibliotheque(db)
+    if not bibliotheque:
+        raise HTTPException(
+            status_code=400,
+            detail="La bibliothèque d'exercices est vide : impossible de générer une séance tant qu'elle n'est pas peuplée.",
+        )
+
     profil_dict = schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
     historique_ctx = _construire_contexte_historique(db)
     etat_du_jour = payload.model_dump()
 
     recommandation = regles_seance.generer_recommandation(profil_dict, historique_ctx, etat_du_jour)
-    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour)
+    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour, bibliotheque)
 
     try:
         data = mistral_client.appeler_mistral_json(prompt)
@@ -372,6 +478,11 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     if not required_keys.issubset(data) or not isinstance(data.get("exercices"), list):
         logger.error("Réponse Mistral incomplète ou invalide (génération séance) : %s", data)
         raise HTTPException(status_code=502, detail="La séance générée par l'IA est incomplète ou mal formée.")
+
+    ids_valides = {ex.id for ex in bibliotheque}
+    if not all(isinstance(item, dict) and item.get("exercice_id") in ids_valides for item in data["exercices"]):
+        logger.error("Réponse Mistral avec exercice_id hors bibliothèque : %s", data)
+        raise HTTPException(status_code=502, detail="La séance générée par l'IA référence un exercice hors bibliothèque.")
 
     seance = models.Seance(
         date=date.today(),
@@ -398,30 +509,43 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
 
 @app.post("/api/seance/terminer", response_model=schemas.TerminerSeanceOut)
 def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depends(get_db)):
+    """Calcule la fin de séance à partir des vraies données de series_loggees
+    (plus d'IA pour interpréter un compte-rendu texte libre). Le RPE est déclaré
+    directement par le joueur ; `note` reste un texte libre optionnel pour le
+    ressenti général, conservé tel quel sans traitement IA."""
     seance = db.get(models.Seance, payload.seance_id)
     if not seance:
         raise HTTPException(status_code=404, detail="Séance introuvable")
 
-    prompt = _construire_prompt_extraction(seance, payload.compte_rendu)
+    series = db.query(models.SerieLoggee).filter(models.SerieLoggee.seance_id == seance.id).all()
+    series_validees = [s for s in series if s.coche]
 
-    try:
-        data = mistral_client.appeler_mistral_json(prompt)
-    except mistral_client.MistralError as exc:
-        logger.error("Échec de l'extraction du compte-rendu via Mistral : %s", exc)
-        raise HTTPException(status_code=502, detail=f"L'analyse du compte-rendu a échoué : {exc}") from exc
+    volume_total = sum((s.poids_kg or 0) * (s.repetitions or 0) for s in series_validees)
+    nb_series_validees = len(series_validees)
 
-    required_keys = {"exercices_realises", "rpe", "pourcentage_complete"}
-    if not required_keys.issubset(data):
-        logger.error("Réponse Mistral incomplète ou invalide (extraction compte-rendu) : %s", data)
-        raise HTTPException(status_code=502, detail="L'extraction du compte-rendu par l'IA est incomplète ou mal formée.")
+    series_prevues = sum(int(item.get("series") or 0) for item in (seance.exercices or []) if isinstance(item, dict))
+    pourcentage_complete = round(100 * nb_series_validees / series_prevues, 1) if series_prevues > 0 else None
 
-    rpe = data.get("rpe")
-    rpe = int(rpe) if isinstance(rpe, (int, float)) else None
-    pourcentage_complete = data.get("pourcentage_complete")
-    pourcentage_complete = float(pourcentage_complete) if isinstance(pourcentage_complete, (int, float)) else None
+    exercices_ids = sorted({s.exercice_id for s in series_validees})
+    bibliotheque_par_id = {
+        ex.id: ex for ex in db.query(models.ExerciceBibliotheque).filter(models.ExerciceBibliotheque.id.in_(exercices_ids)).all()
+    } if exercices_ids else {}
 
+    exercices_realises = []
+    for exercice_id in exercices_ids:
+        series_exercice = sorted((s for s in series_validees if s.exercice_id == exercice_id), key=lambda s: s.numero_serie)
+        exercices_realises.append(
+            {
+                "exercice_id": exercice_id,
+                "nom": bibliotheque_par_id[exercice_id].nom if exercice_id in bibliotheque_par_id else None,
+                "series": [{"numero_serie": s.numero_serie, "poids_kg": s.poids_kg, "repetitions": s.repetitions} for s in series_exercice],
+            }
+        )
+
+    rpe = payload.rpe
     seance.statut = "terminee"
     seance.rpe = rpe
+    seance.note = payload.note
     db.commit()
 
     today_streak = db.get(models.Streak, seance.date)
@@ -438,24 +562,33 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
     calendrier = profil.calendrier_matchs if profil else None
     phase = compute_phase(seance.date, calendrier)
 
+    resume = {
+        "exercices_realises": exercices_realises,
+        "rpe": rpe,
+        "pourcentage_complete": pourcentage_complete,
+        "volume_total_kg": volume_total,
+        "nb_series_validees": nb_series_validees,
+        "notes": payload.note,
+    }
+
     historique = models.HistoriqueSeance(
         date=seance.date,
         phase_calendaire=phase,
         type_seance=seance.type_seance or seance.nom,
         exercices_prevus=seance.exercices,
-        exercices_realises=data.get("exercices_realises") or [],
+        exercices_realises=exercices_realises,
         rpe=rpe,
         pourcentage_complete=pourcentage_complete,
-        zone_sensible_signalee=data.get("zone_sensible_signalee") or None,
+        zone_sensible_signalee=None,
         xp_gagne=xp_gagne,
-        notes=data.get("notes"),
+        notes=payload.note,
         etat_declare_avant={},
     )
     db.add(historique)
     db.commit()
     db.refresh(historique)
 
-    return schemas.TerminerSeanceOut(resume=data, xp_gagne=xp_gagne, historique_id=historique.id)
+    return schemas.TerminerSeanceOut(resume=resume, xp_gagne=xp_gagne, historique_id=historique.id)
 
 
 # ---------- Streaks ----------

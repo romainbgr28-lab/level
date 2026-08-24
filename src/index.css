@@ -430,6 +430,111 @@ p {
   box-shadow: 0 8px 24px rgba(124, 92, 255, 0.35);
 }
 
+/* Workout live totals bar */
+.workout-totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.workout-totals .stat-tile {
+  padding: 12px;
+}
+
+.workout-totals .stat-tile__value {
+  font-size: 19px;
+}
+
+.exercise-block__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.exercise-block__name {
+  font-weight: 600;
+  font-size: 15px;
+  text-align: left;
+}
+
+.exercise-block__group {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.exercise-block__previous {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.set-row__input {
+  width: 56px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-row__num {
+  width: 22px;
+  font-size: 13px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* Modal sheet (fiche détail exercice) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 4, 8, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  padding: 20px;
+  padding-bottom: calc(20px + var(--safe-bottom));
+}
+
+.modal-sheet__image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  object-fit: cover;
+  margin-bottom: 14px;
+}
+
+.modal-sheet__close {
+  float: right;
+  color: var(--text-faint);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.instruction-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 /* RPE selector */
 .rpe-grid {
   display: grid;
