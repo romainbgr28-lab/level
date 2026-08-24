@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LineChart from '../components/LineChart';
-import { getChargeProgress, getProgrammeActif, getStats, getStreaks } from '../api/client';
+import { genererProgramme, getChargeProgress, getProgrammeActif, getStats, getStreaks } from '../api/client';
 import type { ApiChargePoint, ApiProgramme, ApiStats, ApiStreakDay } from '../api/client';
 
 function semaineActuelle(programme: ApiProgramme): number {
@@ -61,6 +61,7 @@ export default function Progress() {
   const [charge, setCharge] = useState<ApiChargePoint[]>([]);
   const [streaks, setStreaks] = useState<ApiStreakDay[]>([]);
   const [programme, setProgramme] = useState<ApiProgramme | null>(null);
+  const [programmeLoading, setProgrammeLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -69,7 +70,17 @@ export default function Progress() {
         setStats(s);
         setCharge(c);
         setStreaks(streakDays);
-        setProgramme(prog);
+        if (prog) {
+          setProgramme(prog);
+          return;
+        }
+        // Aucun programme actif (ex : profil créé avant l'ajout de cette fonctionnalité,
+        // ou génération à l'onboarding qui a échoué) : on en génère un à la volée.
+        setProgrammeLoading(true);
+        genererProgramme()
+          .then(setProgramme)
+          .catch(() => {})
+          .finally(() => setProgrammeLoading(false));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -113,7 +124,16 @@ export default function Progress() {
         Voir le bilan hebdomadaire
       </button>
 
-      {programme && <ProgrammeSection programme={programme} />}
+      {programme ? (
+        <ProgrammeSection programme={programme} />
+      ) : (
+        programmeLoading && (
+          <section className="card">
+            <div className="card__eyebrow">Mon programme</div>
+            <p className="subtle">Construction de ton programme personnalisé…</p>
+          </section>
+        )
+      )}
 
       <section className="card">
         <div className="card__eyebrow">Développé couché — charge (dernières séances)</div>

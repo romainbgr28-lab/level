@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import {
   createSerieLoggee,
@@ -8,7 +7,6 @@ import {
   getDernierePerformance,
   getExercicesBibliotheque,
   getSeriesLoggees,
-  getTodayModule,
   getTodaySeance,
   terminerSeanceIA,
   updateSerieLoggee,
@@ -18,7 +16,6 @@ import type {
   ApiDifficulte,
   ApiEtatDuJour,
   ApiExerciceBibliotheque,
-  ApiModule,
   ApiSeance,
   ApiSeanceExercice,
   ApiSeanceGeneree,
@@ -77,9 +74,7 @@ function chargeCible(chargeIndicative?: string | null): number | null {
 }
 
 export default function Today() {
-  const navigate = useNavigate();
   const [view, setView] = useState<View>('loading');
-  const [learningModule, setLearningModule] = useState<ApiModule | null>(null);
 
   const [seance, setSeance] = useState<ApiSeance | ApiSeanceGeneree | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,8 +107,7 @@ export default function Today() {
   const [resultat, setResultat] = useState<ApiTerminerSeanceResult | null>(null);
 
   useEffect(() => {
-    Promise.all([getTodaySeance(), getTodayModule()]).then(([s, m]) => {
-      setLearningModule(m);
+    getTodaySeance().then((s) => {
       if (s) {
         setSeance(s);
         setView(s.statut === 'terminee' ? 'terminee' : 'seance');
@@ -808,22 +802,6 @@ export default function Today() {
               </p>
             );
           })()}
-        </section>
-      )}
-
-      {learningModule && (
-        <section className="card">
-          <div className="card__eyebrow">Module du jour</div>
-          <span className="tag">{learningModule.categorie}</span>
-          <h2 className="card__title" style={{ marginTop: 10 }}>
-            {learningModule.titre}
-          </h2>
-          <p className="subtle" style={{ margin: '6px 0 14px' }}>
-            {learningModule.contenu.slice(0, 120)}…
-          </p>
-          <button className="btn btn--ghost" onClick={() => navigate('/module')}>
-            Ouvrir
-          </button>
         </section>
       )}
 
