@@ -105,6 +105,7 @@ export default function Today() {
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const [editingSerieId, setEditingSerieId] = useState<number | null>(null);
   const [editDraftParSerie, setEditDraftParSerie] = useState<Record<number, { poids: string; reps: string }>>({});
+  const [manualOpenId, setManualOpenId] = useState<number | 'auto'>('auto');
 
   const [rpe, setRpe] = useState<number | null>(null);
   const [note, setNote] = useState('');
@@ -174,6 +175,23 @@ export default function Today() {
     }
     return { volume, nbValidees };
   }, [seriesParExercice]);
+
+  function estExerciceComplet(item: ApiSeanceExercice): boolean {
+    const series = seriesParExercice[item.exercice_id] ?? [];
+    const cible = item.series ?? series.length;
+    return cible > 0 && series.length >= cible;
+  }
+
+  const currentExerciceId = useMemo(() => {
+    if (!seance) return null;
+    const premierIncomplet = seance.exercices.find((it) => !estExerciceComplet(it));
+    return premierIncomplet
+      ? premierIncomplet.exercice_id
+      : (seance.exercices[seance.exercices.length - 1]?.exercice_id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seance, seriesParExercice]);
+
+  const openExerciceId = manualOpenId === 'auto' ? currentExerciceId : manualOpenId;
 
   function draftFor(exerciceId: number) {
     return draftParExercice[exerciceId] ?? { poids: '', reps: '' };
@@ -507,158 +525,204 @@ export default function Today() {
             const cible = item.series ?? series.length;
             const prochaineNumero = series.length + 1;
             const seanceTerminee = 'statut' in seance && seance.statut === 'terminee';
+            const complet = estExerciceComplet(item);
+            const isOpen = openExerciceId === item.exercice_id;
+            const objectifLabel = `${item.series}x${item.repetitions}${
+              item.charge_indicative ? ` · ${item.charge_indicative}` : ''
+            }${item.rpe_cible ? ` · RPE ${item.rpe_cible}` : ''}`;
 
             return (
-              <div className="exercise-block" key={item.exercice_id}>
-                <div className="exercise-block__head">
-                  <button
-                    type="button"
-                    className="exercise-block__name"
-                    onClick={() => setDetailExerciceId(item.exercice_id)}
-                  >
-                    {ex?.nom ?? `Exercice #${item.exercice_id}`}
-                  </button>
-                  <span className="exercise-block__group">{ex?.groupe_musculaire}</span>
-                </div>
-                <div className="exercise-block__previous">
-                  {precedent && precedent.series.length > 0
-                    ? `Précédent : ${precedent.series
-                        .map((s) => `${s.poids_kg ?? '–'} kg x ${s.repetitions ?? '–'}`)
-                        .join(', ')}`
-                    : `Objectif : ${item.series}x${item.repetitions}${
-                        item.charge_indicative ? ` · ${item.charge_indicative}` : ''
-                      }${item.rpe_cible ? ` · RPE ${item.rpe_cible}` : ''}`}
-                </div>
+              <div
+                className={`exercise-block ${isOpen ? 'exercise-block--active' : 'exercise-block--collapsed'} ${
+                  complet ? 'exercise-block--done' : ''
+                }`}
+                key={item.exercice_id}
+              >
+                <button
+                  type="button"
+                  className="exercise-block__head"
+                  onClick={() => setManualOpenId(isOpen ? -1 : item.exercice_id)}
+                >
+                  <span className="exercise-block__title-wrap">
+                    <span
+                      className="exercise-block__name"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailExerciceId(item.exercice_id);
+                      }}
+                    >
+                      {ex?.nom ?? `Exercice #${item.exercice_id}`}
+                    </span>
+                    <span className="exercise-block__group">{ex?.groupe_musculaire}</span>
+                  </span>
+                  <span className={`exercise-block__status ${complet ? 'exercise-block__status--done' : ''}`}>
+                    {complet ? '✓' : `${series.length}/${cible}`}
+                  </span>
+                </button>
 
-                {series.map((s) => (
-                  <div className="set-row" key={s.id}>
-                    <span className="set-row__num">{s.numero_serie}</span>
-                    {editingSerieId === s.id ? (
-                      <>
+                {isOpen && (
+                  <>
+                    <div className="exercise-block__previous">
+                      {precedent && precedent.series.length > 0
+                        ? `Précédent : ${precedent.series
+                            .map((s) => `${s.poids_kg ?? '–'} kg x ${s.repetitions ?? '–'}`)
+                            .join(', ')}`
+                        : `Objectif : ${objectifLabel}`}
+                    </div>
+
+                    {series.map((s) => {
+                      if (editingSerieId === s.id) {
+                        return (
+                          <div className="set-row" key={s.id}>
+                            <span className="set-row__num">{s.numero_serie}</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              className="set-row__input"
+                              placeholder="kg"
+                              value={editDraftFor(s).poids}
+                              onChange={(e) =>
+                                setEditDraftParSerie((prev) => ({
+                                  ...prev,
+                                  [s.id]: { ...editDraftFor(s), poids: e.target.value },
+                                }))
+                              }
+                            />
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              className="set-row__input"
+                              placeholder="reps"
+                              value={editDraftFor(s).reps}
+                              onChange={(e) =>
+                                setEditDraftParSerie((prev) => ({
+                                  ...prev,
+                                  [s.id]: { ...editDraftFor(s), reps: e.target.value },
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="checkbox"
+                              onClick={() => handleEnregistrerEditionSerie(item.exercice_id, s)}
+                              aria-label="Enregistrer"
+                            >
+                              ✓
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="set-line set-line--done" key={s.id}>
+                          <button
+                            type="button"
+                            className={`checkbox checkbox--sm ${s.coche ? 'checked' : ''}`}
+                            onClick={() => handleToggleSerie(item.exercice_id, s)}
+                            aria-label="Valider la série"
+                          >
+                            {s.coche ? '✓' : ''}
+                          </button>
+                          <span className="set-line__text">
+                            {s.repetitions ?? '–'} reps · {s.poids_kg ?? '–'} kg
+                            {s.difficulte && (
+                              <> · {DIFFICULTE_OPTIONS.find((d) => d.value === s.difficulte)?.label}</>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Modifier la série"
+                            onClick={() => ouvrirEditionSerie(s)}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {!seanceTerminee && prochaineNumero <= cible && !draftVisible && (
+                      <div className="set-card set-card--active">
+                        <div className="set-card__head">
+                          <span className="set-card__num">Série {prochaineNumero}</span>
+                          <span className="set-card__target">
+                            {repsCible(item.repetitions) ?? item.repetitions} reps
+                            {item.charge_indicative ? ` · ${item.charge_indicative}` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Saisir manuellement"
+                            onClick={() => handleAjouterSerie(item.exercice_id)}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                        <div className="quick-row">
+                          {DIFFICULTE_OPTIONS.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              className={`quick-btn quick-btn--${o.value}`}
+                              onClick={() => handleValiderRapide(item, o.value)}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {draftVisible && (
+                      <div className="set-row">
+                        <span className="set-row__num">{series.length + 1}</span>
                         <input
                           type="number"
                           inputMode="decimal"
                           className="set-row__input"
                           placeholder="kg"
-                          value={editDraftFor(s).poids}
-                          onChange={(e) =>
-                            setEditDraftParSerie((prev) => ({ ...prev, [s.id]: { ...editDraftFor(s), poids: e.target.value } }))
-                          }
+                          value={draft.poids}
+                          onChange={(e) => setDraft(item.exercice_id, { poids: e.target.value })}
                         />
                         <input
                           type="number"
                           inputMode="numeric"
                           className="set-row__input"
                           placeholder="reps"
-                          value={editDraftFor(s).reps}
-                          onChange={(e) =>
-                            setEditDraftParSerie((prev) => ({ ...prev, [s.id]: { ...editDraftFor(s), reps: e.target.value } }))
-                          }
+                          value={draft.reps}
+                          onChange={(e) => setDraft(item.exercice_id, { reps: e.target.value })}
                         />
                         <button
                           type="button"
                           className="checkbox"
-                          onClick={() => handleEnregistrerEditionSerie(item.exercice_id, s)}
-                          aria-label="Enregistrer"
+                          onClick={() => handleValiderSerie(item)}
+                          aria-label="Valider la série"
                         >
                           ✓
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="set-row__load">
-                          {s.poids_kg ?? '–'} kg × {s.repetitions ?? '–'}
-                          {s.difficulte && (
-                            <span className="subtle" style={{ marginLeft: 6 }}>
-                              ({DIFFICULTE_OPTIONS.find((d) => d.value === s.difficulte)?.label})
-                            </span>
-                          )}
-                        </span>
-                        <button type="button" className="link-discreet" onClick={() => ouvrirEditionSerie(s)}>
-                          Modifier
-                        </button>
-                        <button
-                          type="button"
-                          className={`checkbox ${s.coche ? 'checked' : ''}`}
-                          onClick={() => handleToggleSerie(item.exercice_id, s)}
-                          aria-label="Valider la série"
-                        >
-                          {s.coche ? '✓' : ''}
-                        </button>
-                      </>
+                      </div>
                     )}
-                  </div>
-                ))}
 
-                {!seanceTerminee && prochaineNumero <= cible && !draftVisible && (
-                  <div className="set-row set-row--cible">
-                    <span className="set-row__num">{prochaineNumero}</span>
-                    <span className="set-row__load">
-                      {repsCible(item.repetitions) ?? item.repetitions} reps
-                      {item.charge_indicative ? ` · ${item.charge_indicative}` : ''}
-                    </span>
-                    <div className="tag-row tag-row--select" style={{ margin: 0 }}>
-                      {DIFFICULTE_OPTIONS.map((o) => (
-                        <button
-                          key={o.value}
-                          type="button"
-                          className="tag tag--selectable"
-                          onClick={() => handleValiderRapide(item, o.value)}
-                        >
-                          {o.label}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="link-discreet"
-                      style={{ marginLeft: 8 }}
-                      onClick={() => handleAjouterSerie(item.exercice_id)}
-                    >
-                      Modifier
-                    </button>
-                  </div>
-                )}
+                    {Array.from({ length: Math.max(0, cible - prochaineNumero) }, (_, i) => (
+                      <div className="set-line set-line--upcoming" key={`upcoming-${item.exercice_id}-${i}`}>
+                        <span className="set-line__num">Série {prochaineNumero + i + 1}</span>
+                        <span className="set-line__text">
+                          {repsCible(item.repetitions) ?? item.repetitions} reps
+                          {item.charge_indicative ? ` · ${item.charge_indicative}` : ''}
+                        </span>
+                      </div>
+                    ))}
 
-                {draftVisible && (
-                  <div className="set-row">
-                    <span className="set-row__num">{series.length + 1}</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      className="set-row__input"
-                      placeholder="kg"
-                      value={draft.poids}
-                      onChange={(e) => setDraft(item.exercice_id, { poids: e.target.value })}
-                    />
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      className="set-row__input"
-                      placeholder="reps"
-                      value={draft.reps}
-                      onChange={(e) => setDraft(item.exercice_id, { reps: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      className="checkbox"
-                      onClick={() => handleValiderSerie(item)}
-                      aria-label="Valider la série"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                )}
-
-                {!draftVisible && prochaineNumero > cible && !seanceTerminee && (
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    style={{ marginTop: 10 }}
-                    onClick={() => handleAjouterSerie(item.exercice_id)}
-                  >
-                    + Ajouter une série
-                  </button>
+                    {!draftVisible && prochaineNumero > cible && !seanceTerminee && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        style={{ marginTop: 10 }}
+                        onClick={() => handleAjouterSerie(item.exercice_id)}
+                      >
+                        + Ajouter une série
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             );
