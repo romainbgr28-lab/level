@@ -64,6 +64,9 @@ export default function Onboarding({ onDone }: OnboardingProps) {
 
   const [objectifs, setObjectifs] = useState<string[]>([]);
   const [poste, setPoste] = useState('');
+  const [age, setAge] = useState('');
+  const [tailleCm, setTailleCm] = useState('');
+  const [poidsKg, setPoidsKg] = useState('');
   const [qualites, setQualites] = useState<ApiQualitesPhysiques>({
     force: 0,
     explosivite: 0,
@@ -104,7 +107,12 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       case 1:
         return poste !== '';
       case 2:
-        return QUALITES.every((q) => qualites[q.key] > 0);
+        return (
+          Number(age) > 0 &&
+          Number(tailleCm) > 0 &&
+          Number(poidsKg) > 0 &&
+          QUALITES.every((q) => qualites[q.key] > 0)
+        );
       case 3:
         return (
           (jourHabituel !== '' || exceptions.length > 0) &&
@@ -132,6 +140,9 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       const profil = await saveProfil({
         objectifs,
         poste,
+        age: Number(age),
+        taille_cm: Number(tailleCm),
+        poids_kg: Number(poidsKg),
         niveau_physique: niveauPhysiqueAuto(qualites),
         niveaux_qualites_physiques: qualites,
         calendrier_matchs: {
@@ -192,7 +203,50 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       {step === 2 && (
         <section>
           <h1 className="page-title">Niveau physique actuel</h1>
-          <p className="subtle">Pour chaque qualité, de 1 (faible) à 5 (élevé).</p>
+
+          <p className="subtle">Âge, taille et poids — utilisés pour calculer tes charges de départ.</p>
+          <div className="onboarding-theme">
+            <div className="section-title">Âge</div>
+            <input
+              type="number"
+              min={10}
+              max={90}
+              className="textarea"
+              style={{ minHeight: 'unset', padding: 12 }}
+              placeholder="Âge (années)"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+            />
+          </div>
+          <div className="onboarding-theme">
+            <div className="section-title">Taille (cm)</div>
+            <input
+              type="number"
+              min={100}
+              max={230}
+              className="textarea"
+              style={{ minHeight: 'unset', padding: 12 }}
+              placeholder="Taille en cm"
+              value={tailleCm}
+              onChange={(e) => setTailleCm(e.target.value)}
+            />
+          </div>
+          <div className="onboarding-theme">
+            <div className="section-title">Poids (kg)</div>
+            <input
+              type="number"
+              min={30}
+              max={200}
+              step="0.1"
+              className="textarea"
+              style={{ minHeight: 'unset', padding: 12 }}
+              placeholder="Poids en kg"
+              value={poidsKg}
+              onChange={(e) => setPoidsKg(e.target.value)}
+            />
+          </div>
+
+          <p className="subtle" style={{ marginTop: 20 }}>Pour chaque qualité, de 1 (faible) à 5 (élevé).</p>
           {QUALITES.map(({ key, label }) => (
             <div key={key} className="onboarding-theme">
               <div className="section-title">{label}</div>

@@ -35,6 +35,9 @@ class ObjectifEsthetique(BaseModel):
 class ProfilBase(BaseModel):
     objectifs: list[str]
     poste: str
+    age: int
+    taille_cm: float
+    poids_kg: float
     niveau_physique: str
     niveaux_qualites_physiques: QualitesPhysiques
     calendrier_matchs: CalendrierMatchs

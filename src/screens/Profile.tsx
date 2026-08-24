@@ -67,6 +67,20 @@ export default function Profile() {
         <span className="info-row__value">{profil.poste}</span>
       </div>
 
+      <div className="section-title">Biométrie</div>
+      <div className="info-row">
+        <span className="info-row__label">Âge</span>
+        <span className="info-row__value">{profil.age} ans</span>
+      </div>
+      <div className="info-row">
+        <span className="info-row__label">Taille</span>
+        <span className="info-row__value">{profil.taille_cm} cm</span>
+      </div>
+      <div className="info-row">
+        <span className="info-row__label">Poids</span>
+        <span className="info-row__value">{profil.poids_kg} kg</span>
+      </div>
+
       <div className="section-title">Niveaux actuels</div>
       <div className="info-row">
         <span className="info-row__label">Physique</span>

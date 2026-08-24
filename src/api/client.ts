@@ -130,6 +130,9 @@ export interface ApiProfil {
   id: number;
   objectifs: string[];
   poste: string;
+  age: number;
+  taille_cm: number;
+  poids_kg: number;
   niveau_physique: string;
   niveaux_qualites_physiques: ApiQualitesPhysiques;
   calendrier_matchs: ApiCalendrierMatchs;

@@ -10,6 +10,9 @@ class Profil(Base):
     id = Column(Integer, primary_key=True, index=True)
     objectifs = Column(JSON, nullable=False, default=list)
     poste = Column(String, nullable=False)  # Gardien | Défenseur | Milieu | Attaquant
+    age = Column(Integer, nullable=False)
+    taille_cm = Column(Float, nullable=False)
+    poids_kg = Column(Float, nullable=False)
     niveau_physique = Column(String, nullable=False)  # résumé auto (Débutant/Intermédiaire/Avancé)
     niveaux_qualites_physiques = Column(JSON, nullable=False, default=dict)  # {force, explosivite, vitesse, endurance}: 1-5
     calendrier_matchs = Column(JSON, nullable=False, default=dict)  # {jour_habituel, exceptions, entrainements_club}

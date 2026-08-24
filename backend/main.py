@@ -13,6 +13,7 @@ import mistral_client
 import models
 import regles_seance
 import schemas
+from charge_depart import estimer_charge_depart, formater_recommandation_charge
 from calendrier import compute_phase
 from database import Base, SessionLocal, engine, get_db
 from seed import seed
@@ -372,6 +373,37 @@ def _construire_liste_bibliotheque(db: Session) -> list[models.ExerciceBibliothe
     return db.query(models.ExerciceBibliotheque).order_by(models.ExerciceBibliotheque.id.asc()).all()
 
 
+def _a_historique_reel(exercice_id: int, db: Session) -> bool:
+    """Vrai si au moins une série a déjà été loguée (façon Hevy) pour cet exercice :
+    dans ce cas la vraie progression (basée sur cet historique) prime sur toute
+    charge de départ estimée."""
+    return (
+        db.query(models.SerieLoggee.id)
+        .filter(models.SerieLoggee.exercice_id == exercice_id, models.SerieLoggee.coche == 1)
+        .first()
+        is not None
+    )
+
+
+def _construire_charges_depart(
+    candidats: list[models.ExerciceBibliotheque],
+    poids_corps: Optional[float],
+    niveau_physique: Optional[str],
+    db: Session,
+) -> dict[int, float]:
+    """Calcule, pour les exercices candidats concernés (charge basée sur le poids
+    de corps) et n'ayant pas encore d'historique réel loggé, une charge de départ
+    à injecter dans le prompt Mistral comme point de départ à respecter."""
+    charges: dict[int, float] = {}
+    for ex in candidats:
+        if _a_historique_reel(ex.id, db):
+            continue  # historique réel disponible : la vraie progression prime
+        charge = estimer_charge_depart(ex.nom, poids_corps, niveau_physique)
+        if charge is not None:
+            charges[ex.id] = charge
+    return charges
+
+
 # Types d'exercices pertinents pour chaque type de séance suggéré par le moteur de règles.
 # "gainage_prevention" et "échauffement" sont toujours inclus : le premier doit systématiquement
 # figurer en fin de séance (garde-fou ci-dessous), le second sert de mise en route quel que soit
@@ -502,15 +534,22 @@ def _construire_prompt_generation(
     etat_du_jour: dict,
     bibliotheque: list[models.ExerciceBibliotheque],
     fiches_theoriques: list[str],
+    charges_depart: Optional[dict[int, float]] = None,
 ) -> str:
     exclusions = recommandation.get("exclusions") or []
     exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
     raisons_txt = "; ".join(recommandation.get("raisons") or []) or "aucune"
 
-    bibliotheque_txt = "\n".join(
-        f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type})"
-        for ex in bibliotheque
-    )
+    charges_depart = charges_depart or {}
+
+    def _ligne_bibliotheque(ex: models.ExerciceBibliotheque) -> str:
+        ligne = f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type})"
+        charge = charges_depart.get(ex.id)
+        if charge is not None:
+            ligne += f" — {formater_recommandation_charge(charge)}"
+        return ligne
+
+    bibliotheque_txt = "\n".join(_ligne_bibliotheque(ex) for ex in bibliotheque)
 
     fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
 
@@ -521,6 +560,12 @@ disponible et ses zones sensibles — tu dois obligatoirement choisir les exerci
 UNIQUEMENT parmi cette liste, en référençant leur id ; interdiction stricte d'inventer un exercice
 ou de référencer un id qui n'y figure pas)
 {bibliotheque_txt}
+
+Pour les exercices ci-dessus portant une « charge de départ recommandée », cette valeur a été
+calculée côté serveur (poids de corps + niveau déclaré, aucun historique réel disponible pour cet
+exercice) : reprends-la telle quelle dans "charge_indicative" pour cet exercice, sans l'inventer
+ni la modifier sans raison. Pour les autres exercices avec charge, indique une charge indicative
+raisonnable comme d'habitude.
 
 CONTRAINTE OBLIGATOIRE : inclure au moins un exercice de type gainage_prevention (voir liste
 ci-dessus) et le placer en dernière position de la liste "exercices" (fin de séance).
@@ -636,8 +681,13 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     fiches_theoriques = connaissances.selectionner_fiches_pertinentes(
         recommandation["type_seance_suggere"], profil_dict.get("poste"), zone_sensible
     )
+    charges_depart = _construire_charges_depart(
+        candidats, profil_dict.get("poids_kg"), profil_dict.get("niveau_physique"), db
+    )
     system_prompt = _construire_system_prompt()
-    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour, candidats, fiches_theoriques)
+    prompt = _construire_prompt_generation(
+        profil_dict, recommandation, etat_du_jour, candidats, fiches_theoriques, charges_depart
+    )
 
     ids_valides = {ex.id for ex in candidats}
     required_keys = {"nom_seance", "duree_min", "exercices", "explication"}
