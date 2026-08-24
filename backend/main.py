@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import connaissances
 import mistral_client
 import models
 import regles_seance
@@ -371,8 +372,22 @@ def _construire_liste_bibliotheque(db: Session) -> list[models.ExerciceBibliothe
     return db.query(models.ExerciceBibliotheque).order_by(models.ExerciceBibliotheque.id.asc()).all()
 
 
+def _construire_system_prompt() -> str:
+    notes = connaissances.get_notes_generation_ia()
+    notes_txt = "\n".join(f"- {n}" for n in notes)
+    return (
+        "Tu es un coach sportif spécialisé en préparation physique football. "
+        "Règles de comportement à respecter systématiquement, sans exception :\n"
+        f"{notes_txt}"
+    )
+
+
 def _construire_prompt_generation(
-    profil: dict, recommandation: dict, etat_du_jour: dict, bibliotheque: list[models.ExerciceBibliotheque]
+    profil: dict,
+    recommandation: dict,
+    etat_du_jour: dict,
+    bibliotheque: list[models.ExerciceBibliotheque],
+    fiches_theoriques: list[str],
 ) -> str:
     exclusions = recommandation.get("exclusions") or []
     exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
@@ -382,6 +397,8 @@ def _construire_prompt_generation(
         f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type})"
         for ex in bibliotheque
     )
+
+    fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
 
     return f"""Tu es un coach sportif qui construit une séance de sport concrète pour un joueur de football amateur.
 
@@ -413,6 +430,10 @@ ne dépend pas de l'envie du joueur ci-dessus)
 - Ajustement à appliquer par rapport à la dernière séance de ce type : charge {recommandation['ajustement_charge_pct']:+.0f}%, volume {recommandation.get('ajustement_volume_pct', 0):+.0f}%
 - Zones à exclure impérativement de la séance (aucun exercice ne doit les solliciter) : {exclusions_txt}
 - Raisons de ces contraintes : {raisons_txt}
+
+CONNAISSANCES THÉORIQUES DE RÉFÉRENCE (à utiliser pour enrichir l'explication de la séance,
+jamais pour contredire la recommandation calculée ci-dessus)
+{fiches_txt}
 
 CONSIGNE
 Construis une séance concrète respectant strictement l'intensité maximale et les exclusions
@@ -466,10 +487,16 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     etat_du_jour = payload.model_dump()
 
     recommandation = regles_seance.generer_recommandation(profil_dict, historique_ctx, etat_du_jour)
-    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour, bibliotheque)
+
+    zone_sensible = (recommandation.get("exclusions") or [None])[0]
+    fiches_theoriques = connaissances.selectionner_fiches_pertinentes(
+        recommandation["type_seance_suggere"], profil_dict.get("poste"), zone_sensible
+    )
+    system_prompt = _construire_system_prompt()
+    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour, bibliotheque, fiches_theoriques)
 
     try:
-        data = mistral_client.appeler_mistral_json(prompt)
+        data = mistral_client.appeler_mistral_json(prompt, system_prompt=system_prompt)
     except mistral_client.MistralError as exc:
         logger.error("Échec de la génération de séance via Mistral : %s", exc)
         raise HTTPException(status_code=502, detail=f"Le générateur de séance a échoué : {exc}") from exc

@@ -16,7 +16,7 @@ class MistralError(Exception):
     """Erreur d'appel ou de réponse Mistral — à traduire en réponse HTTP claire côté API."""
 
 
-def appeler_mistral_json(prompt: str, timeout: float = 30.0) -> dict:
+def appeler_mistral_json(prompt: str, system_prompt: str | None = None, timeout: float = 30.0) -> dict:
     """Appelle Mistral en mode JSON et retourne le JSON parsé de la réponse.
 
     Lève MistralError (jamais silencieuse) si la clé API manque, si l'appel réseau
@@ -27,9 +27,14 @@ def appeler_mistral_json(prompt: str, timeout: float = 30.0) -> dict:
     if not api_key:
         raise MistralError("MISTRAL_API_KEY n'est pas configurée côté serveur.")
 
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
     payload = {
         "model": MISTRAL_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "response_format": {"type": "json_object"},
         "temperature": 0.4,
     }

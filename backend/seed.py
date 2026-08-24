@@ -1,7 +1,23 @@
 from datetime import date
 
+from connaissances import get_exercices_musculation_base
 from database import SessionLocal
-from models import ModuleIntellectuel, Streak
+from models import ExerciceBibliotheque, ModuleIntellectuel, Streak
+
+
+def _instructions_musculation(fiche: dict) -> list[str]:
+    """Construit la liste de points d'exécution/sécurité pour un exercice de la
+    bibliothèque à partir d'une fiche de musculation_execution_exercices_base."""
+    points = []
+    if fiche.get("execution"):
+        points.append(f"Exécution : {fiche['execution']}")
+    if fiche.get("erreurs_frequentes"):
+        points.append(f"Erreurs fréquentes : {fiche['erreurs_frequentes']}")
+    if fiche.get("corrections"):
+        points.append(f"Corrections : {fiche['corrections']}")
+    if fiche.get("points_securite"):
+        points.append(f"Sécurité : {fiche['points_securite']}")
+    return points
 
 
 def seed(db):
@@ -78,6 +94,18 @@ def seed(db):
     # GET /api/seances/today la trouve toujours en premier et l'écran Aujourd'hui
     # n'affiche jamais le bouton "Générer ma séance du jour" — le flux IA n'est
     # alors jamais réellement exercé.
+
+    if db.query(ExerciceBibliotheque).count() == 0:
+        for fiche in get_exercices_musculation_base():
+            db.add(
+                ExerciceBibliotheque(
+                    nom=fiche["nom"],
+                    groupe_musculaire=fiche["groupe_musculaire"],
+                    instructions=_instructions_musculation(fiche),
+                    image_url=None,
+                    type="force",
+                )
+            )
 
     if db.query(Streak).count() == 0:
         db.add(Streak(date=date.today(), sport_fait=0, apprentissage_fait=0))

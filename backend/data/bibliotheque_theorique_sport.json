@@ -1,0 +1,252 @@
+{
+  "meta": {
+    "description": "Bibliothèque de connaissances théoriques sur l'entraînement physique et la préparation football, destinée à servir de contexte de référence pour la génération de séances par IA (Mistral) dans l'app LEVEL.",
+    "note_fiabilite": "Ce contenu combine des synthèses de littérature sportive (via NotebookLM, sources fournies par l'utilisateur) et des connaissances générales consensuelles. Les valeurs chiffrées précises (ex: pourcentages, distances, tableaux normatifs) doivent être traitées comme des repères indicatifs, pas des normes validées cliniquement. Aucune donnée anthropométrique ou cinématique de très haute précision (issue de tracking GPS professionnel) n'a été conservée par prudence — non vérifiable et non utile à la génération de séances individuelles.",
+    "usage": "Chaque fiche peut être injectée partiellement dans le prompt Mistral selon le type de séance généré (ne pas tout envoyer d'un coup — filtrer par pertinence côté backend)."
+  },
+
+  "principes_fondamentaux": [
+    {
+      "id": "surcharge_progressive",
+      "titre": "Surcharge progressive",
+      "niveau_confiance": "établi",
+      "contenu": "La progression de charge ou de volume est le moteur principal de l'adaptation physique (force, hypertrophie, endurance). Une progression trop rapide (>10% de volume/intensité par semaine) est associée à un risque de blessure significativement accru. Une progression prudente et régulière (de l'ordre de 2 à 5% par semaine sur une charge donnée, quand la séance précédente a été bien tolérée) est la norme recommandée.",
+      "application_pratique": "Le moteur de règles de l'app applique déjà cette logique : +5% si RPE bas et séance complétée deux fois de suite, -10% si RPE élevé ou séance ratée."
+    },
+    {
+      "id": "phases_adaptation",
+      "titre": "Chronologie des adaptations à l'entraînement",
+      "niveau_confiance": "établi",
+      "contenu": "Les gains de force des premières semaines (0-6 semaines) viennent majoritairement de l'amélioration neuromusculaire (coordination, recrutement), pas encore d'un vrai gain de masse musculaire. L'hypertrophie musculaire réelle devient significative à partir de 6 semaines et plus. Les tissus conjonctifs (tendons) s'adaptent plus lentement (8-12 semaines) que le muscle — c'est une des raisons pour lesquelles il faut être prudent en augmentant l'intensité trop vite au début d'un programme, même si la force perçue progresse vite.",
+      "application_pratique": "Pour un utilisateur débutant ou qui reprend après une pause, prévoir une phase de 4-6 semaines de charge modérée avant d'introduire des charges lourdes ou de la pliométrie intense."
+    },
+    {
+      "id": "recuperation_supercompensation",
+      "titre": "Récupération et supercompensation",
+      "niveau_confiance": "établi",
+      "contenu": "Le repos est une phase active de reconstruction, pas une simple absence d'effort. Délais de récupération recommandés avant de refaire un travail similaire intense : environ 48h pour un travail de force lourde, 48-72h pour un travail pliométrique/explosivité, 24h pour un travail d'endurance modérée.",
+      "application_pratique": "Le moteur de règles ne doit jamais programmer deux séances de force lourde à moins de 48h d'intervalle, ni deux séances de pliométrie intense à moins de 48-72h."
+    },
+    {
+      "id": "zones_charge_objectif",
+      "titre": "Zones de charge selon l'objectif",
+      "niveau_confiance": "établi",
+      "contenu": "Le nombre de répétitions, le repos entre séries et l'intensité doivent être adaptés à l'objectif recherché.",
+      "tableau": [
+        {"objectif": "Force maximale", "charge_pct_1RM": ">85%", "repetitions": "3-6", "repos": "3-5 min", "rpe_cible": "9-10 (proche de l'échec)"},
+        {"objectif": "Hypertrophie / esthétique", "charge_pct_1RM": "65-80%", "repetitions": "6-12", "repos": "60-90s", "rpe_cible": "8-9"},
+        {"objectif": "Endurance musculaire", "charge_pct_1RM": "50-65%", "repetitions": "15-25", "repos": "<60s", "rpe_cible": "7-8"}
+      ],
+      "note": "Le RPE (Rate of Perceived Exertion, échelle 0-10) est un outil d'autorégulation utile : il s'adapte à la forme du jour, contrairement à un pourcentage figé de charge maximale."
+    },
+    {
+      "id": "signes_surentrainement",
+      "titre": "Signes de surentraînement à surveiller",
+      "niveau_confiance": "établi",
+      "contenu": "Signaux d'alerte à prendre au sérieux : stagnation ou baisse des charges habituelles, fatigue anormale à intensité égale, troubles du sommeil, baisse d'appétit, douleurs tendineuses persistantes, baisse de la coordination/motricité.",
+      "application_pratique": "Si ces signes sont rapportés dans le compte-rendu de fin de séance, le moteur de règles doit basculer en mode 'semaine de décharge' (volume -30%) indépendamment du calendrier de matchs."
+    },
+    {
+      "id": "hypertrophie_volume",
+      "titre": "Volume d'entraînement pour l'hypertrophie",
+      "niveau_confiance": "établi (bien documenté dans la littérature, notamment travaux de Schoenfeld)",
+      "contenu": "Un minimum d'environ 10 séries par groupe musculaire par semaine est généralement nécessaire pour une réponse hypertrophique notable. Une progression vers 15-20 séries par semaine sur un cycle peut aider à dépasser un plateau, à condition que la récupération suive.",
+      "application_pratique": "Pour l'objectif esthétique déclaré par l'utilisateur (zones ciblées), répartir le volume hebdomadaire sur les groupes musculaires concernés en tenant compte de ce seuil."
+    }
+  ],
+
+  "qualites_physiques_football": [
+    {
+      "id": "vitesse_vivacite_reactivite",
+      "titre": "Vitesse, vivacité et réactivité — bien distinguer",
+      "niveau_confiance": "établi (distinction classique en préparation physique sportive)",
+      "contenu": "Trois qualités différentes, à ne pas confondre : la vitesse linéaire (courir vite en ligne droite), la vivacité (actions rapides sur quelques mètres avec changement de direction), et la réactivité (réagir vite à un signal extérieur : ballon, adversaire). Le travail de vivacité/réactivité se fait sur de très courtes distances (souvent <10m), avec une récupération longue (10 à 20 fois la durée de l'effort) pour rester sur des efforts de qualité maximale, jamais en fatigue.",
+      "application_pratique": "Un exercice de vivacité mal placé (en fin de séance fatiguante, ou en veille de match avec trop de volume) perd son intérêt et devient un risque plutôt qu'un bénéfice."
+    },
+    {
+      "id": "explosivite_force_explosive",
+      "titre": "Explosivité et force explosive",
+      "niveau_confiance": "établi",
+      "contenu": "L'explosivité repose sur le recrutement rapide des fibres musculaires rapides. Elle se travaille avec des charges légères à vitesse maximale d'exécution (l'intention de vitesse compte plus que la charge lourde), typiquement sur des séries courtes de 5 à 10 répétitions.",
+      "application_pratique": "Ne jamais confondre travail d'explosivité avec travail de force lourde classique — l'exécution doit rester rapide et propre, jamais lente et écrasante."
+    },
+    {
+      "id": "pliometrie",
+      "titre": "Pliométrie — progressivité obligatoire",
+      "niveau_confiance": "établi",
+      "contenu": "La pliométrie (sauts, rebonds) est un pont entre force et vitesse, mais elle est exigeante pour les tendons et articulations. Une progression stricte doit être respectée : débuter par des sauts simples au sol (squat jumps, petits bondissements), avant d'introduire des sauts plus complexes (sauts avec réception contrôlée), puis seulement pour un utilisateur confirmé des sauts avec plus de contrainte (sauts en profondeur, sauts unilatéraux). Une récupération de 48 à 72h est recommandée entre deux séances de pliométrie intense.",
+      "prerequis_securite": "Avant d'introduire de la pliométrie plus intense, l'utilisateur devrait être capable de tenir un équilibre statique sur une jambe environ 30 secondes sans douleur, et ne présenter aucune douleur inflammatoire active aux membres inférieurs.",
+      "application_pratique": "Le moteur de règles doit limiter la pliométrie à un niveau 'débutant' (sauts simples, faible volume) pour tout utilisateur qui n'a pas d'historique de force de base établi, indépendamment de son niveau déclaré à l'onboarding — la confirmation se fait par les séances réelles complétées, pas seulement la déclaration initiale."
+    },
+    {
+      "id": "endurance_intermittente",
+      "titre": "Endurance intermittente spécifique football",
+      "niveau_confiance": "établi",
+      "contenu": "Le football n'exige pas une endurance continue (comme la course longue distance) mais une endurance intermittente : alternance d'efforts intenses courts et de récupérations. Les formats de fractionné type '30 secondes effort / 30 secondes récupération' ou '15 secondes / 15 secondes' sont des standards reconnus pour ce type de préparation, souvent combinés à des exercices avec ballon pour rester spécifique au sport.",
+      "application_pratique": "Privilégier ce type de fractionné plutôt que du footing continu pour développer l'endurance utile au football."
+    },
+    {
+      "id": "agilite_vs_changement_direction",
+      "titre": "Agilité réactive vs changement de direction planifié",
+      "niveau_confiance": "établi",
+      "contenu": "Un changement de direction planifié (type slalom entre plots) est un exercice physique pur. L'agilité 'vraie' implique en plus une réaction à un stimulus imprévisible (un adversaire, un partenaire, un ballon) — c'est cette dimension de prise de décision rapide qui différencie le plus les joueurs à haut niveau."
+    }
+  ],
+
+  "priorites_par_poste": [
+    {
+      "poste": "défenseur",
+      "priorites": ["force pour les duels", "explosivité verticale (jeu aérien)", "endurance de répétition d'efforts courts"],
+      "note": "Doit conserver une base de vitesse mais celle-ci est généralement moins déterminante que pour un attaquant ou ailier."
+    },
+    {
+      "poste": "milieu",
+      "priorites": ["endurance intermittente (volume de course le plus élevé du terrain)", "coordination", "répétition d'efforts"],
+      "note": "Poste le plus exigeant en volume total de course dans la plupart des analyses de préparation physique football."
+    },
+    {
+      "poste": "attaquant",
+      "priorites": ["vitesse linéaire et explosivité réactive", "capacité de sprint répété", "puissance de frappe/finition"],
+      "note": "Les efforts sont plus courts et plus explosifs que pour un milieu, avec une importance forte de la fraîcheur pour être décisif en fin d'action."
+    },
+    {
+      "poste": "gardien",
+      "priorites": ["explosivité réactive unilatérale", "souplesse et amplitude articulaire", "temps de réaction"],
+      "note": "Profil physique très différent des autres postes — peu de course longue distance, beaucoup d'explosivité ponctuelle et de réactivité."
+    }
+  ],
+
+  "prevention_blessures": {
+    "protocole_fifa11plus": {
+      "titre": "Protocole FIFA 11+",
+      "niveau_confiance": "établi (protocole validé et largement documenté)",
+      "efficacite_documentee": "Protocole reconnu pour réduire significativement les blessures des membres inférieurs, notamment les ruptures du ligament croisé antérieur, chez les joueurs de football.",
+      "frequence_recommandee": "3 fois par semaine minimum, environ 20 minutes",
+      "structure": [
+        {
+          "partie": "1 - Course et étirements actifs (~8 min)",
+          "contenu": "Course en ligne droite, mouvements de hanches (rotation externe/interne), cercles de jambe avec cônes ou partenaire, contact épaule, sprints avant/arrière progressifs."
+        },
+        {
+          "partie": "2 - Force, équilibre, pliométrie (~10 min)",
+          "contenu": "Six exercices piliers : planche ventrale, planche latérale, exercice nordique des ischio-jambiers (à genoux, contrôler lentement la descente vers l'avant), équilibre sur une jambe, squats avec contrôle de l'alignement genou-orteil, sauts avec réception souple et contrôlée."
+        },
+        {
+          "partie": "3 - Course à haute vitesse (~2 min)",
+          "contenu": "Changements de direction brusques ('plant and cut'), bondissements, pivots."
+        }
+      ],
+      "avertissement": "Les étirements statiques sont à proscrire dans un échauffement pré-effort — ils réduisent temporairement la puissance explosive. Utiliser uniquement des étirements dynamiques."
+    },
+    "zones_a_risque": [
+      {
+        "zone": "ischio-jambiers",
+        "frequence_relative": "zone la plus fréquemment touchée dans les blessures musculaires au football",
+        "cause_frequente": "souvent liée à un déséquilibre de force par rapport aux quadriceps, et aux sprints répétés",
+        "exercice_prevention": "Nordic Hamstring : à genoux, buste droit, descendre lentement vers l'avant en freinant activement avec les ischio-jambiers, retenu par un partenaire ou un support fixe."
+      },
+      {
+        "zone": "adducteurs",
+        "cause_frequente": "changements de direction, contraintes latérales répétées",
+        "exercice_prevention": "Exercice de Copenhague (renforcement adducteurs en position latérale). Attention : exercice très exigeant, à introduire progressivement (commencer avec un faible volume, ex: 8 répétitions, pour éviter des courbatures très invalidantes au démarrage)."
+      },
+      {
+        "zone": "genoux (ligament croisé antérieur)",
+        "cause_frequente": "réceptions de saut mal contrôlées avec le genou qui rentre vers l'intérieur (valgus dynamique)",
+        "exercice_prevention": "Travail de contrôle de l'alignement genou-orteil sur squats et réceptions de saut, renforcement des stabilisateurs de hanche."
+      }
+    ],
+    "gainage": [
+      {"type": "ventral", "exercice": "planche sur les coudes", "modalite": "30s statique, ou variante dynamique avec levée de membre"},
+      {"type": "latéral", "exercice": "planche sur le côté", "modalite": "30s par côté, en maintenant l'alignement épaule-bassin-pied"},
+      {"type": "dorsal", "exercice": "pont fessier (glute bridge)", "modalite": "focus sur l'activation des fessiers"}
+    ],
+    "signaux_alerte": {
+      "titre": "Distinguer courbature normale et blessure",
+      "niveau_confiance": "établi (principe clinique de base, la classification précise à 4 niveaux n'a pas été conservée telle quelle par prudence sur la source)",
+      "regles_simples": [
+        "Douleur diffuse, apparaissant après l'effort, soulagée par un étirement léger et l'échauffement suivant → probablement une courbature normale, poursuite adaptée possible.",
+        "Douleur aiguë et localisée, sensation de 'claquement' ou de 'coup de poignard' pendant l'effort → ARRÊT IMMÉDIAT de la séance, ne pas insister, consulter un professionnel de santé.",
+        "Douleur qui s'aggrave lors d'un étirement passif de la zone → à traiter comme potentiellement structurelle, ne pas continuer l'entraînement sur cette zone tant qu'un avis médical n'a pas été obtenu.",
+        "Perte de fonction immédiate (incapacité à poser le pied, à étendre le membre normalement) ou hématome important → urgence médicale, ne jamais tenter de 'faire passer' ce type de blessure."
+      ]
+    }
+  },
+
+  "musculation_execution_exercices_base": [
+    {
+      "id": "squat",
+      "nom": "Squat (back squat / squat libre)",
+      "groupe_musculaire": "jambes, fessiers, gainage",
+      "erreurs_frequentes": "Genoux qui rentrent vers l'intérieur (valgus), buste qui s'affaisse vers l'avant.",
+      "corrections": "Maintenir le buste droit et fier ('proud chest'), pousser activement les genoux vers l'extérieur dans l'alignement des pieds tout au long du mouvement.",
+      "points_securite": "Descendre à une amplitude contrôlée sans perdre l'alignement du dos ; ne jamais sacrifier la technique pour ajouter de la charge."
+    },
+    {
+      "id": "developpe_couche",
+      "nom": "Développé couché (bench press)",
+      "groupe_musculaire": "pectoraux, épaules, triceps",
+      "erreurs_frequentes": "Épaules instables qui remontent, coudes positionnés trop haut/écartés.",
+      "corrections": "Serrer les omoplates ensemble et vers le bas avant et pendant le mouvement (rétraction scapulaire) pour protéger l'épaule.",
+      "points_securite": "Toujours utiliser un partenaire ou des barres de sécurité sur les charges proches du maximum."
+    },
+    {
+      "id": "rowing_barre",
+      "nom": "Rowing buste penché (barbell row)",
+      "groupe_musculaire": "dos, biceps, gainage",
+      "execution": "Pieds largeur épaules, saisir la barre juste à l'extérieur des genoux, stabiliser le buste avec une inclinaison de 15 à 45 degrés (comme un soulevé de terre partiel), tirer la barre jusqu'au contact du torse entre le sternum et le nombril.",
+      "erreurs_frequentes": "Balancement du buste pour créer de l'élan (momentum), haussement des épaules en fin de mouvement.",
+      "corrections": "Contracter les abdominaux pour stabiliser la colonne, garder une tension constante sur les ischio-jambiers et fessiers, éviter tout mouvement de balancier."
+    },
+    {
+      "id": "souleve_terre",
+      "nom": "Soulevé de terre (deadlift)",
+      "groupe_musculaire": "chaîne postérieure complète (dos, fessiers, ischio-jambiers)",
+      "erreurs_frequentes": "Dos qui s'arrondit, barre qui s'éloigne du corps pendant le mouvement.",
+      "corrections": "Engager activement les muscles du dos pour garder la barre proche des tibias tout au long du mouvement, garder le dos neutre (ni arrondi ni excessivement cambré).",
+      "points_securite": "C'est l'exercice le plus exigeant techniquement pour le bas du dos — privilégier une charge modérée avec une technique parfaite plutôt qu'une charge lourde mal exécutée."
+    }
+  ],
+
+  "interference_force_esthetique_explosivite": {
+    "titre": "Concilier musculation esthétique et préparation athlétique foot",
+    "niveau_confiance": "établi dans ses grandes lignes (littérature sur l'entraînement concurrent), certaines valeurs précises de la source à traiter avec prudence",
+    "contenu": "Faire à la fois du travail cardio/explosivité et du travail de musculation lourde dans un temps rapproché peut réduire l'efficacité de chacun (effet dit 'd'interférence'). C'est surtout la qualité 'explosivité pure' qui est la plus sensible à cette interférence — les mouvements de puissance perdent en qualité s'ils sont faits juste après un effort cardio intense. Le gain de masse musculaire (hypertrophie) est globalement plus résistant à cette interférence que la force explosive pure.",
+    "recommandations_pratiques": [
+      "Si musculation et travail cardio/explosivité sont prévus le même jour, espacer les deux séances d'au moins 6 heures si possible.",
+      "Faire la musculation en priorité dans la journée si l'objectif esthétique est prioritaire ce jour-là.",
+      "Pour tout travail cardio complémentaire, le vélo est moins traumatisant pour les muscles que la course à pied, donc à privilégier en complément si le volume de course est déjà élevé par ailleurs (matchs, entraînements club)."
+    ]
+  },
+
+  "tests_terrain_suivis_progression": [
+    {
+      "id": "test_sprint",
+      "nom": "Test de sprint (répété régulièrement pour suivre la progression, ex: 20-30m)",
+      "protocole": "Échauffement dynamique de 10 minutes. Chronométrer un sprint maximal sur une distance fixe (ex: 20m ou 30m) à partir d'un départ arrêté. Réaliser 2-3 essais avec récupération complète (plusieurs minutes) entre chaque, garder le meilleur temps.",
+      "usage_app": "Enregistrer ce temps dans l'historique de l'utilisateur et le comparer dans le temps — l'important est la progression individuelle, pas une comparaison à une norme externe (les tableaux de temps 'normatifs' varient trop selon les conditions de test pour être fiables comme référence absolue)."
+    },
+    {
+      "id": "test_saut_vertical",
+      "nom": "Test de saut vertical (squat jump)",
+      "protocole": "Position accroupie (genoux à environ 90°), mains sur les hanches, marquer une pause de 1-2 secondes en position basse avant de sauter le plus haut possible sans mouvement de descente préalable. Mesurer la hauteur atteinte (avec une app de mesure de saut ou une mesure simple au mur).",
+      "usage_app": "Ce test est aussi un bon indicateur de fraîcheur : une baisse nette de performance par rapport à la moyenne habituelle de l'utilisateur peut signaler une fatigue accumulée à surveiller, indépendamment du calendrier prévu."
+    },
+    {
+      "id": "test_endurance_intermittente",
+      "nom": "Test d'endurance intermittente simplifié (inspiré des tests navette type Bronco)",
+      "protocole": "Navettes sur des distances croissantes (par exemple 20m-40m-60m aller-retour), répétées plusieurs fois consécutivement à effort maximal, sans pacing volontaire. Chronométrer le temps total.",
+      "usage_app": "Comme pour les autres tests, la valeur de référence pertinente est la progression personnelle de l'utilisateur dans le temps, pas une norme externe."
+    }
+  ],
+
+  "notes_generation_ia": {
+    "instructions_pour_prompt_mistral": [
+      "Toujours respecter les garde-fous du moteur de règles (intensité max selon phase calendaire, exclusions de zones sensibles) — ce contenu théorique sert à ENRICHIR les explications, jamais à les contredire.",
+      "Ne jamais présenter une valeur chiffrée précise de ce document comme une norme absolue à l'utilisateur — formuler en repère indicatif ('en général', 'à titre de repère').",
+      "Pour toute séance incluant de la pliométrie, vérifier explicitement dans le prompt que l'historique de l'utilisateur montre une base de force suffisante ou un niveau déclaré non-débutant avant de proposer des sauts avancés.",
+      "Toujours inclure un rappel de gainage/prévention en fin de séance de type explosivité/vitesse, conformément à la logique du protocole FIFA 11+.",
+      "Si l'utilisateur a déclaré une zone sensible ou une douleur récente, exclure systématiquement les exercices sollicitant directement cette zone et le mentionner explicitement dans l'explication de la séance."
+    ]
+  }
+}
