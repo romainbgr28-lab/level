@@ -28,7 +28,8 @@
         "Rotations de hanches, chevilles, épaules (10 par sens)",
         "Fentes marchées avec rotation du buste (10 par jambe)"
       ],
-      "points_securite": "Ne jamais faire d'étirement statique prolongé avant l'effort."
+      "points_securite": "Ne jamais faire d'étirement statique prolongé avant l'effort.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "echauffement_articulaire_cible",
@@ -43,7 +44,8 @@
         "Squats à vide (poids du corps) pour activer les jambes avant charge",
         "Pompes lentes ou dips légers pour activer le haut du corps"
       ],
-      "points_securite": "Utile avant une séance de force lourde, pour préparer spécifiquement les articulations sollicitées."
+      "points_securite": "Utile avant une séance de force lourde, pour préparer spécifiquement les articulations sollicitées.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "sprint_court",
@@ -58,7 +60,8 @@
         "Accélération maximale sur toute la distance",
         "Récupération complète entre répétitions"
       ],
-      "points_securite": "Toujours précédé d'un échauffement complet."
+      "points_securite": "Toujours précédé d'un échauffement complet.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "sprint_lance",
@@ -72,7 +75,8 @@
         "Vitesse maximale maintenue sur les 10-15m suivants",
         "Décélération contrôlée en fin de course"
       ],
-      "points_securite": "Bon complément au sprint départ arrêté, cible spécifiquement la vitesse de pointe."
+      "points_securite": "Bon complément au sprint départ arrêté, cible spécifiquement la vitesse de pointe.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "montee_genoux_rapide",
@@ -86,7 +90,8 @@
         "Appuis courts et dynamiques",
         "Séries courtes de 10-15 secondes à intensité maximale"
       ],
-      "points_securite": "Excellent exercice de fréquence de foulée, faible impact."
+      "points_securite": "Excellent exercice de fréquence de foulée, faible impact.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "squat_jump",
@@ -101,7 +106,8 @@
         "Extension explosive vers le haut, sans élan préalable",
         "Réception souple, genoux fléchis"
       ],
-      "points_securite": "Pliométrie niveau débutant. Réception toujours contrôlée."
+      "points_securite": "Pliométrie niveau débutant. Réception toujours contrôlée.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "bondissement_lateral",
@@ -115,7 +121,8 @@
         "Rechercher l'amplitude tout en gardant le contrôle",
         "Réception stable avant chaque nouveau saut"
       ],
-      "points_securite": "Pliométrie niveau débutant/intermédiaire. Terrain stable requis."
+      "points_securite": "Pliométrie niveau débutant/intermédiaire. Terrain stable requis.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "saut_reception_controlee",
@@ -129,7 +136,8 @@
         "Stabilisation immédiate à la réception, sans rebond",
         "Maintenir 2 secondes la position stable"
       ],
-      "points_securite": "Excellent exercice de prévention du genou. Niveau intermédiaire."
+      "points_securite": "Excellent exercice de prévention du genou. Niveau intermédiaire.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "saut_haie_bas",
@@ -143,7 +151,8 @@
         "Contact au sol le plus court possible entre chaque saut",
         "Rester sur l'avant du pied"
       ],
-      "points_securite": "Travaille la raideur des chevilles et la réactivité au sol, prérequis avant pliométrie plus intense."
+      "points_securite": "Travaille la raideur des chevilles et la réactivité au sol, prérequis avant pliométrie plus intense.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "fentes_sautees",
@@ -157,7 +166,8 @@
         "Sauter pour changer de jambe en l'air",
         "Réception contrôlée directement en fente de l'autre côté"
       ],
-      "points_securite": "Exercice intermédiaire, nécessite un bon contrôle du squat/fente classique au préalable."
+      "points_securite": "Exercice intermédiaire, nécessite un bon contrôle du squat/fente classique au préalable.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "medecine_ball_slam",
@@ -171,7 +181,8 @@
         "Le projeter au sol avec un maximum de puissance en engageant tout le corps",
         "Ramasser et répéter"
       ],
-      "points_securite": "Bon exercice d'explosivité du haut du corps, faible risque articulaire."
+      "points_securite": "Bon exercice d'explosivité du haut du corps, faible risque articulaire.",
+      "charge_recommandee": "charge_legere"
     },
     {
       "id": "slalom_plots",
@@ -185,7 +196,8 @@
         "Traverser en slalom à vitesse maximale contrôlée",
         "Varier les appuis (intérieur/extérieur du pied)"
       ],
-      "points_securite": "Terrain non glissant recommandé."
+      "points_securite": "Terrain non glissant recommandé.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "parcours_t",
@@ -199,7 +211,8 @@
         "Sprint avant, pas chassés latéraux vers chaque plot, course arrière pour revenir",
         "Chronométrer pour suivre la progression"
       ],
-      "points_securite": "Exercice classique d'évaluation et d'entraînement de l'agilité multidirectionnelle."
+      "points_securite": "Exercice classique d'évaluation et d'entraînement de l'agilité multidirectionnelle.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "pas_chasses_echelle",
@@ -213,7 +226,8 @@
         "Varier les patterns (un pied par case, deux pieds, latéral)",
         "Privilégier la fréquence et la précision des appuis plutôt que la vitesse pure au début"
       ],
-      "points_securite": "Bon exercice technique à faible risque, utile en échauffement avancé aussi."
+      "points_securite": "Bon exercice technique à faible risque, utile en échauffement avancé aussi.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "reaction_signal",
@@ -227,7 +241,8 @@
         "Réagir par un sprint court ou un changement de direction",
         "Répéter avec des signaux variés pour travailler l'anticipation"
       ],
-      "points_securite": "Le plus proche de l'agilité 'réelle' utilisée en match, nécessite un partenaire ou une app de signal."
+      "points_securite": "Le plus proche de l'agilité 'réelle' utilisée en match, nécessite un partenaire ou une app de signal.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "fractionne_30_30",
@@ -241,7 +256,8 @@
         "30s de récupération active",
         "Répéter selon le volume prévu"
       ],
-      "points_securite": "Adapter le nombre de répétitions au niveau d'endurance déclaré."
+      "points_securite": "Adapter le nombre de répétitions au niveau d'endurance déclaré.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "fractionne_15_15",
@@ -255,7 +271,8 @@
         "15s de récupération active",
         "Répéter selon le volume prévu, format plus court et plus intense que le 30-30"
       ],
-      "points_securite": "Plus exigeant que le 30-30, réserver aux utilisateurs avec une base d'endurance déjà établie."
+      "points_securite": "Plus exigeant que le 30-30, réserver aux utilisateurs avec une base d'endurance déjà établie.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "circuit_technique_intermittent",
@@ -269,7 +286,8 @@
         "Alterner intensité haute et récupération active",
         "Garder une qualité technique même sous fatigue"
       ],
-      "points_securite": "Bon exercice pour habituer le corps à l'endurance spécifique du match (effort + technique)."
+      "points_securite": "Bon exercice pour habituer le corps à l'endurance spécifique du match (effort + technique).",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "cote_montee",
@@ -283,7 +301,8 @@
         "Redescendre en marchant pour récupérer",
         "Répéter selon le volume prévu"
       ],
-      "points_securite": "Développe la puissance et l'endurance avec moins d'impact articulaire qu'un sprint plat répété (moindre vitesse atteinte)."
+      "points_securite": "Développe la puissance et l'endurance avec moins d'impact articulaire qu'un sprint plat répété (moindre vitesse atteinte).",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "gainage_planche_ventrale",
@@ -298,7 +317,8 @@
         "Contracter abdominaux et fessiers",
         "Tenir la position"
       ],
-      "points_securite": "Arrêter si le bas du dos se cambre excessivement."
+      "points_securite": "Arrêter si le bas du dos se cambre excessivement.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "gainage_planche_laterale",
@@ -313,7 +333,8 @@
         "Hanches poussées vers le haut",
         "Tenir puis changer de côté"
       ],
-      "points_securite": "Réduire le temps si l'épaule d'appui gêne plutôt que forcer."
+      "points_securite": "Réduire le temps si l'épaule d'appui gêne plutôt que forcer.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "nordic_hamstring",
@@ -328,7 +349,8 @@
         "Freiner le plus longtemps possible avant de poser les mains",
         "Se repousser pour revenir"
       ],
-      "points_securite": "Démarrer avec un très faible volume (3-5 répétitions), progression lente sur plusieurs semaines."
+      "points_securite": "Démarrer avec un très faible volume (3-5 répétitions), progression lente sur plusieurs semaines.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "copenhagen_adduction",
@@ -343,7 +365,8 @@
         "Maintenir ou répéter contrôlé",
         "Répéter de l'autre côté"
       ],
-      "points_securite": "Débuter avec un faible volume (8 répétitions), version genou plié avant jambe tendue."
+      "points_securite": "Débuter avec un faible volume (8 répétitions), version genou plié avant jambe tendue.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "pont_fessier",
@@ -358,7 +381,8 @@
         "Contracter fortement les fessiers en haut",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Éviter de cambrer excessivement le bas du dos."
+      "points_securite": "Éviter de cambrer excessivement le bas du dos.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "gainage_dynamique_rotation",
@@ -372,7 +396,8 @@
         "Rotation contrôlée du buste en maintenant le gainage",
         "Répéter des deux côtés"
       ],
-      "points_securite": "Introduire une fois le gainage statique maîtrisé."
+      "points_securite": "Introduire une fois le gainage statique maîtrisé.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "equilibre_unipodal",
@@ -386,7 +411,8 @@
         "Maintenir l'équilibre 20-30 secondes",
         "Progression : yeux fermés ou surface instable"
       ],
-      "points_securite": "Clé pour la prévention cheville/genou, à intégrer régulièrement."
+      "points_securite": "Clé pour la prévention cheville/genou, à intégrer régulièrement.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "fente_avant",
@@ -401,7 +427,8 @@
         "Buste droit",
         "Repousser sur la jambe avant pour revenir"
       ],
-      "points_securite": "Contrôler la descente."
+      "points_securite": "Contrôler la descente.",
+      "charge_recommandee": "charge_moderee"
     },
     {
       "id": "fente_bulgare",
@@ -416,7 +443,8 @@
         "Buste droit",
         "Remonter en poussant sur la jambe avant"
       ],
-      "points_securite": "Exercice unilatéral exigeant en équilibre, bon pour corriger les déséquilibres gauche/droite."
+      "points_securite": "Exercice unilatéral exigeant en équilibre, bon pour corriger les déséquilibres gauche/droite.",
+      "charge_recommandee": "charge_moderee"
     },
     {
       "id": "presse_epaules",
@@ -430,7 +458,8 @@
         "Pousser verticalement sans cambrer excessivement",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Garder les abdominaux gainés."
+      "points_securite": "Garder les abdominaux gainés.",
+      "charge_recommandee": "charge_moderee"
     },
     {
       "id": "tirage_vertical",
@@ -445,7 +474,8 @@
         "Amener la barre vers le haut du torse",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Éviter de se balancer."
+      "points_securite": "Éviter de se balancer.",
+      "charge_recommandee": "charge_moderee"
     },
     {
       "id": "hip_thrust",
@@ -460,7 +490,8 @@
         "Contracter fortement les fessiers en haut",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Ne pas cambrer excessivement le bas du dos."
+      "points_securite": "Ne pas cambrer excessivement le bas du dos.",
+      "charge_recommandee": "charge_lourde_progressive"
     },
     {
       "id": "presse_jambes_unilaterale",
@@ -474,7 +505,8 @@
         "Redescendre contrôlé sans que la jambe arrière n'aide trop",
         "Répéter puis changer de jambe"
       ],
-      "points_securite": "Bon transfert vers la force spécifique aux appuis du football (asymétrie naturelle du sport)."
+      "points_securite": "Bon transfert vers la force spécifique aux appuis du football (asymétrie naturelle du sport).",
+      "charge_recommandee": "charge_moderee"
     },
     {
       "id": "curl_biceps",
@@ -489,7 +521,8 @@
         "Coudes fixes, proches du buste",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Éviter le balancement du buste."
+      "points_securite": "Éviter le balancement du buste.",
+      "charge_recommandee": "charge_legere"
     },
     {
       "id": "extension_triceps",
@@ -504,7 +537,8 @@
         "Coudes fixes",
         "Retendre vers le haut"
       ],
-      "points_securite": "Mouvement contrôlé, éviter de descendre trop bas si gêne à l'épaule."
+      "points_securite": "Mouvement contrôlé, éviter de descendre trop bas si gêne à l'épaule.",
+      "charge_recommandee": "charge_legere"
     },
     {
       "id": "elevation_laterale",
@@ -518,7 +552,8 @@
         "Lever les bras sur les côtés jusqu'à hauteur d'épaule",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Charge légère — exercice d'isolation."
+      "points_securite": "Charge légère — exercice d'isolation.",
+      "charge_recommandee": "charge_legere"
     },
     {
       "id": "abdos_releve_jambes",
@@ -532,7 +567,8 @@
         "Lever les jambes jusqu'à la verticale, bas du dos plaqué au sol",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Réduire l'amplitude si le bas du dos se cambre."
+      "points_securite": "Réduire l'amplitude si le bas du dos se cambre.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "curl_marteau",
@@ -546,7 +582,8 @@
         "Fléchir les coudes sans tourner le poignet",
         "Redescendre contrôlé"
       ],
-      "points_securite": "Variante du curl classique, bonne pour varier le stimulus."
+      "points_securite": "Variante du curl classique, bonne pour varier le stimulus.",
+      "charge_recommandee": "charge_legere"
     },
     {
       "id": "ecarte_couche",
@@ -560,7 +597,8 @@
         "Ouvrir les bras sur les côtés en gardant l'angle du coude",
         "Ramener les haltères en contractant les pectoraux"
       ],
-      "points_securite": "Ne pas descendre trop bas pour éviter de stresser l'épaule."
+      "points_securite": "Ne pas descendre trop bas pour éviter de stresser l'épaule.",
+      "charge_recommandee": "charge_moderee"
     },
     {
       "id": "gainage_abdos_velo",
@@ -574,7 +612,8 @@
         "Amener alternativement le coude vers le genou opposé en pédalant",
         "Mouvement contrôlé, pas de à-coups sur la nuque"
       ],
-      "points_securite": "Ne pas tirer sur la nuque avec les mains."
+      "points_securite": "Ne pas tirer sur la nuque avec les mains.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "mollets_debout",
@@ -588,7 +627,8 @@
         "Contrôler la descente",
         "Répéter"
       ],
-      "points_securite": "Exercice simple à faible risque, utile pour l'équilibre musculaire des jambes."
+      "points_securite": "Exercice simple à faible risque, utile pour l'équilibre musculaire des jambes.",
+      "charge_recommandee": "charge_legere"
     },
     {
       "id": "gammes_athletiques",
@@ -601,7 +641,8 @@
         "Séquences techniques sur 15-20m : montées de genoux, talons-fesses, pas chassés, skipping",
         "Focus sur la qualité d'exécution"
       ],
-      "points_securite": "Bon échauffement avancé ou travail technique à faible risque."
+      "points_securite": "Bon échauffement avancé ou travail technique à faible risque.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "jonglage_controle",
@@ -614,7 +655,8 @@
         "Séquences de contrôle et jonglage à intensité modérée",
         "Varier les surfaces de contact (pied, cuisse, poitrine)"
       ],
-      "points_securite": "Exercice à très faible risque physique, utile en récupération active aussi."
+      "points_securite": "Exercice à très faible risque physique, utile en récupération active aussi.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "mobilite_hanches",
@@ -628,7 +670,8 @@
         "Fente avec rotation du buste",
         "Mouvements lents et contrôlés"
       ],
-      "points_securite": "Idéal en récupération ou fin de séance."
+      "points_securite": "Idéal en récupération ou fin de séance.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "etirement_dynamique_jambes",
@@ -642,7 +685,8 @@
         "Marche avec grandes foulées et légère rotation du buste",
         "Respiration calme"
       ],
-      "points_securite": "À utiliser en fin de séance uniquement."
+      "points_securite": "À utiliser en fin de séance uniquement.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "mobilite_thoracique",
@@ -656,7 +700,8 @@
         "Cercles d'épaules amples",
         "Étirement dynamique du haut du dos"
       ],
-      "points_securite": "Utile après une séance de force du haut du corps."
+      "points_securite": "Utile après une séance de force du haut du corps.",
+      "charge_recommandee": "poids_du_corps"
     },
     {
       "id": "marche_recuperation",
@@ -669,7 +714,8 @@
         "Marche à rythme modéré 10-15 minutes",
         "Respiration profonde et régulière"
       ],
-      "points_securite": "Idéal le lendemain d'un match ou d'une séance intense (phase récupération)."
+      "points_securite": "Idéal le lendemain d'un match ou d'une séance intense (phase récupération).",
+      "charge_recommandee": "poids_du_corps"
     }
   ]
 }

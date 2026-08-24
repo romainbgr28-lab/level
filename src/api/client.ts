@@ -60,6 +60,7 @@ export interface ApiExerciceBibliotheque {
   materiel_requis: string | null;
   sport_specifique: string | null;
   points_securite: string | null;
+  charge_recommandee: 'poids_du_corps' | 'charge_legere' | 'charge_moderee' | 'charge_lourde_progressive';
 }
 
 // ---------- Séries loguées (logging temps réel façon Hevy) ----------

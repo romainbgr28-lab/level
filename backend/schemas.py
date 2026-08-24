@@ -108,6 +108,8 @@ class ExerciceBibliothequeBase(BaseModel):
     materiel_requis: Optional[str] = None
     sport_specifique: Optional[str] = None  # "foot" | "généraliste"
     points_securite: Optional[str] = None
+    # poids_du_corps | charge_legere | charge_moderee | charge_lourde_progressive
+    charge_recommandee: str = "charge_moderee"
 
 
 class ExerciceBibliothequeCreate(ExerciceBibliothequeBase):

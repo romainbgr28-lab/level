@@ -4,7 +4,6 @@
     "note_fiabilite": "Ce contenu combine des synthèses de littérature sportive (via NotebookLM, sources fournies par l'utilisateur) et des connaissances générales consensuelles. Les valeurs chiffrées précises (ex: pourcentages, distances, tableaux normatifs) doivent être traitées comme des repères indicatifs, pas des normes validées cliniquement. Aucune donnée anthropométrique ou cinématique de très haute précision (issue de tracking GPS professionnel) n'a été conservée par prudence — non vérifiable et non utile à la génération de séances individuelles.",
     "usage": "Chaque fiche peut être injectée partiellement dans le prompt Mistral selon le type de séance généré (ne pas tout envoyer d'un coup — filtrer par pertinence côté backend)."
   },
-
   "principes_fondamentaux": [
     {
       "id": "surcharge_progressive",
@@ -33,9 +32,27 @@
       "niveau_confiance": "établi",
       "contenu": "Le nombre de répétitions, le repos entre séries et l'intensité doivent être adaptés à l'objectif recherché.",
       "tableau": [
-        {"objectif": "Force maximale", "charge_pct_1RM": ">85%", "repetitions": "3-6", "repos": "3-5 min", "rpe_cible": "9-10 (proche de l'échec)"},
-        {"objectif": "Hypertrophie / esthétique", "charge_pct_1RM": "65-80%", "repetitions": "6-12", "repos": "60-90s", "rpe_cible": "8-9"},
-        {"objectif": "Endurance musculaire", "charge_pct_1RM": "50-65%", "repetitions": "15-25", "repos": "<60s", "rpe_cible": "7-8"}
+        {
+          "objectif": "Force maximale",
+          "charge_pct_1RM": ">85%",
+          "repetitions": "3-6",
+          "repos": "3-5 min",
+          "rpe_cible": "9-10 (proche de l'échec)"
+        },
+        {
+          "objectif": "Hypertrophie / esthétique",
+          "charge_pct_1RM": "65-80%",
+          "repetitions": "6-12",
+          "repos": "60-90s",
+          "rpe_cible": "8-9"
+        },
+        {
+          "objectif": "Endurance musculaire",
+          "charge_pct_1RM": "50-65%",
+          "repetitions": "15-25",
+          "repos": "<60s",
+          "rpe_cible": "7-8"
+        }
       ],
       "note": "Le RPE (Rate of Perceived Exertion, échelle 0-10) est un outil d'autorégulation utile : il s'adapte à la forme du jour, contrairement à un pourcentage figé de charge maximale."
     },
@@ -54,7 +71,6 @@
       "application_pratique": "Pour l'objectif esthétique déclaré par l'utilisateur (zones ciblées), répartir le volume hebdomadaire sur les groupes musculaires concernés en tenant compte de ce seuil."
     }
   ],
-
   "qualites_physiques_football": [
     {
       "id": "vitesse_vivacite_reactivite",
@@ -92,30 +108,44 @@
       "contenu": "Un changement de direction planifié (type slalom entre plots) est un exercice physique pur. L'agilité 'vraie' implique en plus une réaction à un stimulus imprévisible (un adversaire, un partenaire, un ballon) — c'est cette dimension de prise de décision rapide qui différencie le plus les joueurs à haut niveau."
     }
   ],
-
   "priorites_par_poste": [
     {
       "poste": "défenseur",
-      "priorites": ["force pour les duels", "explosivité verticale (jeu aérien)", "endurance de répétition d'efforts courts"],
+      "priorites": [
+        "force pour les duels",
+        "explosivité verticale (jeu aérien)",
+        "endurance de répétition d'efforts courts"
+      ],
       "note": "Doit conserver une base de vitesse mais celle-ci est généralement moins déterminante que pour un attaquant ou ailier."
     },
     {
       "poste": "milieu",
-      "priorites": ["endurance intermittente (volume de course le plus élevé du terrain)", "coordination", "répétition d'efforts"],
+      "priorites": [
+        "endurance intermittente (volume de course le plus élevé du terrain)",
+        "coordination",
+        "répétition d'efforts"
+      ],
       "note": "Poste le plus exigeant en volume total de course dans la plupart des analyses de préparation physique football."
     },
     {
       "poste": "attaquant",
-      "priorites": ["vitesse linéaire et explosivité réactive", "capacité de sprint répété", "puissance de frappe/finition"],
+      "priorites": [
+        "vitesse linéaire et explosivité réactive",
+        "capacité de sprint répété",
+        "puissance de frappe/finition"
+      ],
       "note": "Les efforts sont plus courts et plus explosifs que pour un milieu, avec une importance forte de la fraîcheur pour être décisif en fin d'action."
     },
     {
       "poste": "gardien",
-      "priorites": ["explosivité réactive unilatérale", "souplesse et amplitude articulaire", "temps de réaction"],
+      "priorites": [
+        "explosivité réactive unilatérale",
+        "souplesse et amplitude articulaire",
+        "temps de réaction"
+      ],
       "note": "Profil physique très différent des autres postes — peu de course longue distance, beaucoup d'explosivité ponctuelle et de réactivité."
     }
   ],
-
   "prevention_blessures": {
     "protocole_fifa11plus": {
       "titre": "Protocole FIFA 11+",
@@ -157,9 +187,21 @@
       }
     ],
     "gainage": [
-      {"type": "ventral", "exercice": "planche sur les coudes", "modalite": "30s statique, ou variante dynamique avec levée de membre"},
-      {"type": "latéral", "exercice": "planche sur le côté", "modalite": "30s par côté, en maintenant l'alignement épaule-bassin-pied"},
-      {"type": "dorsal", "exercice": "pont fessier (glute bridge)", "modalite": "focus sur l'activation des fessiers"}
+      {
+        "type": "ventral",
+        "exercice": "planche sur les coudes",
+        "modalite": "30s statique, ou variante dynamique avec levée de membre"
+      },
+      {
+        "type": "latéral",
+        "exercice": "planche sur le côté",
+        "modalite": "30s par côté, en maintenant l'alignement épaule-bassin-pied"
+      },
+      {
+        "type": "dorsal",
+        "exercice": "pont fessier (glute bridge)",
+        "modalite": "focus sur l'activation des fessiers"
+      }
     ],
     "signaux_alerte": {
       "titre": "Distinguer courbature normale et blessure",
@@ -172,7 +214,6 @@
       ]
     }
   },
-
   "musculation_execution_exercices_base": [
     {
       "id": "squat",
@@ -180,7 +221,8 @@
       "groupe_musculaire": "jambes, fessiers, gainage",
       "erreurs_frequentes": "Genoux qui rentrent vers l'intérieur (valgus), buste qui s'affaisse vers l'avant.",
       "corrections": "Maintenir le buste droit et fier ('proud chest'), pousser activement les genoux vers l'extérieur dans l'alignement des pieds tout au long du mouvement.",
-      "points_securite": "Descendre à une amplitude contrôlée sans perdre l'alignement du dos ; ne jamais sacrifier la technique pour ajouter de la charge."
+      "points_securite": "Descendre à une amplitude contrôlée sans perdre l'alignement du dos ; ne jamais sacrifier la technique pour ajouter de la charge.",
+      "charge_recommandee": "charge_lourde_progressive"
     },
     {
       "id": "developpe_couche",
@@ -188,7 +230,8 @@
       "groupe_musculaire": "pectoraux, épaules, triceps",
       "erreurs_frequentes": "Épaules instables qui remontent, coudes positionnés trop haut/écartés.",
       "corrections": "Serrer les omoplates ensemble et vers le bas avant et pendant le mouvement (rétraction scapulaire) pour protéger l'épaule.",
-      "points_securite": "Toujours utiliser un partenaire ou des barres de sécurité sur les charges proches du maximum."
+      "points_securite": "Toujours utiliser un partenaire ou des barres de sécurité sur les charges proches du maximum.",
+      "charge_recommandee": "charge_lourde_progressive"
     },
     {
       "id": "rowing_barre",
@@ -196,7 +239,8 @@
       "groupe_musculaire": "dos, biceps, gainage",
       "execution": "Pieds largeur épaules, saisir la barre juste à l'extérieur des genoux, stabiliser le buste avec une inclinaison de 15 à 45 degrés (comme un soulevé de terre partiel), tirer la barre jusqu'au contact du torse entre le sternum et le nombril.",
       "erreurs_frequentes": "Balancement du buste pour créer de l'élan (momentum), haussement des épaules en fin de mouvement.",
-      "corrections": "Contracter les abdominaux pour stabiliser la colonne, garder une tension constante sur les ischio-jambiers et fessiers, éviter tout mouvement de balancier."
+      "corrections": "Contracter les abdominaux pour stabiliser la colonne, garder une tension constante sur les ischio-jambiers et fessiers, éviter tout mouvement de balancier.",
+      "charge_recommandee": "charge_lourde_progressive"
     },
     {
       "id": "souleve_terre",
@@ -204,10 +248,10 @@
       "groupe_musculaire": "chaîne postérieure complète (dos, fessiers, ischio-jambiers)",
       "erreurs_frequentes": "Dos qui s'arrondit, barre qui s'éloigne du corps pendant le mouvement.",
       "corrections": "Engager activement les muscles du dos pour garder la barre proche des tibias tout au long du mouvement, garder le dos neutre (ni arrondi ni excessivement cambré).",
-      "points_securite": "C'est l'exercice le plus exigeant techniquement pour le bas du dos — privilégier une charge modérée avec une technique parfaite plutôt qu'une charge lourde mal exécutée."
+      "points_securite": "C'est l'exercice le plus exigeant techniquement pour le bas du dos — privilégier une charge modérée avec une technique parfaite plutôt qu'une charge lourde mal exécutée.",
+      "charge_recommandee": "charge_lourde_progressive"
     }
   ],
-
   "interference_force_esthetique_explosivite": {
     "titre": "Concilier musculation esthétique et préparation athlétique foot",
     "niveau_confiance": "établi dans ses grandes lignes (littérature sur l'entraînement concurrent), certaines valeurs précises de la source à traiter avec prudence",
@@ -218,7 +262,6 @@
       "Pour tout travail cardio complémentaire, le vélo est moins traumatisant pour les muscles que la course à pied, donc à privilégier en complément si le volume de course est déjà élevé par ailleurs (matchs, entraînements club)."
     ]
   },
-
   "tests_terrain_suivis_progression": [
     {
       "id": "test_sprint",
@@ -239,7 +282,6 @@
       "usage_app": "Comme pour les autres tests, la valeur de référence pertinente est la progression personnelle de l'utilisateur dans le temps, pas une norme externe."
     }
   ],
-
   "notes_generation_ia": {
     "instructions_pour_prompt_mistral": [
       "Toujours respecter les garde-fous du moteur de règles (intensité max selon phase calendaire, exclusions de zones sensibles) — ce contenu théorique sert à ENRICHIR les explications, jamais à les contredire.",

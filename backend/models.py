@@ -59,6 +59,11 @@ class ExerciceBibliotheque(Base):
     materiel_requis = Column(String, nullable=True)  # ex: "aucun", "haltères", "banc ou support surélevé"
     sport_specifique = Column(String, nullable=True)  # "foot" | "généraliste"
     points_securite = Column(String, nullable=True)
+    # Nature de la charge adaptée à cet exercice, indépendante du niveau de force déclaré par
+    # l'utilisateur : poids_du_corps | charge_legere | charge_moderee | charge_lourde_progressive.
+    # Sert de garde-fou pour Mistral (voir main.py::_construire_prompt_generation) afin d'éviter
+    # une charge incohérente (ex: squat jump chargé à 40kg).
+    charge_recommandee = Column(String, nullable=False, default="charge_moderee")
 
 
 class SerieLoggee(Base):

@@ -518,13 +518,39 @@ def _construire_seance_secours(
     }
 
 
+def _corriger_charges_poids_du_corps(exercices: list[dict], charge_recommandee_par_id: dict[int, str]) -> None:
+    """Garde-fou post-génération : si Mistral renvoie malgré tout une charge non nulle sur un
+    exercice marqué poids_du_corps dans la bibliothèque, force "charge_indicative" à "poids du
+    corps" plutôt que de relancer un appel Mistral supplémentaire (coût inutile pour une simple
+    correction de valeur)."""
+    for item in exercices:
+        if charge_recommandee_par_id.get(item.get("exercice_id")) != "poids_du_corps":
+            continue
+        charge = item.get("charge_indicative")
+        if isinstance(charge, str) and "poids du corps" in charge.lower():
+            continue
+        if charge in (None, "", "0", 0):
+            continue
+        logger.warning(
+            "Charge non nulle (%r) reçue de Mistral pour un exercice poids_du_corps (id %s) : "
+            "forcée à « poids du corps ».",
+            charge,
+            item.get("exercice_id"),
+        )
+        item["charge_indicative"] = "poids du corps"
+
+
 def _construire_system_prompt() -> str:
     notes = connaissances.get_notes_generation_ia()
     notes_txt = "\n".join(f"- {n}" for n in notes)
     return (
         "Tu es un coach sportif spécialisé en préparation physique football. "
         "Règles de comportement à respecter systématiquement, sans exception :\n"
-        f"{notes_txt}"
+        f"{notes_txt}\n"
+        "- Pour chaque exercice, respecte strictement le champ charge_recommandee fourni. "
+        "Ne propose jamais de charge lourde sur un exercice marqué poids_du_corps ou "
+        "charge_legere, même si l'utilisateur a un bon niveau de force déclaré — la nature "
+        "de l'exercice prime sur le niveau de l'utilisateur."
     )
 
 
@@ -543,7 +569,10 @@ def _construire_prompt_generation(
     charges_depart = charges_depart or {}
 
     def _ligne_bibliotheque(ex: models.ExerciceBibliotheque) -> str:
-        ligne = f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type})"
+        ligne = (
+            f"- id {ex.id} : {ex.nom} (groupe musculaire : {ex.groupe_musculaire}, type : {ex.type}, "
+            f"charge_recommandee : {ex.charge_recommandee})"
+        )
         charge = charges_depart.get(ex.id)
         if charge is not None:
             ligne += f" — {formater_recommandation_charge(charge)}"
@@ -561,11 +590,17 @@ UNIQUEMENT parmi cette liste, en référençant leur id ; interdiction stricte d
 ou de référencer un id qui n'y figure pas)
 {bibliotheque_txt}
 
+Chaque exercice ci-dessus porte un champ charge_recommandee (poids_du_corps, charge_legere,
+charge_moderee ou charge_lourde_progressive) qui indique la nature de charge adaptée à cet
+exercice, indépendamment du niveau de force du joueur. Respecte-le strictement : pour un exercice
+marqué poids_du_corps, "charge_indicative" doit valoir "poids du corps" (aucune charge externe,
+même légère) ; pour un exercice marqué charge_legere, ne propose qu'une charge légère.
+
 Pour les exercices ci-dessus portant une « charge de départ recommandée », cette valeur a été
 calculée côté serveur (poids de corps + niveau déclaré, aucun historique réel disponible pour cet
 exercice) : reprends-la telle quelle dans "charge_indicative" pour cet exercice, sans l'inventer
 ni la modifier sans raison. Pour les autres exercices avec charge, indique une charge indicative
-raisonnable comme d'habitude.
+raisonnable comme d'habitude, cohérente avec le champ charge_recommandee.
 
 CONTRAINTE OBLIGATOIRE : inclure au moins un exercice de type gainage_prevention (voir liste
 ci-dessus) et le placer en dernière position de la liste "exercices" (fin de séance).
@@ -690,6 +725,7 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     )
 
     ids_valides = {ex.id for ex in candidats}
+    charge_recommandee_par_id = {ex.id: ex.charge_recommandee for ex in candidats}
     required_keys = {"nom_seance", "duree_min", "exercices", "explication"}
     data: Optional[dict] = None
 
@@ -708,6 +744,7 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
             logger.warning("Réponse Mistral avec exercice_id hors sélection (tentative %s) : %s", tentative + 1, reponse)
             continue
 
+        _corriger_charges_poids_du_corps(reponse["exercices"], charge_recommandee_par_id)
         data = reponse
         break
 

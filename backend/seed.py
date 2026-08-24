@@ -109,6 +109,7 @@ def seed(db):
                     materiel_requis="barre (ou haltères)",
                     sport_specifique="généraliste",
                     points_securite=fiche.get("points_securite"),
+                    charge_recommandee=fiche.get("charge_recommandee", "charge_lourde_progressive"),
                 )
             )
         noms_existants = {fiche["nom"] for fiche in get_exercices_musculation_base()}
@@ -126,6 +127,7 @@ def seed(db):
                 materiel_requis=fiche.get("materiel_requis"),
                 sport_specifique=fiche.get("sport_specifique"),
                 points_securite=fiche.get("points_securite"),
+                charge_recommandee=fiche.get("charge_recommandee", "charge_moderee"),
             )
         )
 
