@@ -303,3 +303,40 @@ class TerminerSeanceOut(BaseModel):
     resume: dict[str, Any]  # calculé à partir des series_loggees réelles (plus d'interprétation IA)
     xp_gagne: int
     historique_id: int
+
+
+# ---------- Programme structuré (8 semaines) ----------
+
+
+class ProgrammeGenererPayload(BaseModel):
+    utilisateur_id: Optional[int] = None
+
+
+class ProgrammeBase(BaseModel):
+    utilisateur_id: int
+    date_debut: date
+    duree_semaines: int = 8
+    phases: list[dict[str, Any]] = []
+    gabarit_hebdomadaire: dict[str, Any] = {}
+    trajectoire_progression: dict[str, Any] = {}
+    statut: str = "actif"
+
+
+class ProgrammeOut(ProgrammeBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    date_creation: Optional[datetime] = None
+
+
+class NiveauHistoriqueBase(BaseModel):
+    utilisateur_id: int
+    qualite: str
+    ancien_niveau: int
+    nouveau_niveau: int
+    date: date
+    critere_declencheur: str
+
+
+class NiveauHistoriqueOut(NiveauHistoriqueBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int

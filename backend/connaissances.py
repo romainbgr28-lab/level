@@ -135,3 +135,22 @@ def selectionner_fiches_pertinentes(type_seance: str, poste: str, zone_sensible:
         fiches.append(poste_fiche)
 
     return fiches[:4]
+
+
+def selectionner_fiches_programme(poste: str) -> list[str]:
+    """Sélectionne les fiches théoriques pertinentes pour construire un programme
+    structuré sur 8 semaines : périodisation, chronologie des adaptations, et
+    priorités du poste (voir main.py::generer_programme)."""
+    data = _load()
+    fiches: list[str] = []
+
+    for id_ in ("phases_adaptation", "surcharge_progressive", "recuperation_supercompensation"):
+        item = _find_by_id(data["principes_fondamentaux"], id_)
+        if item:
+            fiches.append(_fiche(item["titre"], item["contenu"]))
+
+    poste_fiche = _priorites_poste_fiche(poste)
+    if poste_fiche:
+        fiches.append(poste_fiche)
+
+    return fiches

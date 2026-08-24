@@ -128,6 +128,41 @@ class Streak(Base):
     apprentissage_fait = Column(Integer, nullable=False, default=0)  # 0/1 bool
 
 
+class Programme(Base):
+    """Programme structuré sur 8 semaines (par défaut), généré par Mistral à partir
+    du profil complet. Indépendant de la génération de séance quotidienne
+    (/api/seance/generer) : sert de trame globale, pas de séance concrète."""
+
+    __tablename__ = "programme"
+
+    id = Column(Integer, primary_key=True, index=True)
+    utilisateur_id = Column(Integer, nullable=False)
+    date_debut = Column(Date, nullable=False)
+    duree_semaines = Column(Integer, nullable=False, default=8)
+    # Liste de 3 blocs {nom, semaines: [debut, fin], description}
+    phases = Column(JSON, nullable=False, default=list)
+    # {jour: "Lundi"|...: type_seance: "force"|"explosivité_vitesse"|"esthétique"|"repos"}
+    gabarit_hebdomadaire = Column(JSON, nullable=False, default=dict)
+    # {force: [pct_semaine_1, ..., pct_semaine_8], explosivite: [...], esthetique: [...]}
+    trajectoire_progression = Column(JSON, nullable=False, default=dict)
+    statut = Column(String, nullable=False, default="actif")  # actif | terminé
+    date_creation = Column(DateTime, server_default=func.now())
+
+
+class NiveauHistorique(Base):
+    """Journal des changements de niveau déclaré/estimé par qualité physique."""
+
+    __tablename__ = "niveau_historique"
+
+    id = Column(Integer, primary_key=True, index=True)
+    utilisateur_id = Column(Integer, nullable=False)
+    qualite = Column(String, nullable=False)  # force | explosivite | vitesse | endurance
+    ancien_niveau = Column(Integer, nullable=False)
+    nouveau_niveau = Column(Integer, nullable=False)
+    date = Column(Date, nullable=False)
+    critere_declencheur = Column(String, nullable=False)
+
+
 class HistoriqueSeance(Base):
     """Journal détaillé d'une séance : ce qui était prévu vs réalisé, contexte déclaré
     avant la séance, et la phase du calendrier de matchs au moment de la séance."""

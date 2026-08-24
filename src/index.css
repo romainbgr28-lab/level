@@ -1055,6 +1055,14 @@ p {
   margin: 28px 0;
 }
 
+.onboarding-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
 .exception-form {
   display: flex;
   gap: 8px;

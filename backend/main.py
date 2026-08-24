@@ -929,6 +929,157 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
     return schemas.TerminerSeanceOut(resume=resume, xp_gagne=xp_gagne, historique_id=historique.id)
 
 
+# ---------- Programme structuré (8 semaines, indépendant de /api/seance/generer) ----------
+
+DUREE_SEMAINES_PROGRAMME_DEFAUT = 8
+
+
+def _construire_system_prompt_programme() -> str:
+    return (
+        "Tu es un préparateur physique spécialisé en football qui construit un programme "
+        "structuré sur plusieurs semaines. Règles impératives :\n"
+        "- Ne planifie jamais plus de séances par semaine que le nombre de jours disponibles "
+        "déclarés par le joueur : n'invente aucune séance supplémentaire.\n"
+        "- Équilibre les types de séance (force, explosivité_vitesse, esthétique) selon les "
+        "priorités physiques du poste du joueur.\n"
+        "- La progression de charge/volume doit être prudente et réaliste : jamais plus de "
+        "5 à 8% de progression cumulée par semaine.\n"
+        "- Ne place jamais de séance de type force lourde la veille du jour de match habituel "
+        "déclaré : positionne intelligemment le gabarit hebdomadaire par rapport à ce jour."
+    )
+
+
+def _construire_prompt_programme(profil: dict, fiches_theoriques: list[str], jours_dispo: list[str]) -> str:
+    fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
+    jour_match = (profil.get("calendrier_matchs") or {}).get("jour_habituel") or "non renseigné"
+
+    return f"""Construis un programme d'entraînement physique structuré sur {DUREE_SEMAINES_PROGRAMME_DEFAUT} semaines
+pour un joueur de football amateur, à partir de son profil complet.
+
+PROFIL
+- Objectifs : {profil.get('objectifs')}
+- Poste : {profil.get('poste')}
+- Niveau physique global : {profil.get('niveau_physique')}
+- Qualités physiques déclarées (1 à 5) : {profil.get('niveaux_qualites_physiques')}
+- Jour de match habituel : {jour_match}
+- Entraînements club : {(profil.get('calendrier_matchs') or {}).get('entrainements_club')}
+- Jours disponibles déclarés (ne pas en inventer d'autres) : {jours_dispo}
+- Durée par séance / contraintes de temps : {profil.get('contraintes_temps')}
+- Matériel disponible : {profil.get('materiel')}
+- Objectif esthétique : {profil.get('objectif_esthetique')}
+
+CONNAISSANCES THÉORIQUES DE RÉFÉRENCE (périodisation, chronologie des adaptations, priorités du poste)
+{fiches_txt}
+
+CONSIGNE
+Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, au format exact suivant :
+{{
+  "phases": [
+    {{"nom": "adaptation", "semaine_debut": 1, "semaine_fin": 2, "description": "string (intention de ce bloc)"}},
+    {{"nom": "accumulation", "semaine_debut": 3, "semaine_fin": 6, "description": "string"}},
+    {{"nom": "évaluation", "semaine_debut": 7, "semaine_fin": 8, "description": "string"}}
+  ],
+  "gabarit_hebdomadaire": {{"<jour parmi {jours_dispo}>": "force" | "explosivité_vitesse" | "esthétique" | "repos", "...": "..."}},
+  "trajectoire_progression": {{
+    "force": [8 nombres, progression en % relatif à la semaine 1 (100 = point de départ)],
+    "explosivite": [8 nombres, même logique],
+    "esthetique": [8 nombres, même logique]
+  }}
+}}
+
+Le gabarit_hebdomadaire doit contenir une entrée pour chacun des jours disponibles déclarés ci-dessus,
+et uniquement ceux-là. La trajectoire_progression doit contenir exactement {DUREE_SEMAINES_PROGRAMME_DEFAUT}
+valeurs par qualité, en progression prudente (jamais plus de 5 à 8% cumulés par semaine)."""
+
+
+def _construire_programme_secours(jours_dispo: list[str]) -> dict:
+    """Programme de repli, construit sans IA, utilisé si Mistral échoue après retentative."""
+    types_cycle = ["force", "explosivité_vitesse", "esthétique"]
+    gabarit = {jour: types_cycle[i % len(types_cycle)] for i, jour in enumerate(jours_dispo)} if jours_dispo else {}
+    progression = [round(100 + i * 5, 1) for i in range(DUREE_SEMAINES_PROGRAMME_DEFAUT)]
+    return {
+        "phases": [
+            {"nom": "adaptation", "semaine_debut": 1, "semaine_fin": 2, "description": "Reprise progressive, apprentissage des mouvements."},
+            {"nom": "accumulation", "semaine_debut": 3, "semaine_fin": 6, "description": "Montée en charge et en volume."},
+            {"nom": "évaluation", "semaine_debut": 7, "semaine_fin": 8, "description": "Consolidation et bilan des progrès."},
+        ],
+        "gabarit_hebdomadaire": gabarit,
+        "trajectoire_progression": {
+            "force": progression,
+            "explosivite": progression,
+            "esthetique": progression,
+        },
+    }
+
+
+@app.post("/api/programme/generer", response_model=schemas.ProgrammeOut)
+def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = Depends(get_db)):
+    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    if not profil:
+        raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer un programme.")
+
+    utilisateur_id = payload.utilisateur_id if payload.utilisateur_id is not None else profil.id
+    profil_dict = schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
+
+    jours_dispo = [j.strip() for j in (profil_dict.get("contraintes_temps") or "").split("·")[0].split("/") if j.strip()]
+
+    fiches_theoriques = connaissances.selectionner_fiches_programme(profil_dict.get("poste"))
+    system_prompt = _construire_system_prompt_programme()
+    prompt = _construire_prompt_programme(profil_dict, fiches_theoriques, jours_dispo)
+
+    required_keys = {"phases", "gabarit_hebdomadaire", "trajectoire_progression"}
+    data: Optional[dict] = None
+
+    for tentative in range(2):  # un essai, puis une seule retentative en cas de sortie invalide
+        try:
+            reponse = mistral_client.appeler_mistral_json(prompt, system_prompt=system_prompt)
+        except mistral_client.MistralError as exc:
+            logger.error("Échec de la génération de programme via Mistral (tentative %s) : %s", tentative + 1, exc)
+            continue
+
+        if not required_keys.issubset(reponse) or not isinstance(reponse.get("phases"), list) or not reponse["phases"]:
+            logger.warning("Réponse Mistral incomplète ou invalide pour le programme (tentative %s) : %s", tentative + 1, reponse)
+            continue
+
+        data = reponse
+        break
+
+    if data is None:
+        logger.error("Génération de programme IA impossible après retentative : repli sur un programme de secours.")
+        data = _construire_programme_secours(jours_dispo)
+
+    # Un seul programme actif à la fois : on clôt l'ancien avant de créer le nouveau.
+    db.query(models.Programme).filter(
+        models.Programme.utilisateur_id == utilisateur_id, models.Programme.statut == "actif"
+    ).update({"statut": "terminé"})
+    db.commit()
+
+    programme = models.Programme(
+        utilisateur_id=utilisateur_id,
+        date_debut=date.today(),
+        duree_semaines=DUREE_SEMAINES_PROGRAMME_DEFAUT,
+        phases=data["phases"],
+        gabarit_hebdomadaire=data["gabarit_hebdomadaire"],
+        trajectoire_progression=data["trajectoire_progression"],
+        statut="actif",
+    )
+    db.add(programme)
+    db.commit()
+    db.refresh(programme)
+
+    return programme
+
+
+@app.get("/api/programme/actif", response_model=Optional[schemas.ProgrammeOut])
+def get_programme_actif(db: Session = Depends(get_db)):
+    return (
+        db.query(models.Programme)
+        .filter(models.Programme.statut == "actif")
+        .order_by(models.Programme.id.desc())
+        .first()
+    )
+
+
 # ---------- Streaks ----------
 
 @app.get("/api/streaks", response_model=list[schemas.StreakOut])

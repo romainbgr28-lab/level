@@ -2,22 +2,74 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LineChart from '../components/LineChart';
-import { getChargeProgress, getStats, getStreaks } from '../api/client';
-import type { ApiChargePoint, ApiStats, ApiStreakDay } from '../api/client';
+import { getChargeProgress, getProgrammeActif, getStats, getStreaks } from '../api/client';
+import type { ApiChargePoint, ApiProgramme, ApiStats, ApiStreakDay } from '../api/client';
+
+function semaineActuelle(programme: ApiProgramme): number {
+  const debut = new Date(programme.date_debut);
+  const jours = Math.floor((Date.now() - debut.getTime()) / (1000 * 60 * 60 * 24));
+  const semaine = Math.floor(jours / 7) + 1;
+  return Math.min(Math.max(semaine, 1), programme.duree_semaines);
+}
+
+function phaseCourante(programme: ApiProgramme, semaine: number) {
+  return programme.phases.find((p) => semaine >= p.semaine_debut && semaine <= p.semaine_fin);
+}
+
+function ProgrammeSection({ programme }: { programme: ApiProgramme }) {
+  const semaine = semaineActuelle(programme);
+  const phase = phaseCourante(programme, semaine);
+  const jours = Object.entries(programme.gabarit_hebdomadaire);
+
+  return (
+    <section className="card">
+      <div className="card__eyebrow">Mon programme</div>
+      {phase && (
+        <p className="subtle" style={{ marginBottom: 12 }}>
+          Phase actuelle : <strong>{phase.nom}</strong> (semaine {semaine}/{programme.duree_semaines}) — {phase.description}
+        </p>
+      )}
+
+      <div className="streak-grid" style={{ marginBottom: 16 }}>
+        {Array.from({ length: programme.duree_semaines }).map((_, i) => {
+          const num = i + 1;
+          return (
+            <div
+              key={num}
+              className={`streak-cell${num === semaine ? ' active' : ''}`}
+              title={`Semaine ${num}`}
+            />
+          );
+        })}
+      </div>
+
+      <div className="choice-list">
+        {jours.map(([jour, type]) => (
+          <div key={jour} className="choice-item" style={{ justifyContent: 'space-between' }}>
+            <span>{jour}</span>
+            <span className="subtle">{type}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Progress() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<ApiStats | null>(null);
   const [charge, setCharge] = useState<ApiChargePoint[]>([]);
   const [streaks, setStreaks] = useState<ApiStreakDay[]>([]);
+  const [programme, setProgramme] = useState<ApiProgramme | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getStats(), getChargeProgress(), getStreaks()])
-      .then(([s, c, streakDays]) => {
+    Promise.all([getStats(), getChargeProgress(), getStreaks(), getProgrammeActif()])
+      .then(([s, c, streakDays, prog]) => {
         setStats(s);
         setCharge(c);
         setStreaks(streakDays);
+        setProgramme(prog);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -60,6 +112,8 @@ export default function Progress() {
       <button className="btn btn--ghost" style={{ marginBottom: 20 }} onClick={() => navigate('/bilan')}>
         Voir le bilan hebdomadaire
       </button>
+
+      {programme && <ProgrammeSection programme={programme} />}
 
       <section className="card">
         <div className="card__eyebrow">Développé couché — charge (dernières séances)</div>

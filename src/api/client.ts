@@ -315,6 +315,32 @@ export const terminerSeanceIA = (payload: {
   duree_reelle_min?: number | null;
 }) => request<ApiTerminerSeanceResult>('/api/seance/terminer', { method: 'POST', body: JSON.stringify(payload) });
 
+// ---------- Programme structuré (8 semaines) ----------
+
+export interface ApiProgrammePhase {
+  nom: string;
+  semaine_debut: number;
+  semaine_fin: number;
+  description: string;
+}
+
+export interface ApiProgramme {
+  id: number;
+  utilisateur_id: number;
+  date_debut: string;
+  duree_semaines: number;
+  phases: ApiProgrammePhase[];
+  gabarit_hebdomadaire: Record<string, string>;
+  trajectoire_progression: Record<string, number[]>;
+  statut: 'actif' | 'terminé';
+  date_creation: string | null;
+}
+
+export const genererProgramme = () =>
+  request<ApiProgramme>('/api/programme/generer', { method: 'POST', body: JSON.stringify({}) });
+
+export const getProgrammeActif = () => request<ApiProgramme | null>('/api/programme/actif');
+
 // ---------- Stats & progression ----------
 
 export const getStats = () => request<ApiStats>('/api/stats');

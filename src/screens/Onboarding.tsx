@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { saveProfil } from '../api/client';
+import { saveProfil, genererProgramme } from '../api/client';
 import type { ApiCalendrierException, ApiProfil, ApiQualitesPhysiques } from '../api/client';
 
 interface OnboardingProps {
@@ -60,6 +60,7 @@ function RadioItem({ label, selected, onClick }: { label: string; selected: bool
 export default function Onboarding({ onDone }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [generatingProgramme, setGeneratingProgramme] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [objectifs, setObjectifs] = useState<string[]>([]);
@@ -159,6 +160,17 @@ export default function Onboarding({ onDone }: OnboardingProps) {
         contraintes_temps: contraintesTemps,
         materiel,
       });
+
+      setGeneratingProgramme(true);
+      try {
+        await genererProgramme();
+      } catch {
+        // La génération du programme ne doit pas bloquer l'entrée dans l'app :
+        // le profil est déjà enregistré, l'utilisateur peut continuer sans programme.
+      } finally {
+        setGeneratingProgramme(false);
+      }
+
       onDone(profil);
     } catch (e) {
       const detail = e instanceof Error ? e.message : '';
@@ -167,6 +179,16 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       setSaving(false);
     }
   };
+
+  if (generatingProgramme) {
+    return (
+      <div className="screen">
+        <div className="onboarding-loading">
+          <p className="page-title">Construction de ton programme personnalisé…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="screen">
