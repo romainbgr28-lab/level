@@ -88,16 +88,22 @@ export default function Profile() {
         <span className="info-row__label">Endurance</span>
         <span className="info-row__value">{profil.niveaux_qualites_physiques.endurance}/5</span>
       </div>
-      <div className="info-row">
-        <span className="info-row__label">Intellectuel</span>
-        <span className="info-row__value">{profil.niveau_intellectuel}</span>
-      </div>
 
       <div className="section-title">Calendrier des matchs</div>
       <div className="info-row">
         <span className="info-row__label">Jour habituel</span>
         <span className="info-row__value">{profil.calendrier_matchs.jour_habituel ?? '—'}</span>
       </div>
+      {profil.calendrier_matchs.entrainements_club && (
+        <div className="info-row">
+          <span className="info-row__label">Entraînements club</span>
+          <span className="info-row__value">
+            {profil.calendrier_matchs.entrainements_club.actif
+              ? `${profil.calendrier_matchs.entrainements_club.seances_par_semaine ?? '—'} / semaine`
+              : 'Aucun'}
+          </span>
+        </div>
+      )}
       {profil.calendrier_matchs.exceptions.length > 0 && (
         <ul className="exception-list">
           {profil.calendrier_matchs.exceptions.map((e, i) => (

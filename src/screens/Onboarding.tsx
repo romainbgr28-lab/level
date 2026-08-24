@@ -6,7 +6,7 @@ interface OnboardingProps {
   onDone: (profil: ApiProfil) => void;
 }
 
-const OBJECTIFS = ['Force', 'Endurance', 'Perte de poids', 'Discipline mentale', 'Culture générale'];
+const OBJECTIFS = ['Force', 'Endurance', 'Perte de poids', 'Discipline mentale'];
 const POSTES = ['Gardien', 'Défenseur', 'Milieu', 'Attaquant'];
 const QUALITES: { key: keyof ApiQualitesPhysiques; label: string }[] = [
   { key: 'force', label: 'Force' },
@@ -14,21 +14,47 @@ const QUALITES: { key: keyof ApiQualitesPhysiques; label: string }[] = [
   { key: 'vitesse', label: 'Vitesse' },
   { key: 'endurance', label: 'Endurance' },
 ];
-const THEMES_INTELLECTUELS = ['Culture générale', 'Économie', 'Histoire', 'Sciences'];
-const NIVEAUX_INTELLECTUELS = ['Débutant', 'Intermédiaire', 'Avancé'];
 const JOURS_SEMAINE = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const DUREES = ['15 min', '30 min', '45 min', '60 min'];
 const MATERIELS = ['Aucun', 'Poids du corps', 'Haltères', 'Salle complète'];
 const TAGS_ESTHETIQUES = ['Bras', 'Épaules', 'Abdos', 'Dos', 'Jambes', 'Silhouette générale'];
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 
 function niveauPhysiqueAuto(qualites: ApiQualitesPhysiques): string {
   const moyenne = (qualites.force + qualites.explosivite + qualites.vitesse + qualites.endurance) / 4;
   if (moyenne <= 2) return 'Débutant';
   if (moyenne <= 3.5) return 'Intermédiaire';
   return 'Avancé';
+}
+
+/** Case cochable carrée : plusieurs sélections possibles sur l'étape. */
+function CheckboxItem({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={`choice-item ${selected ? 'selected' : ''}`} onClick={onClick}>
+      <span className="choice-item__indicator choice-item__indicator--checkbox">
+        {selected && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5">
+            <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+/** Bouton rond : une seule sélection possible sur l'étape. */
+function RadioItem({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={`choice-item ${selected ? 'selected' : ''}`} onClick={onClick}>
+      <span className="choice-item__indicator choice-item__indicator--radio">
+        {selected && <span className="choice-item__dot" />}
+      </span>
+      {label}
+    </button>
+  );
 }
 
 export default function Onboarding({ onDone }: OnboardingProps) {
@@ -44,11 +70,12 @@ export default function Onboarding({ onDone }: OnboardingProps) {
     vitesse: 0,
     endurance: 0,
   });
-  const [niveauxIntellectuels, setNiveauxIntellectuels] = useState<Record<string, string>>({});
   const [jourHabituel, setJourHabituel] = useState('');
   const [exceptions, setExceptions] = useState<ApiCalendrierException[]>([]);
   const [exceptionDate, setExceptionDate] = useState('');
   const [exceptionLabel, setExceptionLabel] = useState('');
+  const [clubActif, setClubActif] = useState<'' | 'oui' | 'non'>('');
+  const [seancesClub, setSeancesClub] = useState('');
   const [jours, setJours] = useState<string[]>([]);
   const [duree, setDuree] = useState('');
   const [materiel, setMateriel] = useState('');
@@ -79,14 +106,16 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       case 2:
         return QUALITES.every((q) => qualites[q.key] > 0);
       case 3:
-        return THEMES_INTELLECTUELS.every((t) => niveauxIntellectuels[t]);
+        return (
+          (jourHabituel !== '' || exceptions.length > 0) &&
+          clubActif !== '' &&
+          (clubActif === 'non' || Number(seancesClub) > 0)
+        );
       case 4:
-        return jourHabituel !== '' || exceptions.length > 0;
-      case 5:
         return jours.length > 0 && duree !== '';
-      case 6:
+      case 5:
         return materiel !== '';
-      case 7:
+      case 6:
         return true; // étape optionnelle
       default:
         return false;
@@ -97,9 +126,6 @@ export default function Onboarding({ onDone }: OnboardingProps) {
     setSaving(true);
     setError(null);
     try {
-      const niveauIntellectuel = THEMES_INTELLECTUELS.map(
-        (t) => `${t}: ${niveauxIntellectuels[t]}`
-      ).join(', ');
       const contraintesTemps = `${jours.join('/')} · ${duree}/séance`;
       const hasEsthetique = tagsEsthetiques.length > 0 || texteEsthetique.trim() !== '';
 
@@ -108,10 +134,13 @@ export default function Onboarding({ onDone }: OnboardingProps) {
         poste,
         niveau_physique: niveauPhysiqueAuto(qualites),
         niveaux_qualites_physiques: qualites,
-        niveau_intellectuel: niveauIntellectuel,
         calendrier_matchs: {
           jour_habituel: jourHabituel || null,
           exceptions,
+          entrainements_club: {
+            actif: clubActif === 'oui',
+            seances_par_semaine: clubActif === 'oui' ? Number(seancesClub) : null,
+          },
         },
         objectif_esthetique: hasEsthetique
           ? { tags: tagsEsthetiques, texte_libre: texteEsthetique.trim() || undefined }
@@ -120,8 +149,9 @@ export default function Onboarding({ onDone }: OnboardingProps) {
         materiel,
       });
       onDone(profil);
-    } catch {
-      setError("Impossible d'enregistrer le profil. Réessaie.");
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : '';
+      setError(`Impossible d'enregistrer le profil. ${detail}`);
     } finally {
       setSaving(false);
     }
@@ -138,17 +168,10 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       {step === 0 && (
         <section>
           <h1 className="page-title">Tes objectifs</h1>
-          <p className="subtle">Choisis un ou plusieurs objectifs.</p>
-          <div className="tag-row tag-row--select">
+          <p className="subtle">Plusieurs choix possibles.</p>
+          <div className="choice-list">
             {OBJECTIFS.map((o) => (
-              <button
-                key={o}
-                type="button"
-                className={`tag tag--selectable ${objectifs.includes(o) ? 'tag--active' : ''}`}
-                onClick={() => toggle(objectifs, o, setObjectifs)}
-              >
-                {o}
-              </button>
+              <CheckboxItem key={o} label={o} selected={objectifs.includes(o)} onClick={() => toggle(objectifs, o, setObjectifs)} />
             ))}
           </div>
         </section>
@@ -157,17 +180,10 @@ export default function Onboarding({ onDone }: OnboardingProps) {
       {step === 1 && (
         <section>
           <h1 className="page-title">Poste joué</h1>
-          <p className="subtle">Sur le terrain, tu joues plutôt…</p>
-          <div className="option-list">
+          <p className="subtle">Un seul choix.</p>
+          <div className="choice-list">
             {POSTES.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={`option-item ${poste === p ? 'option-item--active' : ''}`}
-                onClick={() => setPoste(p)}
-              >
-                {p}
-              </button>
+              <RadioItem key={p} label={p} selected={poste === p} onClick={() => setPoste(p)} />
             ))}
           </div>
         </section>
@@ -199,46 +215,16 @@ export default function Onboarding({ onDone }: OnboardingProps) {
 
       {step === 3 && (
         <section>
-          <h1 className="page-title">Niveau intellectuel souhaité</h1>
-          <p className="subtle">Par thème.</p>
-          {THEMES_INTELLECTUELS.map((theme) => (
-            <div key={theme} className="onboarding-theme">
-              <div className="section-title">{theme}</div>
-              <div className="tag-row tag-row--select">
-                {NIVEAUX_INTELLECTUELS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    className={`tag tag--selectable ${
-                      niveauxIntellectuels[theme] === n ? 'tag--active' : ''
-                    }`}
-                    onClick={() =>
-                      setNiveauxIntellectuels((prev) => ({ ...prev, [theme]: n }))
-                    }
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {step === 4 && (
-        <section>
           <h1 className="page-title">Calendrier des matchs</h1>
-          <p className="subtle">Jour de match habituel</p>
-          <div className="option-list">
+          <p className="subtle">Jour de match habituel — un seul choix.</p>
+          <div className="choice-list">
             {JOURS_SEMAINE.map((j) => (
-              <button
+              <RadioItem
                 key={j}
-                type="button"
-                className={`option-item ${jourHabituel === j ? 'option-item--active' : ''}`}
+                label={j}
+                selected={jourHabituel === j}
                 onClick={() => setJourHabituel(jourHabituel === j ? '' : j)}
-              >
-                {j}
-              </button>
+              />
             ))}
           </div>
 
@@ -279,38 +265,63 @@ export default function Onboarding({ onDone }: OnboardingProps) {
               ))}
             </ul>
           )}
+
+          <p className="subtle" style={{ marginTop: 20 }}>
+            As-tu des entraînements club en plus des matchs ? Un seul choix.
+          </p>
+          <div className="choice-list" style={{ marginBottom: clubActif === 'oui' ? 14 : 0 }}>
+            <RadioItem label="Oui" selected={clubActif === 'oui'} onClick={() => setClubActif('oui')} />
+            <RadioItem
+              label="Non"
+              selected={clubActif === 'non'}
+              onClick={() => {
+                setClubActif('non');
+                setSeancesClub('');
+              }}
+            />
+          </div>
+          {clubActif === 'oui' && (
+            <input
+              type="number"
+              min={1}
+              max={14}
+              className="textarea"
+              style={{ minHeight: 'unset', padding: 12 }}
+              placeholder="Nombre de séances par semaine"
+              value={seancesClub}
+              onChange={(e) => setSeancesClub(e.target.value)}
+            />
+          )}
+        </section>
+      )}
+
+      {step === 4 && (
+        <section>
+          <h1 className="page-title">Contraintes de temps</h1>
+          <p className="subtle">Jours disponibles — plusieurs choix possibles.</p>
+          <div className="choice-list choice-list--grid" style={{ gap: 10 }}>
+            {JOURS.map((j) => (
+              <CheckboxItem key={j} label={j} selected={jours.includes(j)} onClick={() => toggle(jours, j, setJours)} />
+            ))}
+          </div>
+          <p className="subtle" style={{ marginTop: 20 }}>
+            Durée par séance — un seul choix.
+          </p>
+          <div className="choice-list">
+            {DUREES.map((d) => (
+              <RadioItem key={d} label={d} selected={duree === d} onClick={() => setDuree(d)} />
+            ))}
+          </div>
         </section>
       )}
 
       {step === 5 && (
         <section>
-          <h1 className="page-title">Contraintes de temps</h1>
-          <p className="subtle">Jours disponibles</p>
-          <div className="tag-row tag-row--select">
-            {JOURS.map((j) => (
-              <button
-                key={j}
-                type="button"
-                className={`tag tag--selectable ${jours.includes(j) ? 'tag--active' : ''}`}
-                onClick={() => toggle(jours, j, setJours)}
-              >
-                {j}
-              </button>
-            ))}
-          </div>
-          <p className="subtle" style={{ marginTop: 20 }}>
-            Durée par séance
-          </p>
-          <div className="option-list">
-            {DUREES.map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`option-item ${duree === d ? 'option-item--active' : ''}`}
-                onClick={() => setDuree(d)}
-              >
-                {d}
-              </button>
+          <h1 className="page-title">Matériel disponible</h1>
+          <p className="subtle">Un seul choix.</p>
+          <div className="choice-list">
+            {MATERIELS.map((m) => (
+              <RadioItem key={m} label={m} selected={materiel === m} onClick={() => setMateriel(m)} />
             ))}
           </div>
         </section>
@@ -318,36 +329,16 @@ export default function Onboarding({ onDone }: OnboardingProps) {
 
       {step === 6 && (
         <section>
-          <h1 className="page-title">Matériel disponible</h1>
-          <div className="option-list">
-            {MATERIELS.map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={`option-item ${materiel === m ? 'option-item--active' : ''}`}
-                onClick={() => setMateriel(m)}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {step === 7 && (
-        <section>
           <h1 className="page-title">Objectif esthétique</h1>
-          <p className="subtle">Optionnel — zones à travailler en priorité.</p>
-          <div className="tag-row tag-row--select">
+          <p className="subtle">Optionnel — zones à travailler en priorité, plusieurs choix possibles.</p>
+          <div className="choice-list choice-list--grid" style={{ gap: 10 }}>
             {TAGS_ESTHETIQUES.map((t) => (
-              <button
+              <CheckboxItem
                 key={t}
-                type="button"
-                className={`tag tag--selectable ${tagsEsthetiques.includes(t) ? 'tag--active' : ''}`}
+                label={t}
+                selected={tagsEsthetiques.includes(t)}
                 onClick={() => toggle(tagsEsthetiques, t, setTagsEsthetiques)}
-              >
-                {t}
-              </button>
+              />
             ))}
           </div>
           <textarea

@@ -16,9 +16,15 @@ class CalendrierException(BaseModel):
     label: Optional[str] = None
 
 
+class EntrainementsClub(BaseModel):
+    actif: bool
+    seances_par_semaine: Optional[int] = None
+
+
 class CalendrierMatchs(BaseModel):
     jour_habituel: Optional[str] = None
     exceptions: list[CalendrierException] = []
+    entrainements_club: Optional[EntrainementsClub] = None
 
 
 class ObjectifEsthetique(BaseModel):
@@ -31,7 +37,6 @@ class ProfilBase(BaseModel):
     poste: str
     niveau_physique: str
     niveaux_qualites_physiques: QualitesPhysiques
-    niveau_intellectuel: str
     calendrier_matchs: CalendrierMatchs
     objectif_esthetique: Optional[ObjectifEsthetique] = None
     contraintes_temps: str

@@ -12,8 +12,7 @@ class Profil(Base):
     poste = Column(String, nullable=False)  # Gardien | Défenseur | Milieu | Attaquant
     niveau_physique = Column(String, nullable=False)  # résumé auto (Débutant/Intermédiaire/Avancé)
     niveaux_qualites_physiques = Column(JSON, nullable=False, default=dict)  # {force, explosivite, vitesse, endurance}: 1-5
-    niveau_intellectuel = Column(String, nullable=False)
-    calendrier_matchs = Column(JSON, nullable=False, default=dict)  # {jour_habituel, exceptions: [{date, label}]}
+    calendrier_matchs = Column(JSON, nullable=False, default=dict)  # {jour_habituel, exceptions, entrainements_club}
     objectif_esthetique = Column(JSON, nullable=True)  # {tags: [...], texte_libre: str} | null
     contraintes_temps = Column(String, nullable=False)
     materiel = Column(String, nullable=False)

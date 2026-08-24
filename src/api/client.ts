@@ -6,7 +6,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (!res.ok) {
-    throw new Error(`API ${path} → ${res.status}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(`API ${path} → ${res.status}${body ? ` : ${body}` : ''}`);
   }
   if (res.status === 204) {
     return undefined as T;
@@ -67,9 +68,15 @@ export interface ApiCalendrierException {
   label?: string | null;
 }
 
+export interface ApiEntrainementsClub {
+  actif: boolean;
+  seances_par_semaine?: number | null;
+}
+
 export interface ApiCalendrierMatchs {
   jour_habituel: string | null;
   exceptions: ApiCalendrierException[];
+  entrainements_club?: ApiEntrainementsClub | null;
 }
 
 export interface ApiObjectifEsthetique {
@@ -83,7 +90,6 @@ export interface ApiProfil {
   poste: string;
   niveau_physique: string;
   niveaux_qualites_physiques: ApiQualitesPhysiques;
-  niveau_intellectuel: string;
   calendrier_matchs: ApiCalendrierMatchs;
   objectif_esthetique: ApiObjectifEsthetique | null;
   contraintes_temps: string;

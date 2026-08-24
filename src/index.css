@@ -691,6 +691,72 @@ p {
   margin-bottom: 20px;
 }
 
+/* Choix multiple (cases carrées) vs choix unique (boutons ronds) */
+.choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice-list--grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.choice-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 13px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.choice-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+
+.choice-item__indicator {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.choice-item__indicator--checkbox {
+  border-radius: 6px;
+}
+
+.choice-item__indicator--radio {
+  border-radius: 50%;
+}
+
+.choice-item.selected .choice-item__indicator {
+  border-color: var(--accent);
+}
+
+.choice-item.selected .choice-item__indicator--checkbox {
+  background: var(--accent);
+}
+
+.choice-item__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .onboarding-actions {
   display: flex;
   gap: 10px;
