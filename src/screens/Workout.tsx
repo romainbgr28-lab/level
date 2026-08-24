@@ -1,22 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { addExerciceHistorique, getTodaySeance, updateSeance } from '../api/client';
+import { addExerciceHistorique, addHistoriqueSeance, getTodaySeance, updateSeance } from '../api/client';
 import type { ApiSeance } from '../api/client';
 
 type SetKey = string; // `${exerciseId}-${setIndex}`
+type Phase = 'checkin' | 'exercices' | 'ressenti';
 
 const REST_SECONDS = 90;
+const SOMMEIL_OPTIONS = ['Mauvais', 'Moyen', 'Bon', 'Excellent'];
+const MOTIVATION_OPTIONS = ['Faible', 'Correcte', 'Élevée'];
 
 export default function Workout() {
   const navigate = useNavigate();
   const [seance, setSeance] = useState<ApiSeance | null>(null);
   const [loading, setLoading] = useState(true);
+  const [phase, setPhase] = useState<Phase>('checkin');
   const [checked, setChecked] = useState<Set<SetKey>>(new Set());
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
-  const [finished, setFinished] = useState(false);
   const [rpe, setRpe] = useState<number | null>(null);
+  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const [sommeil, setSommeil] = useState('');
+  const [motivation, setMotivation] = useState('');
+  const [tempsDispo, setTempsDispo] = useState('');
+  const [envieTexte, setEnvieTexte] = useState('');
 
   useEffect(() => {
     getTodaySeance()
@@ -61,6 +70,8 @@ export default function Workout() {
     setSubmitting(true);
     try {
       await updateSeance(seance.id, { statut: 'terminee', rpe, duree_reelle: seance.duree_reelle ?? 45 });
+
+      // Historique par exercice (alimente le graphique de charge en Progression)
       await Promise.all(
         seance.exercices.map((ex) =>
           addExerciceHistorique({
@@ -73,6 +84,31 @@ export default function Workout() {
           })
         )
       );
+
+      // Journal détaillé de la séance : prévu vs réalisé + contexte déclaré avant
+      const exercicesRealises = seance.exercices
+        .map((ex) => ({
+          id: ex.id,
+          name: ex.name,
+          sets: ex.sets.filter((_, i) => checked.has(`${ex.id}-${i}`)),
+        }))
+        .filter((ex) => ex.sets.length > 0);
+
+      await addHistoriqueSeance({
+        date: seance.date,
+        type_seance: seance.nom,
+        exercices_prevus: seance.exercices,
+        exercices_realises: exercicesRealises,
+        rpe,
+        notes: notes.trim() || null,
+        etat_declare_avant: {
+          sommeil: sommeil || null,
+          motivation: motivation || null,
+          temps_dispo: tempsDispo || null,
+          envie_texte: envieTexte.trim() || null,
+        },
+      });
+
       navigate('/');
     } finally {
       setSubmitting(false);
@@ -97,7 +133,80 @@ export default function Workout() {
     );
   }
 
-  if (finished) {
+  if (phase === 'checkin') {
+    return (
+      <div className="screen">
+        <Header title="Séance en cours" />
+        <button className="back-btn" onClick={() => navigate('/')}>
+          ← Annuler
+        </button>
+        <h1 className="page-title">Avant de commencer</h1>
+        <p className="subtle" style={{ marginBottom: 18 }}>
+          Quelques infos rapides pour adapter le suivi de cette séance.
+        </p>
+
+        <div className="onboarding-theme">
+          <div className="section-title">Sommeil de la nuit dernière</div>
+          <div className="tag-row tag-row--select">
+            {SOMMEIL_OPTIONS.map((o) => (
+              <button
+                key={o}
+                type="button"
+                className={`tag tag--selectable ${sommeil === o ? 'tag--active' : ''}`}
+                onClick={() => setSommeil(o)}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="onboarding-theme">
+          <div className="section-title">Motivation du jour</div>
+          <div className="tag-row tag-row--select">
+            {MOTIVATION_OPTIONS.map((o) => (
+              <button
+                key={o}
+                type="button"
+                className={`tag tag--selectable ${motivation === o ? 'tag--active' : ''}`}
+                onClick={() => setMotivation(o)}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="onboarding-theme">
+          <div className="section-title">Temps disponible aujourd’hui</div>
+          <input
+            type="text"
+            className="textarea"
+            style={{ minHeight: 'unset', padding: 12 }}
+            placeholder="Ex : 45 min"
+            value={tempsDispo}
+            onChange={(e) => setTempsDispo(e.target.value)}
+          />
+        </div>
+
+        <div className="onboarding-theme">
+          <div className="section-title">Envie du moment (optionnel)</div>
+          <textarea
+            className="textarea"
+            placeholder="Ex : j’ai envie de pousser fort aujourd’hui…"
+            value={envieTexte}
+            onChange={(e) => setEnvieTexte(e.target.value)}
+          />
+        </div>
+
+        <button className="btn btn--primary" onClick={() => setPhase('exercices')}>
+          Commencer la séance
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'ressenti') {
     return (
       <div className="screen">
         <Header title="Séance en cours" />
@@ -117,6 +226,13 @@ export default function Workout() {
             </button>
           ))}
         </div>
+        <textarea
+          className="textarea"
+          style={{ marginBottom: 18 }}
+          placeholder="Notes sur la séance (optionnel)…"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
         <button
           className="btn btn--primary"
           disabled={rpe === null || submitting}
@@ -176,7 +292,7 @@ export default function Workout() {
         </div>
       ))}
 
-      <button className="btn btn--primary" onClick={() => setFinished(true)}>
+      <button className="btn btn--primary" onClick={() => setPhase('ressenti')}>
         Terminer la séance
       </button>
     </div>

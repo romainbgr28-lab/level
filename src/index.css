@@ -618,6 +618,19 @@ p {
   font-size: 13px;
 }
 
+/* Welcome */
+.welcome-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  text-align: center;
+}
+
+.welcome-screen__body {
+  width: 100%;
+}
+
 /* Onboarding */
 .onboarding-progress {
   display: flex;

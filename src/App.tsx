@@ -9,27 +9,40 @@ import WeeklyReview from './screens/WeeklyReview';
 import News from './screens/News';
 import Profile from './screens/Profile';
 import Onboarding from './screens/Onboarding';
+import Welcome from './screens/Welcome';
 import { getProfil } from './api/client';
 
+type AppStatus = 'checking' | 'welcome' | 'onboarding' | 'ready';
+
 export default function App() {
-  const [checkingProfil, setCheckingProfil] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [status, setStatus] = useState<AppStatus>('checking');
+  const [profilFetchError, setProfilFetchError] = useState(false);
 
   useEffect(() => {
     getProfil()
-      .then((profil) => setNeedsOnboarding(profil === null))
-      .catch(() => setNeedsOnboarding(false))
-      .finally(() => setCheckingProfil(false));
+      .then((profil) => setStatus(profil === null ? 'welcome' : 'ready'))
+      .catch(() => {
+        setProfilFetchError(true);
+        setStatus('welcome');
+      });
   }, []);
 
-  if (checkingProfil) {
+  if (status === 'checking') {
     return <div className="app-shell" />;
   }
 
-  if (needsOnboarding) {
+  if (status === 'welcome') {
     return (
       <div className="app-shell">
-        <Onboarding onDone={() => setNeedsOnboarding(false)} />
+        <Welcome error={profilFetchError} onStart={() => setStatus('onboarding')} />
+      </div>
+    );
+  }
+
+  if (status === 'onboarding') {
+    return (
+      <div className="app-shell">
+        <Onboarding onDone={() => setStatus('ready')} />
       </div>
     );
   }
