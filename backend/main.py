@@ -934,14 +934,24 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
 DUREE_SEMAINES_PROGRAMME_DEFAUT = 8
 
 
+TYPES_SEANCE_PROGRAMME = ["force", "explosivité_vitesse", "esthétique", "endurance", "repos"]
+
+
 def _construire_system_prompt_programme() -> str:
     return (
         "Tu es un préparateur physique spécialisé en football qui construit un programme "
         "structuré sur plusieurs semaines. Règles impératives :\n"
         "- Ne planifie jamais plus de séances par semaine que le nombre de jours disponibles "
         "déclarés par le joueur : n'invente aucune séance supplémentaire.\n"
-        "- Équilibre les types de séance (force, explosivité_vitesse, esthétique) selon les "
-        "priorités physiques du poste du joueur.\n"
+        "- Prends en compte TOUS les objectifs déclarés par le joueur (pas seulement son poste "
+        "et son calendrier de matchs) pour construire le gabarit_hebdomadaire et la "
+        "trajectoire_progression : si l'objectif « Endurance » ou « Perte de poids » est déclaré, "
+        "le gabarit_hebdomadaire doit obligatoirement inclure une proportion adaptée de séances de "
+        "type endurance (au moins une par semaine si le nombre de jours disponibles le permet), et "
+        "la trajectoire_progression doit inclure une entrée « endurance ».\n"
+        "- Équilibre les types de séance (force, explosivité_vitesse, esthétique, endurance) selon "
+        "les priorités physiques du poste du joueur ET selon ses objectifs déclarés — les deux "
+        "comptent, ni l'un ni l'autre ne doit être ignoré.\n"
         "- La progression de charge/volume doit être prudente et réaliste : jamais plus de "
         "5 à 8% de progression cumulée par semaine.\n"
         "- Ne place jamais de séance de type force lourde la veille du jour de match habituel "
@@ -952,12 +962,15 @@ def _construire_system_prompt_programme() -> str:
 def _construire_prompt_programme(profil: dict, fiches_theoriques: list[str], jours_dispo: list[str]) -> str:
     fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
     jour_match = (profil.get("calendrier_matchs") or {}).get("jour_habituel") or "non renseigné"
+    objectifs = profil.get("objectifs") or []
+    types_txt = " | ".join(f'"{t}"' for t in TYPES_SEANCE_PROGRAMME)
 
     return f"""Construis un programme d'entraînement physique structuré sur {DUREE_SEMAINES_PROGRAMME_DEFAUT} semaines
 pour un joueur de football amateur, à partir de son profil complet.
 
 PROFIL
-- Objectifs : {profil.get('objectifs')}
+- Objectifs déclarés (à respecter TOUS dans le gabarit_hebdomadaire et la trajectoire_progression,
+  pas seulement le poste et le calendrier) : {objectifs}
 - Poste : {profil.get('poste')}
 - Niveau physique global : {profil.get('niveau_physique')}
 - Qualités physiques déclarées (1 à 5) : {profil.get('niveaux_qualites_physiques')}
@@ -979,24 +992,39 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après,
     {{"nom": "accumulation", "semaine_debut": 3, "semaine_fin": 6, "description": "string"}},
     {{"nom": "évaluation", "semaine_debut": 7, "semaine_fin": 8, "description": "string"}}
   ],
-  "gabarit_hebdomadaire": {{"<jour parmi {jours_dispo}>": "force" | "explosivité_vitesse" | "esthétique" | "repos", "...": "..."}},
+  "gabarit_hebdomadaire": {{"<jour parmi {jours_dispo}>": {types_txt}, "...": "..."}},
   "trajectoire_progression": {{
     "force": [8 nombres, progression en % relatif à la semaine 1 (100 = point de départ)],
     "explosivite": [8 nombres, même logique],
-    "esthetique": [8 nombres, même logique]
+    "esthetique": [8 nombres, même logique],
+    "endurance": [8 nombres, même logique — obligatoire si « Endurance » ou « Perte de poids » figure dans les objectifs déclarés]
   }}
 }}
 
 Le gabarit_hebdomadaire doit contenir une entrée pour chacun des jours disponibles déclarés ci-dessus,
 et uniquement ceux-là. La trajectoire_progression doit contenir exactement {DUREE_SEMAINES_PROGRAMME_DEFAUT}
-valeurs par qualité, en progression prudente (jamais plus de 5 à 8% cumulés par semaine)."""
+valeurs par qualité, en progression prudente (jamais plus de 5 à 8% cumulés par semaine). N'inclus la clé
+"endurance" dans trajectoire_progression que si au moins un jour du gabarit_hebdomadaire est de type
+"endurance"."""
 
 
-def _construire_programme_secours(jours_dispo: list[str]) -> dict:
+def _construire_programme_secours(jours_dispo: list[str], objectifs: list[str]) -> dict:
     """Programme de repli, construit sans IA, utilisé si Mistral échoue après retentative."""
-    types_cycle = ["force", "explosivité_vitesse", "esthétique"]
+    objectifs_lower = [o.lower() for o in (objectifs or [])]
+    veut_endurance = any(o in objectifs_lower for o in ("endurance", "perte de poids"))
+
+    types_cycle = ["force", "explosivité_vitesse", "esthétique", "endurance"] if veut_endurance else ["force", "explosivité_vitesse", "esthétique"]
     gabarit = {jour: types_cycle[i % len(types_cycle)] for i, jour in enumerate(jours_dispo)} if jours_dispo else {}
     progression = [round(100 + i * 5, 1) for i in range(DUREE_SEMAINES_PROGRAMME_DEFAUT)]
+
+    trajectoire = {
+        "force": progression,
+        "explosivite": progression,
+        "esthetique": progression,
+    }
+    if veut_endurance:
+        trajectoire["endurance"] = progression
+
     return {
         "phases": [
             {"nom": "adaptation", "semaine_debut": 1, "semaine_fin": 2, "description": "Reprise progressive, apprentissage des mouvements."},
@@ -1004,11 +1032,7 @@ def _construire_programme_secours(jours_dispo: list[str]) -> dict:
             {"nom": "évaluation", "semaine_debut": 7, "semaine_fin": 8, "description": "Consolidation et bilan des progrès."},
         ],
         "gabarit_hebdomadaire": gabarit,
-        "trajectoire_progression": {
-            "force": progression,
-            "explosivite": progression,
-            "esthetique": progression,
-        },
+        "trajectoire_progression": trajectoire,
     }
 
 
@@ -1046,7 +1070,7 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
 
     if data is None:
         logger.error("Génération de programme IA impossible après retentative : repli sur un programme de secours.")
-        data = _construire_programme_secours(jours_dispo)
+        data = _construire_programme_secours(jours_dispo, profil_dict.get("objectifs") or [])
 
     # Un seul programme actif à la fois : on clôt l'ancien avant de créer le nouveau.
     db.query(models.Programme).filter(

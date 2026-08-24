@@ -1055,6 +1055,131 @@ p {
   margin: 28px 0;
 }
 
+/* Résumé du programme (écran Progression) + écran dédié Programme */
+
+.section-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 24px 0 16px;
+}
+
+.programme-summary__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.programme-summary__phase {
+  font-size: 14px;
+  color: var(--text);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.programme-weeks {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.programme-week {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.programme-week--passee {
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+
+.programme-week--actuelle {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.programme-week--a-venir {
+  background: transparent;
+  border: 1px dashed var(--border-accent);
+  color: var(--text-dim);
+}
+
+.programme-weeks-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.programme-weeks-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.programme-weeks-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.programme-weeks-legend__dot--passee {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.programme-weeks-legend__dot--actuelle {
+  background: var(--accent);
+}
+
+.programme-weeks-legend__dot--a-venir {
+  background: transparent;
+  border: 1px dashed var(--border-accent);
+}
+
+.programme-phase {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.programme-phase:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.programme-phase--active .programme-phase__nom {
+  color: var(--accent-2);
+}
+
+.programme-phase__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.programme-phase__nom {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.programme-jour__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .onboarding-loading {
   display: flex;
   align-items: center;

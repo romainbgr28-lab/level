@@ -16,41 +16,29 @@ function phaseCourante(programme: ApiProgramme, semaine: number) {
   return programme.phases.find((p) => semaine >= p.semaine_debut && semaine <= p.semaine_fin);
 }
 
-function ProgrammeSection({ programme }: { programme: ApiProgramme }) {
+function tronquer(texte: string, max: number): string {
+  return texte.length > max ? `${texte.slice(0, max).trimEnd()}…` : texte;
+}
+
+function ProgrammeSummary({ programme }: { programme: ApiProgramme }) {
+  const navigate = useNavigate();
   const semaine = semaineActuelle(programme);
   const phase = phaseCourante(programme, semaine);
-  const jours = Object.entries(programme.gabarit_hebdomadaire);
 
   return (
-    <section className="card">
-      <div className="card__eyebrow">Mon programme</div>
+    <section className="card card--coach programme-summary">
+      <div className="programme-summary__head">
+        <div className="card__eyebrow" style={{ marginBottom: 0 }}>Mon programme</div>
+        <span className="subtle">Semaine {semaine}/{programme.duree_semaines}</span>
+      </div>
       {phase && (
-        <p className="subtle" style={{ marginBottom: 12 }}>
-          Phase actuelle : <strong>{phase.nom}</strong> (semaine {semaine}/{programme.duree_semaines}) — {phase.description}
+        <p className="programme-summary__phase">
+          Phase actuelle : <strong>{phase.nom}</strong> — {tronquer(phase.description, 70)}
         </p>
       )}
-
-      <div className="streak-grid" style={{ marginBottom: 16 }}>
-        {Array.from({ length: programme.duree_semaines }).map((_, i) => {
-          const num = i + 1;
-          return (
-            <div
-              key={num}
-              className={`streak-cell${num === semaine ? ' active' : ''}`}
-              title={`Semaine ${num}`}
-            />
-          );
-        })}
-      </div>
-
-      <div className="choice-list">
-        {jours.map(([jour, type]) => (
-          <div key={jour} className="choice-item" style={{ justifyContent: 'space-between' }}>
-            <span>{jour}</span>
-            <span className="subtle">{type}</span>
-          </div>
-        ))}
-      </div>
+      <button className="btn btn--ghost btn--sm" onClick={() => navigate('/programme')}>
+        Voir le programme complet →
+      </button>
     </section>
   );
 }
@@ -125,15 +113,17 @@ export default function Progress() {
       </button>
 
       {programme ? (
-        <ProgrammeSection programme={programme} />
+        <ProgrammeSummary programme={programme} />
       ) : (
         programmeLoading && (
-          <section className="card">
+          <section className="card card--coach">
             <div className="card__eyebrow">Mon programme</div>
             <p className="subtle">Construction de ton programme personnalisé…</p>
           </section>
         )
       )}
+
+      <div className="section-divider" />
 
       <section className="card">
         <div className="card__eyebrow">Développé couché — charge (dernières séances)</div>
