@@ -102,6 +102,9 @@ class ExerciceBibliothequeBase(BaseModel):
     instructions: list[str] = []
     image_url: Optional[str] = None
     type: str  # force | explosivite | technique | récupération
+    materiel_requis: Optional[str] = None
+    sport_specifique: Optional[str] = None  # "foot" | "généraliste"
+    points_securite: Optional[str] = None
 
 
 class ExerciceBibliothequeCreate(ExerciceBibliothequeBase):

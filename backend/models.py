@@ -53,6 +53,9 @@ class ExerciceBibliotheque(Base):
     instructions = Column(JSON, nullable=False, default=list)  # liste de points (str)
     image_url = Column(String, nullable=True)  # placeholder pour l'instant
     type = Column(String, nullable=False)  # force | explosivite | technique | récupération
+    materiel_requis = Column(String, nullable=True)  # ex: "aucun", "haltères", "banc ou support surélevé"
+    sport_specifique = Column(String, nullable=True)  # "foot" | "généraliste"
+    points_securite = Column(String, nullable=True)
 
 
 class SerieLoggee(Base):

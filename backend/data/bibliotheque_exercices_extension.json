@@ -1,0 +1,369 @@
+{
+  "meta": {
+    "description": "Bibliothèque d'exercices pour l'app LEVEL, organisée par type et groupe musculaire. Ces exercices viennent compléter les 4 déjà en base (squat, développé couché, rowing, soulevé de terre). Mistral doit choisir exclusivement parmi les exercices de cette bibliothèque (par id) lors de la génération d'une séance, jamais en inventer de nouveaux."
+  },
+  "exercices": [
+    {
+      "id": "echauffement_dynamique",
+      "nom": "Échauffement dynamique général",
+      "type": "échauffement",
+      "groupe_musculaire": "corps entier",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Course légère sur place ou déplacement 1-2 min",
+        "Montées de genoux, talons-fesses (2x15m)",
+        "Rotations de hanches, chevilles, épaules (10 par sens)",
+        "Fentes marchées avec rotation du buste (10 par jambe)"
+      ],
+      "points_securite": "Ne jamais faire d'étirement statique prolongé avant l'effort — privilégier le mouvement dynamique."
+    },
+    {
+      "id": "sprint_court",
+      "nom": "Sprint linéaire court (10-20m)",
+      "type": "vitesse",
+      "groupe_musculaire": "jambes, chaîne postérieure",
+      "materiel_requis": "aucun (espace dégagé)",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Départ arrêté, buste légèrement incliné vers l'avant",
+        "Premiers appuis courts et puissants, poussée active des bras",
+        "Accélération maximale sur toute la distance",
+        "Récupération complète entre les répétitions (viser 10 à 20 fois la durée de l'effort)"
+      ],
+      "points_securite": "Toujours précédé d'un échauffement complet. Ne jamais enchaîner sur une séance déjà fatigante."
+    },
+    {
+      "id": "squat_jump",
+      "nom": "Squat jump",
+      "type": "explosivité",
+      "groupe_musculaire": "jambes, fessiers",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Position accroupie, genoux à environ 90°",
+        "Pause brève en position basse",
+        "Extension explosive vers le haut, sans élan préalable",
+        "Réception souple, genoux fléchis pour absorber l'impact"
+      ],
+      "points_securite": "Exercice de pliométrie niveau débutant. Réception toujours contrôlée, jamais rigide."
+    },
+    {
+      "id": "bondissement_lateral",
+      "nom": "Bondissement latéral (bounding)",
+      "type": "explosivité",
+      "groupe_musculaire": "jambes, chevilles, gainage",
+      "materiel_requis": "aucun",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Sauts latéraux d'un appui à l'autre sur quelques mètres",
+        "Rechercher l'amplitude tout en gardant le contrôle",
+        "Réception stable avant chaque nouveau saut"
+      ],
+      "points_securite": "Pliométrie niveau débutant/intermédiaire selon amplitude. Terrain stable requis."
+    },
+    {
+      "id": "saut_reception_controlee",
+      "nom": "Saut avec réception contrôlée (jump and stick)",
+      "type": "explosivité",
+      "groupe_musculaire": "jambes, gainage",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Saut vertical ou en avant, à intensité modérée à élevée",
+        "À la réception, se stabiliser immédiatement sans rebond ni pas supplémentaire",
+        "Maintenir 2 secondes la position stable après réception"
+      ],
+      "points_securite": "Excellent exercice de prévention (contrôle du genou). Niveau intermédiaire."
+    },
+    {
+      "id": "slalom_plots",
+      "nom": "Slalom entre plots (changement de direction)",
+      "type": "agilité",
+      "groupe_musculaire": "jambes, chevilles",
+      "materiel_requis": "plots ou repères au sol",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Placer 5-6 plots espacés de 1,5 à 2m",
+        "Traverser en slalom à vitesse maximale contrôlée",
+        "Varier les appuis (intérieur/extérieur du pied)"
+      ],
+      "points_securite": "Terrain non glissant recommandé. Échauffement complet requis avant."
+    },
+    {
+      "id": "gainage_planche_ventrale",
+      "nom": "Planche ventrale (gainage)",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "abdominaux, lombaires",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Appui sur avant-bras et pointes de pieds",
+        "Corps aligné de la tête aux talons, pas de bassin qui tombe ou qui monte",
+        "Contracter les abdominaux et les fessiers",
+        "Tenir la position, respiration régulière"
+      ],
+      "points_securite": "Arrêter si le bas du dos se cambre excessivement — signe de fatigue du gainage profond."
+    },
+    {
+      "id": "gainage_planche_laterale",
+      "nom": "Planche latérale (gainage)",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "obliques, hanches",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Appui sur un avant-bras, corps sur le côté, pieds empilés ou décalés",
+        "Aligner épaule, bassin et pieds",
+        "Hanches poussées vers le haut, pas d'affaissement",
+        "Tenir puis changer de côté"
+      ],
+      "points_securite": "Si l'épaule d'appui gêne, réduire le temps de maintien plutôt que forcer."
+    },
+    {
+      "id": "nordic_hamstring",
+      "nom": "Nordic hamstring curl",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "ischio-jambiers",
+      "materiel_requis": "partenaire ou support fixe pour bloquer les chevilles",
+      "sport_specifique": "foot",
+      "instructions": [
+        "À genoux, chevilles bloquées par un partenaire ou un support",
+        "Buste droit, descendre lentement vers l'avant en résistant avec les ischio-jambiers",
+        "Freiner le plus longtemps possible avant de poser les mains au sol",
+        "Se repousser pour revenir à la position de départ"
+      ],
+      "points_securite": "Exercice exigeant, provoque des courbatures importantes au début. Démarrer avec un très faible volume (3-5 répétitions) et progresser lentement sur plusieurs semaines."
+    },
+    {
+      "id": "copenhagen_adduction",
+      "nom": "Exercice de Copenhague (adducteurs)",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "adducteurs",
+      "materiel_requis": "banc ou support surélevé",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Position latérale, jambe du dessus posée sur un banc/support",
+        "Soulever le bassin en s'appuyant sur l'avant-bras et la jambe surélevée",
+        "Maintenir la position ou effectuer des répétitions contrôlées",
+        "Répéter de l'autre côté"
+      ],
+      "points_securite": "Exercice très exigeant pour les adducteurs. Débuter avec un faible volume (ex: 8 répétitions) et une version simplifiée (genou plié) avant la version jambe tendue."
+    },
+    {
+      "id": "pont_fessier",
+      "nom": "Pont fessier (glute bridge)",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "fessiers, ischio-jambiers, lombaires",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Allongé sur le dos, genoux fléchis, pieds à plat au sol",
+        "Pousser sur les talons pour soulever le bassin",
+        "Contracter fortement les fessiers en position haute",
+        "Redescendre contrôlé, sans à-coup"
+      ],
+      "points_securite": "Éviter de cambrer excessivement le bas du dos en position haute."
+    },
+    {
+      "id": "fente_avant",
+      "nom": "Fente avant (lunge)",
+      "type": "force",
+      "groupe_musculaire": "jambes, fessiers, gainage",
+      "materiel_requis": "aucun (haltères en option pour plus de charge)",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Grand pas en avant, descendre jusqu'à ce que les deux genoux forment environ 90°",
+        "Genou avant aligné avec la cheville, pas au-delà des orteils",
+        "Buste droit tout au long du mouvement",
+        "Repousser sur la jambe avant pour revenir à la position de départ"
+      ],
+      "points_securite": "Contrôler la descente, éviter que le genou arrière touche brutalement le sol."
+    },
+    {
+      "id": "presse_epaules",
+      "nom": "Développé épaules (overhead press)",
+      "type": "force",
+      "groupe_musculaire": "épaules, triceps",
+      "materiel_requis": "haltères ou barre",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Position debout ou assise, charge au niveau des épaules",
+        "Pousser verticalement au-dessus de la tête sans cambrer excessivement le dos",
+        "Redescendre contrôlé jusqu'au point de départ"
+      ],
+      "points_securite": "Garder les abdominaux gainés pour éviter de compenser avec le bas du dos."
+    },
+    {
+      "id": "tirage_vertical",
+      "nom": "Tirage vertical (dos)",
+      "type": "force",
+      "groupe_musculaire": "dos, biceps",
+      "materiel_requis": "barre fixe ou machine",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Suspension à la barre ou position assise à la machine",
+        "Tirer en engageant le dos avant les bras",
+        "Amener la barre vers le haut du torse",
+        "Redescendre contrôlé sans à-coup"
+      ],
+      "points_securite": "Éviter de se balancer pour créer de l'élan."
+    },
+    {
+      "id": "hip_thrust",
+      "nom": "Hip thrust (fessiers)",
+      "type": "force_esthetique",
+      "groupe_musculaire": "fessiers, ischio-jambiers",
+      "materiel_requis": "banc, haltère ou barre en option",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Dos appuyé contre un banc, genoux fléchis, pieds au sol",
+        "Pousser sur les talons pour lever le bassin jusqu'à l'alignement épaules-bassin-genoux",
+        "Contracter fortement les fessiers en haut",
+        "Redescendre contrôlé"
+      ],
+      "points_securite": "Ne pas cambrer excessivement le bas du dos en position haute."
+    },
+    {
+      "id": "curl_biceps",
+      "nom": "Curl biceps",
+      "type": "esthetique",
+      "groupe_musculaire": "biceps",
+      "materiel_requis": "haltères",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Debout, bras tendus le long du corps, haltères en main",
+        "Fléchir les coudes pour amener les haltères vers les épaules",
+        "Garder les coudes fixes, proches du buste",
+        "Redescendre contrôlé"
+      ],
+      "points_securite": "Éviter le balancement du buste pour tricher sur la charge."
+    },
+    {
+      "id": "extension_triceps",
+      "nom": "Extension triceps",
+      "type": "esthetique",
+      "groupe_musculaire": "triceps",
+      "materiel_requis": "haltère",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Haltère tenu à deux mains au-dessus de la tête, bras tendus",
+        "Fléchir les coudes pour descendre l'haltère derrière la tête",
+        "Coudes fixes, pointés vers l'avant",
+        "Retendre les bras vers le haut"
+      ],
+      "points_securite": "Mouvement contrôlé, éviter de descendre trop bas si gêne à l'épaule."
+    },
+    {
+      "id": "elevation_laterale",
+      "nom": "Élévation latérale (épaules)",
+      "type": "esthetique",
+      "groupe_musculaire": "épaules",
+      "materiel_requis": "haltères légers",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Debout, haltères le long du corps",
+        "Lever les bras sur les côtés jusqu'à hauteur d'épaule, légère flexion du coude",
+        "Redescendre contrôlé"
+      ],
+      "points_securite": "Charge légère recommandée — exercice d'isolation, pas de force lourde."
+    },
+    {
+      "id": "abdos_releve_jambes",
+      "nom": "Relevé de jambes (abdominaux)",
+      "type": "esthetique",
+      "groupe_musculaire": "abdominaux",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Allongé sur le dos, jambes tendues",
+        "Lever les jambes jusqu'à la verticale en gardant le bas du dos plaqué au sol",
+        "Redescendre contrôlé sans toucher le sol si possible"
+      ],
+      "points_securite": "Si le bas du dos se cambre pendant l'exercice, réduire l'amplitude."
+    },
+    {
+      "id": "gammes_athletiques",
+      "nom": "Gammes athlétiques (technique de course)",
+      "type": "technique",
+      "groupe_musculaire": "jambes, coordination",
+      "materiel_requis": "aucun",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Série de courtes séquences techniques sur 15-20m : montées de genoux, talons-fesses, pas chassés, skipping",
+        "Focus sur la qualité d'exécution, pas la vitesse maximale"
+      ],
+      "points_securite": "Bon exercice d'échauffement avancé ou de travail technique à faible risque."
+    },
+    {
+      "id": "fractionne_30_30",
+      "nom": "Fractionné 30-30 (endurance intermittente)",
+      "type": "endurance",
+      "groupe_musculaire": "cardio, jambes",
+      "materiel_requis": "espace de course ou terrain",
+      "sport_specifique": "foot",
+      "instructions": [
+        "30 secondes de course à intensité élevée (proche de l'effort maximal soutenable)",
+        "30 secondes de récupération active (marche ou course très légère)",
+        "Répéter selon le volume prévu dans la séance"
+      ],
+      "points_securite": "Adapter le nombre de répétitions au niveau d'endurance déclaré par l'utilisateur, commencer prudent."
+    },
+    {
+      "id": "mobilite_hanches",
+      "nom": "Mobilité des hanches",
+      "type": "mobilite_recuperation",
+      "groupe_musculaire": "hanches",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Cercles de hanches, rotations internes/externes en position debout ou à quatre pattes",
+        "Fente avec rotation du buste pour étirer dynamiquement les hanches",
+        "Mouvements lents et contrôlés, pas de forçage"
+      ],
+      "points_securite": "Idéal en récupération ou en fin de séance, pas d'intensité recherchée ici."
+    },
+    {
+      "id": "etirement_dynamique_jambes",
+      "nom": "Étirements dynamiques jambes (retour au calme)",
+      "type": "mobilite_recuperation",
+      "groupe_musculaire": "jambes",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Balancements de jambe avant/arrière et latéraux, amplitude progressive",
+        "Marche avec grandes foulées et légère rotation du buste",
+        "Respiration calme, ralentir progressivement le rythme cardiaque"
+      ],
+      "points_securite": "À utiliser en fin de séance, jamais avant l'effort (contrairement aux étirements statiques classiques, à éviter avant aussi)."
+    },
+    {
+      "id": "gainage_dynamique_rotation",
+      "nom": "Gainage dynamique avec rotation",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "abdominaux, obliques",
+      "materiel_requis": "aucun (ballon en option)",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Position de planche ou assise stable",
+        "Effectuer une rotation contrôlée du buste tout en maintenant le gainage",
+        "Répéter des deux côtés de façon symétrique"
+      ],
+      "points_securite": "Version plus avancée du gainage statique — introduire une fois le gainage statique maîtrisé."
+    },
+    {
+      "id": "equilibre_unipodal",
+      "nom": "Équilibre sur une jambe (proprioception)",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "cheville, genou, stabilisateurs",
+      "materiel_requis": "aucun",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Debout sur une jambe, l'autre légèrement fléchie",
+        "Maintenir l'équilibre 20-30 secondes",
+        "Progression : yeux fermés, ou sur surface instable si disponible"
+      ],
+      "points_securite": "Exercice clé de prévention des blessures de cheville et de genou, à intégrer régulièrement."
+    }
+  ]
+}

@@ -57,6 +57,9 @@ export interface ApiExerciceBibliotheque {
   instructions: string[];
   image_url: string | null;
   type: string;
+  materiel_requis: string | null;
+  sport_specifique: string | null;
+  points_securite: string | null;
 }
 
 // ---------- Séries loguées (logging temps réel façon Hevy) ----------

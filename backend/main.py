@@ -372,6 +372,120 @@ def _construire_liste_bibliotheque(db: Session) -> list[models.ExerciceBibliothe
     return db.query(models.ExerciceBibliotheque).order_by(models.ExerciceBibliotheque.id.asc()).all()
 
 
+# Types d'exercices pertinents pour chaque type de séance suggéré par le moteur de règles.
+# "gainage_prevention" et "échauffement" sont toujours inclus : le premier doit systématiquement
+# figurer en fin de séance (garde-fou ci-dessous), le second sert de mise en route quel que soit
+# le type de séance.
+TYPES_PAR_TYPE_SEANCE: dict[str, list[str]] = {
+    "force": ["force", "force_esthetique", "technique", "gainage_prevention", "échauffement"],
+    "explosivité_vitesse": ["explosivité", "vitesse", "agilité", "technique", "gainage_prevention", "échauffement"],
+    "esthétique": ["esthetique", "force_esthetique", "gainage_prevention", "échauffement"],
+    "décharge": ["mobilite_recuperation", "gainage_prevention", "technique", "endurance", "échauffement"],
+}
+
+MAX_CANDIDATS_MISTRAL = 18
+
+
+def _materiel_compatible(materiel_requis: Optional[str], materiel_disponible: str) -> bool:
+    """Heuristique simple de compatibilité matériel : un exercice sans matériel (ou
+    "aucun") est toujours compatible ; sinon on cherche un recoupement de mots entre
+    le matériel requis par l'exercice et le matériel déclaré par l'utilisateur."""
+    if not materiel_requis or "aucun" in materiel_requis.lower():
+        return True
+    if not materiel_disponible:
+        return False
+
+    md = materiel_disponible.lower()
+    mots_ignores = {"ou", "et", "de", "des", "le", "la", "les", "un", "une", "en", "option", "pour"}
+    mots_requis = [
+        mot.strip("()., ") for mot in materiel_requis.lower().replace("/", " ").split() if mot.strip("()., ")
+    ]
+    mots_requis = [mot for mot in mots_requis if mot not in mots_ignores and len(mot) > 2]
+    return any(mot in md for mot in mots_requis)
+
+
+def _groupe_concerne_par_zone_sensible(groupe_musculaire: str, zones_sensibles: list[str]) -> bool:
+    gm = (groupe_musculaire or "").lower()
+    return any(zone.lower() in gm for zone in zones_sensibles if zone)
+
+
+def _selectionner_exercices_candidats(
+    bibliotheque: list[models.ExerciceBibliotheque],
+    type_seance_suggere: str,
+    materiel_disponible: str,
+    zones_sensibles: list[str],
+    max_candidats: int = MAX_CANDIDATS_MISTRAL,
+) -> list[models.ExerciceBibliotheque]:
+    """Filtre côté backend la bibliothèque avant de l'envoyer à Mistral (au lieu de tout
+    envoyer) : type d'exercice pertinent pour le type de séance suggéré, matériel
+    disponible, exclusion des zones sensibles déclarées. Garantit qu'au moins un exercice
+    de type gainage_prevention est présent (à placer en fin de séance)."""
+    types_ok = set(TYPES_PAR_TYPE_SEANCE.get(type_seance_suggere, []))
+
+    def _eligible(ex: models.ExerciceBibliotheque) -> bool:
+        if _groupe_concerne_par_zone_sensible(ex.groupe_musculaire, zones_sensibles):
+            return False
+        if not _materiel_compatible(ex.materiel_requis, materiel_disponible):
+            return False
+        return True
+
+    candidats = [ex for ex in bibliotheque if _eligible(ex) and (not types_ok or ex.type in types_ok)]
+
+    # Filet de sécurité : si le croisement type/matériel/zones ne renvoie rien (bibliothèque
+    # trop restreinte, matériel très limité...), on retombe sur tout ce qui respecte au moins
+    # les exclusions de sécurité (matériel, zones sensibles) plutôt que d'envoyer une liste vide.
+    if not candidats:
+        candidats = [ex for ex in bibliotheque if _eligible(ex)]
+    if not candidats:
+        candidats = list(bibliotheque)
+
+    candidats = candidats[:max_candidats]
+
+    if not any(ex.type == "gainage_prevention" for ex in candidats):
+        secours_gainage = next(
+            (ex for ex in bibliotheque if ex.type == "gainage_prevention" and _eligible(ex)),
+            next((ex for ex in bibliotheque if ex.type == "gainage_prevention"), None),
+        )
+        if secours_gainage:
+            candidats.append(secours_gainage)
+
+    return candidats
+
+
+def _construire_seance_secours(
+    candidats: list[models.ExerciceBibliotheque], type_seance_suggere: str
+) -> dict:
+    """Séance de repli, construite sans IA à partir des candidats déjà filtrés, utilisée
+    quand Mistral échoue à renvoyer des exercice_id valides après une nouvelle tentative."""
+    autres = [ex for ex in candidats if ex.type != "gainage_prevention"][:4]
+    gainage = next((ex for ex in candidats if ex.type == "gainage_prevention"), None)
+
+    choisis = autres or list(candidats)[:4]
+    if gainage and gainage not in choisis:
+        choisis.append(gainage)
+
+    exercices = [
+        {
+            "exercice_id": ex.id,
+            "series": 3,
+            "repetitions": "10-12",
+            "charge_indicative": "à ajuster selon ressenti",
+            "notes": None,
+        }
+        for ex in choisis
+    ]
+
+    return {
+        "nom_seance": f"Séance {type_seance_suggere} (générée automatiquement)",
+        "duree_min": 40,
+        "exercices": exercices,
+        "explication": (
+            "Séance de secours générée automatiquement à partir de la bibliothèque d'exercices : "
+            "le générateur IA n'a pas renvoyé de sélection valide après une nouvelle tentative."
+        ),
+    }
+
+
 def _construire_system_prompt() -> str:
     notes = connaissances.get_notes_generation_ia()
     notes_txt = "\n".join(f"- {n}" for n in notes)
@@ -402,10 +516,14 @@ def _construire_prompt_generation(
 
     return f"""Tu es un coach sportif qui construit une séance de sport concrète pour un joueur de football amateur.
 
-EXERCICES DISPONIBLES (bibliothèque — tu dois obligatoirement choisir les exercices de la séance
+EXERCICES DISPONIBLES (présélection déjà filtrée pour ce joueur selon le type de séance, le matériel
+disponible et ses zones sensibles — tu dois obligatoirement choisir les exercices de la séance
 UNIQUEMENT parmi cette liste, en référençant leur id ; interdiction stricte d'inventer un exercice
-qui n'y figure pas)
+ou de référencer un id qui n'y figure pas)
 {bibliotheque_txt}
+
+CONTRAINTE OBLIGATOIRE : inclure au moins un exercice de type gainage_prevention (voir liste
+ci-dessus) et le placer en dernière position de la liste "exercices" (fin de séance).
 
 PROFIL
 - Poste : {profil.get('poste')}
@@ -489,27 +607,45 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     recommandation = regles_seance.generer_recommandation(profil_dict, historique_ctx, etat_du_jour)
 
     zone_sensible = (recommandation.get("exclusions") or [None])[0]
+    zones_sensibles = historique_ctx.get("zones_sensibles_recentes") or []
+    candidats = _selectionner_exercices_candidats(
+        bibliotheque,
+        recommandation["type_seance_suggere"],
+        profil_dict.get("materiel") or "",
+        zones_sensibles,
+    )
+
     fiches_theoriques = connaissances.selectionner_fiches_pertinentes(
         recommandation["type_seance_suggere"], profil_dict.get("poste"), zone_sensible
     )
     system_prompt = _construire_system_prompt()
-    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour, bibliotheque, fiches_theoriques)
+    prompt = _construire_prompt_generation(profil_dict, recommandation, etat_du_jour, candidats, fiches_theoriques)
 
-    try:
-        data = mistral_client.appeler_mistral_json(prompt, system_prompt=system_prompt)
-    except mistral_client.MistralError as exc:
-        logger.error("Échec de la génération de séance via Mistral : %s", exc)
-        raise HTTPException(status_code=502, detail=f"Le générateur de séance a échoué : {exc}") from exc
-
+    ids_valides = {ex.id for ex in candidats}
     required_keys = {"nom_seance", "duree_min", "exercices", "explication"}
-    if not required_keys.issubset(data) or not isinstance(data.get("exercices"), list):
-        logger.error("Réponse Mistral incomplète ou invalide (génération séance) : %s", data)
-        raise HTTPException(status_code=502, detail="La séance générée par l'IA est incomplète ou mal formée.")
+    data: Optional[dict] = None
 
-    ids_valides = {ex.id for ex in bibliotheque}
-    if not all(isinstance(item, dict) and item.get("exercice_id") in ids_valides for item in data["exercices"]):
-        logger.error("Réponse Mistral avec exercice_id hors bibliothèque : %s", data)
-        raise HTTPException(status_code=502, detail="La séance générée par l'IA référence un exercice hors bibliothèque.")
+    for tentative in range(2):  # un essai, puis une seule retentative en cas de sortie invalide
+        try:
+            reponse = mistral_client.appeler_mistral_json(prompt, system_prompt=system_prompt)
+        except mistral_client.MistralError as exc:
+            logger.error("Échec de la génération de séance via Mistral (tentative %s) : %s", tentative + 1, exc)
+            continue
+
+        if not required_keys.issubset(reponse) or not isinstance(reponse.get("exercices"), list) or not reponse["exercices"]:
+            logger.warning("Réponse Mistral incomplète ou invalide (tentative %s) : %s", tentative + 1, reponse)
+            continue
+
+        if not all(isinstance(item, dict) and item.get("exercice_id") in ids_valides for item in reponse["exercices"]):
+            logger.warning("Réponse Mistral avec exercice_id hors sélection (tentative %s) : %s", tentative + 1, reponse)
+            continue
+
+        data = reponse
+        break
+
+    if data is None:
+        logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
+        data = _construire_seance_secours(candidats, recommandation["type_seance_suggere"])
 
     seance = models.Seance(
         date=date.today(),

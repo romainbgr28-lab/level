@@ -1,6 +1,6 @@
 from datetime import date
 
-from connaissances import get_exercices_musculation_base
+from connaissances import get_exercices_bibliotheque_extension, get_exercices_musculation_base
 from database import SessionLocal
 from models import ExerciceBibliotheque, ModuleIntellectuel, Streak
 
@@ -95,7 +95,9 @@ def seed(db):
     # n'affiche jamais le bouton "Générer ma séance du jour" — le flux IA n'est
     # alors jamais réellement exercé.
 
-    if db.query(ExerciceBibliotheque).count() == 0:
+    noms_existants = {nom for (nom,) in db.query(ExerciceBibliotheque.nom).all()}
+
+    if not noms_existants:
         for fiche in get_exercices_musculation_base():
             db.add(
                 ExerciceBibliotheque(
@@ -104,8 +106,28 @@ def seed(db):
                     instructions=_instructions_musculation(fiche),
                     image_url=None,
                     type="force",
+                    materiel_requis="barre (ou haltères)",
+                    sport_specifique="généraliste",
+                    points_securite=fiche.get("points_securite"),
                 )
             )
+        noms_existants = {fiche["nom"] for fiche in get_exercices_musculation_base()}
+
+    for fiche in get_exercices_bibliotheque_extension():
+        if fiche["nom"] in noms_existants:
+            continue
+        db.add(
+            ExerciceBibliotheque(
+                nom=fiche["nom"],
+                groupe_musculaire=fiche["groupe_musculaire"],
+                instructions=list(fiche.get("instructions") or []),
+                image_url=None,
+                type=fiche["type"],
+                materiel_requis=fiche.get("materiel_requis"),
+                sport_specifique=fiche.get("sport_specifique"),
+                points_securite=fiche.get("points_securite"),
+            )
+        )
 
     if db.query(Streak).count() == 0:
         db.add(Streak(date=date.today(), sport_fait=0, apprentissage_fait=0))

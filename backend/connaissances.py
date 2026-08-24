@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Optional
 
 _PATH = Path(__file__).parent / "data" / "bibliotheque_theorique_sport.json"
+_EXTENSION_PATH = Path(__file__).parent / "data" / "bibliotheque_exercices_extension.json"
 _data: Optional[dict] = None
+_extension_data: Optional[dict] = None
 
 
 def _load() -> dict:
@@ -24,10 +26,25 @@ def _load() -> dict:
     return _data
 
 
+def _load_extension() -> dict:
+    global _extension_data
+    if _extension_data is None:
+        with open(_EXTENSION_PATH, encoding="utf-8") as f:
+            _extension_data = json.load(f)
+    return _extension_data
+
+
 def get_exercices_musculation_base() -> list[dict]:
     """Fiches d'exercices de musculation de base (squat, développé couché, rowing,
     soulevé de terre), destinées à peupler la bibliothèque d'exercices (seed.py)."""
     return _load()["musculation_execution_exercices_base"]
+
+
+def get_exercices_bibliotheque_extension() -> list[dict]:
+    """25 exercices complémentaires (échauffement, explosivité, agilité, gainage_prevention,
+    force, esthétique, technique, endurance, mobilité/récupération) destinés à compléter les
+    4 exercices de musculation de base dans la bibliothèque (seed.py)."""
+    return _load_extension()["exercices"]
 
 
 def get_notes_generation_ia() -> list[str]:
