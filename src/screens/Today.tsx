@@ -37,6 +37,13 @@ const CLUB_SEMAINE_OPTIONS: { value: string; label: string }[] = [
   { value: '1_fois', label: 'Oui, 1 fois' },
   { value: '2_fois_ou_plus', label: 'Oui, 2 fois ou plus' },
 ];
+const TYPE_SEANCE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Automatique (recommandé)' },
+  { value: 'force', label: 'Force' },
+  { value: 'explosivité_vitesse', label: 'Explosivité / vitesse' },
+  { value: 'esthétique', label: 'Esthétique' },
+  { value: 'décharge', label: 'Décharge / récupération' },
+];
 
 const REST_SECONDS = 90;
 
@@ -61,6 +68,7 @@ export default function Today() {
   const [tempsDispo, setTempsDispo] = useState('');
   const [envieTexte, setEnvieTexte] = useState('');
   const [clubSemaine, setClubSemaine] = useState('');
+  const [typeSeanceForce, setTypeSeanceForce] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // ---- Logging temps réel façon Hevy ----
@@ -196,6 +204,7 @@ export default function Today() {
         temps_dispo: tempsDispo.trim() || null,
         envie_texte: envieTexte.trim() || null,
         entrainement_club_semaine: clubSemaine || null,
+        type_seance_force: typeSeanceForce || null,
       };
       const generee = await genererSeance(payload);
       setSeance(generee);
@@ -329,6 +338,26 @@ export default function Today() {
               value={tempsDispo}
               onChange={(e) => setTempsDispo(e.target.value)}
             />
+          </div>
+
+          <div className="onboarding-theme">
+            <div className="section-title">Type de séance souhaité (optionnel)</div>
+            <p className="subtle" style={{ margin: '0 0 8px' }}>
+              Par défaut, le type est déterminé automatiquement selon ton calendrier de matchs et ton
+              profil. Tu peux forcer un type précis si tu sais ce que tu veux travailler aujourd’hui.
+            </p>
+            <div className="tag-row tag-row--select">
+              {TYPE_SEANCE_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  className={`tag tag--selectable ${typeSeanceForce === o.value ? 'tag--active' : ''}`}
+                  onClick={() => setTypeSeanceForce(o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="onboarding-theme">
