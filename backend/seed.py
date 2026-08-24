@@ -79,37 +79,21 @@ def seed(db):
                 date=date.today(),
                 nom="Push Day — Force",
                 statut="planifiee",
+                type_seance="force",
+                explication=(
+                    "Séance de démonstration (avant toute génération via /api/seance/generer) : "
+                    "développement du haut du corps en poussée, sans contrainte calendaire particulière."
+                ),
+                # Forme canonique {nom, series, repetitions, charge_indicative, notes} — la même que
+                # celle produite par Mistral via /api/seance/generer, pour que l'écran Aujourd'hui
+                # affiche une séance cohérente dès le premier lancement, avant toute génération IA.
                 exercices=[
-                    {
-                        "id": "ex-1",
-                        "name": "Développé couché",
-                        "sets": [{"reps": 6, "loadKg": 80}] * 4,
-                    },
-                    {
-                        "id": "ex-2",
-                        "name": "Développé militaire",
-                        "sets": [{"reps": 8, "loadKg": 45}] * 3,
-                    },
-                    {
-                        "id": "ex-3",
-                        "name": "Dips lestés",
-                        "sets": [{"reps": 10, "loadKg": 15}] * 3,
-                    },
-                    {
-                        "id": "ex-4",
-                        "name": "Élévations latérales",
-                        "sets": [{"reps": 12, "loadKg": 10}] * 3,
-                    },
-                    {
-                        "id": "ex-5",
-                        "name": "Extensions triceps poulie",
-                        "sets": [{"reps": 12, "loadKg": 20}] * 3,
-                    },
-                    {
-                        "id": "ex-6",
-                        "name": "Gainage",
-                        "sets": [{"reps": 1, "loadKg": 0}] * 3,
-                    },
+                    {"nom": "Développé couché", "series": 4, "repetitions": "6", "charge_indicative": "80 kg", "notes": ""},
+                    {"nom": "Développé militaire", "series": 3, "repetitions": "8", "charge_indicative": "45 kg", "notes": ""},
+                    {"nom": "Dips lestés", "series": 3, "repetitions": "10", "charge_indicative": "15 kg", "notes": ""},
+                    {"nom": "Élévations latérales", "series": 3, "repetitions": "12", "charge_indicative": "10 kg", "notes": ""},
+                    {"nom": "Extensions triceps poulie", "series": 3, "repetitions": "12", "charge_indicative": "20 kg", "notes": ""},
+                    {"nom": "Gainage", "series": 3, "repetitions": "45 s", "charge_indicative": "poids du corps", "notes": ""},
                 ],
             )
         )
