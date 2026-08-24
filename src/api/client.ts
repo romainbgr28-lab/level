@@ -275,6 +275,7 @@ export interface ApiEtatDuJour {
   temps_dispo?: string | null;
   envie_texte?: string | null;
   entrainement_club_semaine?: string | null;
+  type_seance_force?: string | null;
 }
 
 export interface ApiSeanceGeneree {

@@ -261,6 +261,7 @@ class EtatDuJour(BaseModel):
     temps_dispo: Optional[str] = None
     envie_texte: Optional[str] = None
     entrainement_club_semaine: Optional[str] = None  # "non" | "1_fois" | "2_fois_ou_plus"
+    type_seance_force: Optional[str] = None  # override manuel : "force" | "explosivité_vitesse" | "esthétique" | "décharge"
 
 
 class SeanceGenereeOut(BaseModel):

@@ -606,6 +606,17 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
 
     recommandation = regles_seance.generer_recommandation(profil_dict, historique_ctx, etat_du_jour)
 
+    type_force = etat_du_jour.get("type_seance_force")
+    decharge_securite = recommandation["type_seance_suggere"] == "décharge" and any(
+        "mode semaine de décharge activé" in raison for raison in recommandation.get("raisons") or []
+    )
+    if type_force and type_force in TYPES_PAR_TYPE_SEANCE and not decharge_securite:
+        if type_force != recommandation["type_seance_suggere"]:
+            recommandation["raisons"].append(
+                f"Type de séance forcé manuellement à « {type_force} » (au lieu de « {recommandation['type_seance_suggere']} » suggéré par le moteur de règles)."
+            )
+        recommandation["type_seance_suggere"] = type_force
+
     zone_sensible = (recommandation.get("exclusions") or [None])[0]
     zones_sensibles = historique_ctx.get("zones_sensibles_recentes") or []
     candidats = _selectionner_exercices_candidats(
@@ -613,6 +624,13 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
         recommandation["type_seance_suggere"],
         profil_dict.get("materiel") or "",
         zones_sensibles,
+    )
+
+    logger.info(
+        "Génération séance : type_seance_suggere=%s -> %d candidat(s) envoyé(s) à Mistral : %s",
+        recommandation["type_seance_suggere"],
+        len(candidats),
+        [(ex.id, ex.type, ex.nom) for ex in candidats],
     )
 
     fiches_theoriques = connaissances.selectionner_fiches_pertinentes(
