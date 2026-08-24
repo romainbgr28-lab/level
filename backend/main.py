@@ -90,6 +90,19 @@ def get_today_seance(db: Session = Depends(get_db)):
     return db.query(models.Seance).filter(models.Seance.date == date.today()).first()
 
 
+@app.delete("/api/seances/today", status_code=204)
+def delete_today_seance(db: Session = Depends(get_db)):
+    """Supprime la/les séance(s) du jour pour forcer une nouvelle génération.
+
+    Endpoint temporaire, exposé via un bouton de reset côté écran Aujourd'hui,
+    utile notamment pour effacer une séance restée en base d'avant le passage
+    au flux 100% généré par /api/seance/generer.
+    """
+    db.query(models.Seance).filter(models.Seance.date == date.today()).delete()
+    db.commit()
+    return None
+
+
 @app.get("/api/seances/{seance_id}", response_model=schemas.SeanceOut)
 def get_seance(seance_id: int, db: Session = Depends(get_db)):
     seance = db.get(models.Seance, seance_id)

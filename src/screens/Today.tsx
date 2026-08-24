@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { genererSeance, getTodayModule, getTodaySeance, terminerSeanceIA } from '../api/client';
+import { deleteTodaySeance, genererSeance, getTodayModule, getTodaySeance, terminerSeanceIA } from '../api/client';
 import type { ApiEtatDuJour, ApiModule, ApiSeance, ApiSeanceGeneree, ApiTerminerSeanceResult } from '../api/client';
 
 const dateLabel = new Date().toLocaleDateString('fr-FR', {
@@ -81,6 +81,21 @@ export default function Today() {
       setView('terminee');
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement du compte-rendu.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReset() {
+    if (!window.confirm('Supprimer la séance du jour et en générer une nouvelle ?')) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await deleteTodaySeance();
+      setSeance(null);
+      setView('no-seance');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de la réinitialisation.');
     } finally {
       setSubmitting(false);
     }
@@ -225,9 +240,24 @@ export default function Today() {
           )}
 
           {view === 'seance' && (
-            <button className="btn btn--primary" style={{ marginTop: 14 }} onClick={() => setView('compte-rendu')}>
-              Terminer la séance
-            </button>
+            <>
+              <button className="btn btn--primary" style={{ marginTop: 14 }} onClick={() => setView('compte-rendu')}>
+                Terminer la séance
+              </button>
+              <button
+                className="btn btn--ghost"
+                style={{ marginTop: 10 }}
+                disabled={submitting}
+                onClick={handleReset}
+              >
+                Réinitialiser (générer une nouvelle séance)
+              </button>
+              {error && (
+                <p className="subtle" style={{ color: '#e5484d', marginTop: 10 }}>
+                  {error}
+                </p>
+              )}
+            </>
           )}
 
           {view === 'compte-rendu' && (

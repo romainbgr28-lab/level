@@ -141,6 +141,7 @@ export const deleteProfil = () => request<void>('/api/profil', { method: 'DELETE
 // ---------- Séances ----------
 
 export const getTodaySeance = () => request<ApiSeance | null>('/api/seances/today');
+export const deleteTodaySeance = () => request<void>('/api/seances/today', { method: 'DELETE' });
 export const updateSeance = (
   id: number,
   payload: Partial<Pick<ApiSeance, 'statut' | 'rpe' | 'duree_reelle' | 'exercices'>>
