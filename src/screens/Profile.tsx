@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import { deleteProfil, getProfil, getStats } from '../api/client';
 import type { ApiProfil, ApiStats } from '../api/client';
+import DevDatePanel from '../components/DevDatePanel';
 
 export default function Profile() {
   const [profil, setProfil] = useState<ApiProfil | null>(null);
@@ -180,6 +181,8 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      <DevDatePanel />
 
       <div className="section-title">Développement</div>
       <p className="subtle" style={{ marginBottom: 10 }}>

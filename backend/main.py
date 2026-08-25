@@ -14,6 +14,7 @@ import mistral_client
 import models
 import regles_seance
 import schemas
+from dev_date import get_current_date
 from charge_depart import estimer_charge_depart, formater_recommandation_charge
 from calendrier import compute_phase
 from database import Base, SessionLocal, engine, get_db
@@ -89,19 +90,19 @@ def list_seances(db: Session = Depends(get_db)):
 
 
 @app.get("/api/seances/today", response_model=Optional[schemas.SeanceOut])
-def get_today_seance(db: Session = Depends(get_db)):
-    return db.query(models.Seance).filter(models.Seance.date == date.today()).first()
+def get_today_seance(db: Session = Depends(get_db), today: date = Depends(get_current_date)):
+    return db.query(models.Seance).filter(models.Seance.date == today).first()
 
 
 @app.delete("/api/seances/today", status_code=204)
-def delete_today_seance(db: Session = Depends(get_db)):
+def delete_today_seance(db: Session = Depends(get_db), today: date = Depends(get_current_date)):
     """Supprime la/les séance(s) du jour pour forcer une nouvelle génération.
 
     Endpoint temporaire, exposé via un bouton de reset côté écran Aujourd'hui,
     utile notamment pour effacer une séance restée en base d'avant le passage
     au flux 100% généré par /api/seance/generer.
     """
-    db.query(models.Seance).filter(models.Seance.date == date.today()).delete()
+    db.query(models.Seance).filter(models.Seance.date == today).delete()
     db.commit()
     return None
 
@@ -772,7 +773,9 @@ def _calculer_xp(rpe: Optional[int], pourcentage_complete: Optional[float], stre
 
 
 @app.post("/api/seance/generer", response_model=schemas.SeanceGenereeOut)
-def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
+def generer_seance(
+    payload: schemas.EtatDuJour, db: Session = Depends(get_db), today: date = Depends(get_current_date)
+):
     profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
     if not profil:
         raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer une séance.")
@@ -800,11 +803,11 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     programme_ctx: Optional[dict] = None
 
     if programme:
-        semaine_courante = _semaine_courante_programme(programme, date.today())
+        semaine_courante = _semaine_courante_programme(programme, today)
         phase_programme = _phase_programme_pour_semaine(programme, semaine_courante)
         # gabarit_hebdomadaire est keyé par jour ABRÉGÉ ("Lun", "Mer", ...), pas le nom complet
         # ("Lundi") utilisé pour calendrier_matchs.jour_habituel — voir regles_seance.py.
-        jour_abbrev = regles_seance.JOURS_SEMAINE_ABBREV[date.today().weekday()]
+        jour_abbrev = regles_seance.JOURS_SEMAINE_ABBREV[today.weekday()]
         type_seance_gabarit_brut = (programme.gabarit_hebdomadaire or {}).get(jour_abbrev)
         # Tolère une valeur renvoyée par Mistral légèrement différente de la casse/des accents
         # canoniques (déjà observé en production) plutôt que de la traiter comme absente.
@@ -835,7 +838,7 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
         }
 
     recommandation = regles_seance.generer_recommandation(
-        profil_dict, historique_ctx, etat_du_jour, type_seance_gabarit=type_seance_gabarit
+        profil_dict, historique_ctx, etat_du_jour, type_seance_gabarit=type_seance_gabarit, aujourdhui=today
     )
 
     if programme_ctx is not None:
@@ -923,7 +926,7 @@ def generer_seance(payload: schemas.EtatDuJour, db: Session = Depends(get_db)):
     duree_calibree_min = duree_seance.duree_totale_estimee_min(plan)
 
     seance = models.Seance(
-        date=date.today(),
+        date=today,
         nom=data["nom_seance"],
         exercices=data["exercices"],
         statut="prévue",

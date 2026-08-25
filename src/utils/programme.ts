@@ -1,4 +1,5 @@
 import type { ApiProgramme, ApiProgrammePhase } from '../api/client';
+import { getNow } from './devDate';
 
 // gabarit_hebdomadaire est keyé par jour ABRÉGÉ ("Lun", "Mer", ...), pas le nom complet —
 // mêmes abréviations que src/screens/Onboarding.tsx (JOURS) et backend/regles_seance.py
@@ -10,7 +11,7 @@ export const JOURS_SEMAINE_ABBREV = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', '
  * que _semaine_courante_programme() côté backend (backend/main.py), à garder synchronisée. */
 export function semaineActuelle(programme: ApiProgramme): number {
   const debut = new Date(programme.date_debut);
-  const jours = Math.floor((Date.now() - debut.getTime()) / (1000 * 60 * 60 * 24));
+  const jours = Math.floor((getNow().getTime() - debut.getTime()) / (1000 * 60 * 60 * 24));
   const semaine = Math.floor(jours / 7) + 1;
   return Math.min(Math.max(semaine, 1), programme.duree_semaines);
 }
@@ -21,7 +22,7 @@ export function phaseCourante(programme: ApiProgramme, semaine: number): ApiProg
 
 export function jourAbbrevAujourdhui(): string {
   // getDay() : 0 = dimanche ... 6 = samedi -> décalage vers JOURS_SEMAINE_ABBREV (0 = lundi).
-  const index = (new Date().getDay() + 6) % 7;
+  const index = (getNow().getDay() + 6) % 7;
   return JOURS_SEMAINE_ABBREV[index];
 }
 

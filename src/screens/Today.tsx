@@ -31,8 +31,9 @@ import {
   typeSeanceGabaritAujourdhui,
 } from '../utils/programme';
 import { typeSeanceMeta } from '../data/programmeTypes';
+import { getNow } from '../utils/devDate';
 
-const dateLabel = new Date().toLocaleDateString('fr-FR', {
+const dateLabel = getNow().toLocaleDateString('fr-FR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',

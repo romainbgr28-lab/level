@@ -1,8 +1,14 @@
+import { getDevSimulatedDate } from '../utils/devDate';
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const devDate = getDevSimulatedDate();
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(devDate ? { 'X-Dev-Date': devDate } : {}),
+    },
     ...options,
   });
   if (!res.ok) {

@@ -77,6 +77,7 @@ def obtenir_priorites_poste(poste: str) -> list[str]:
 def calculer_ajustement_charge(
     historique_3_dernieres_seances_meme_type: list[dict[str, Any]],
     niveau_physique_onboarding: Optional[str] = None,
+    aujourdhui: Optional[date] = None,
 ) -> dict[str, Any]:
     """Calcule l'ajustement de charge/volume à partir des 3 dernières séances du même type.
 
@@ -100,7 +101,7 @@ def calculer_ajustement_charge(
     seances = sorted(historique_3_dernieres_seances_meme_type, key=lambda s: _as_date(s["date"]), reverse=True)
     derniere = seances[0]
 
-    jours_ecart = (date.today() - _as_date(derniere["date"])).days
+    jours_ecart = ((aujourdhui or date.today()) - _as_date(derniere["date"])).days
     if jours_ecart > 10:
         return {
             "charge_pct": -15.0,
@@ -246,6 +247,7 @@ def generer_recommandation(
     historique: dict[str, Any],
     etat_du_jour: dict[str, Any],
     type_seance_gabarit: Optional[str] = None,
+    aujourdhui: Optional[date] = None,
 ) -> dict[str, Any]:
     """Fonction principale : combine les règles ci-dessus en une recommandation structurée.
 
@@ -261,7 +263,7 @@ def generer_recommandation(
         programme actif, s'il y en a un (voir main.py::generer_seance) — cadre la séance,
         mais reste subordonné à la phase calendaire (cf. _suggerer_type_seance).
     """
-    aujourdhui = date.today()
+    aujourdhui = aujourdhui or date.today()
     date_prochain_match, date_dernier_match = _dates_matchs_proches(profil.get("calendrier_matchs"), aujourdhui)
 
     phase, intensite_max = calculer_phase_calendaire(aujourdhui, date_prochain_match, date_dernier_match)
@@ -269,7 +271,7 @@ def generer_recommandation(
     type_seance_suggere = _suggerer_type_seance(phase, priorites, profil.get("objectif_esthetique"), type_seance_gabarit)
 
     historique_meme_type = (historique.get("par_type") or {}).get(type_seance_suggere, [])
-    ajustement = calculer_ajustement_charge(historique_meme_type, profil.get("niveau_physique"))
+    ajustement = calculer_ajustement_charge(historique_meme_type, profil.get("niveau_physique"), aujourdhui)
 
     recommandation: dict[str, Any] = {
         "phase_calendaire": phase,
