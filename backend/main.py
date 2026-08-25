@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import date, timedelta
 from typing import Optional
 
@@ -219,6 +220,41 @@ def _rpe_approx_depuis_difficulte(difficulte: Optional[str]) -> Optional[int]:
     return DIFFICULTE_RPE_APPROX.get(difficulte) if difficulte else None
 
 
+# Extraction du "prévu" (reps/charge) depuis les champs texte libres de Seance.exercices
+# (ex: repetitions="8-12", charge_indicative="20 kg" | "poids du corps" | "à ajuster selon
+# ressenti"). Mêmes règles que repsCible/chargeCible côté frontend (Today.tsx) pour que la
+# cible affichée à l'utilisateur et le "prévu" persisté en base soient toujours cohérents.
+def _reps_prevues_depuis_repetitions(repetitions: Optional[str]) -> Optional[int]:
+    if not repetitions:
+        return None
+    m = re.search(r"\d+", repetitions)
+    return int(m.group()) if m else None
+
+
+def _charge_prevue_depuis_indicative(charge_indicative: Optional[str]) -> Optional[float]:
+    if not charge_indicative or re.search(r"corps", charge_indicative, re.IGNORECASE):
+        return None
+    m = re.search(r"\d+(?:[.,]\d+)?", charge_indicative)
+    return float(m.group().replace(",", ".")) if m else None
+
+
+def _prevu_pour_exercice(
+    seance: Optional[models.Seance], exercice_id: int
+) -> tuple[Optional[int], Optional[float]]:
+    """Retrouve l'item de Seance.exercices correspondant à cet exercice (association par
+    exercice_id, pas par position dans la liste : un exercice ne peut apparaître qu'une
+    fois par séance, chaque item porte son propre exercice_id)."""
+    if not seance:
+        return None, None
+    for item in seance.exercices or []:
+        if item.get("exercice_id") == exercice_id:
+            return (
+                _reps_prevues_depuis_repetitions(item.get("repetitions")),
+                _charge_prevue_depuis_indicative(item.get("charge_indicative")),
+            )
+    return None, None
+
+
 @app.get("/api/series_loggees", response_model=list[schemas.SerieLoggeeOut])
 def list_series_loggees(seance_id: int, db: Session = Depends(get_db)):
     return (
@@ -235,7 +271,14 @@ def create_serie_loggee(payload: schemas.SerieLoggeeCreate, db: Session = Depend
     data["coche"] = int(data["coche"])
     if data.get("rpe_approx") is None:
         data["rpe_approx"] = _rpe_approx_depuis_difficulte(data.get("difficulte"))
-    serie = models.SerieLoggee(**data)
+
+    # Le prévu (reps/charge) n'est jamais envoyé par le client : il est retrouvé côté
+    # serveur depuis la séance concernée, identique pour le tap rapide et la saisie
+    # manuelle puisque les deux passent par ce même endpoint avec le même payload.
+    seance = db.get(models.Seance, data["seance_id"])
+    reps_prevues, charge_prevue_kg = _prevu_pour_exercice(seance, data["exercice_id"])
+
+    serie = models.SerieLoggee(**data, reps_prevues=reps_prevues, charge_prevue_kg=charge_prevue_kg)
     db.add(serie)
     db.commit()
     db.refresh(serie)

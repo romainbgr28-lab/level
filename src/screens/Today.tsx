@@ -105,7 +105,7 @@ export default function Today() {
   const [bibliotheque, setBibliotheque] = useState<Record<number, ApiExerciceBibliotheque>>({});
   const [seriesParExercice, setSeriesParExercice] = useState<Record<number, ApiSerieLoggee[]>>({});
   const [draftParExercice, setDraftParExercice] = useState<
-    Record<number, { poids: string; reps: string }>
+    Record<number, { poids: string; reps: string; difficulte?: ApiDifficulte }>
   >({});
   const [precedentParExercice, setPrecedentParExercice] = useState<Record<number, ApiDernierePerformance>>({});
   const [detailExerciceId, setDetailExerciceId] = useState<number | null>(null);
@@ -113,7 +113,9 @@ export default function Today() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const [editingSerieId, setEditingSerieId] = useState<number | null>(null);
-  const [editDraftParSerie, setEditDraftParSerie] = useState<Record<number, { poids: string; reps: string }>>({});
+  const [editDraftParSerie, setEditDraftParSerie] = useState<
+    Record<number, { poids: string; reps: string; difficulte?: ApiDifficulte }>
+  >({});
   const [manualOpenId, setManualOpenId] = useState<number | 'auto'>('auto');
 
   const [rpe, setRpe] = useState<number | null>(null);
@@ -238,10 +240,13 @@ export default function Today() {
   const openExerciceId = manualOpenId === 'auto' ? currentExerciceId : manualOpenId;
 
   function draftFor(exerciceId: number) {
-    return draftParExercice[exerciceId] ?? { poids: '', reps: '' };
+    return draftParExercice[exerciceId] ?? { poids: '', reps: '', difficulte: undefined };
   }
 
-  function setDraft(exerciceId: number, patch: Partial<{ poids: string; reps: string }>) {
+  function setDraft(
+    exerciceId: number,
+    patch: Partial<{ poids: string; reps: string; difficulte: ApiDifficulte | undefined }>
+  ) {
     setDraftParExercice((prev) => ({ ...prev, [exerciceId]: { ...draftFor(exerciceId), ...patch } }));
   }
 
@@ -264,10 +269,11 @@ export default function Today() {
       poids_kg: poids,
       repetitions: reps,
       coche: true,
+      difficulte: draft.difficulte ?? null,
     });
 
     setSeriesParExercice((prev) => ({ ...prev, [exerciceId]: [...(prev[exerciceId] ?? []), created] }));
-    setDraft(exerciceId, { poids: '', reps: '' });
+    setDraft(exerciceId, { poids: '', reps: '', difficulte: undefined });
     setRestSecondsLeft(reposPourExercice(item));
   }
 
@@ -293,7 +299,13 @@ export default function Today() {
   }
 
   function editDraftFor(serie: ApiSerieLoggee) {
-    return editDraftParSerie[serie.id] ?? { poids: serie.poids_kg?.toString() ?? '', reps: serie.repetitions?.toString() ?? '' };
+    return (
+      editDraftParSerie[serie.id] ?? {
+        poids: serie.poids_kg?.toString() ?? '',
+        reps: serie.repetitions?.toString() ?? '',
+        difficulte: serie.difficulte ?? undefined,
+      }
+    );
   }
 
   function ouvrirEditionSerie(serie: ApiSerieLoggee) {
@@ -306,6 +318,7 @@ export default function Today() {
     const updated = await updateSerieLoggee(serie.id, {
       poids_kg: draft.poids.trim() ? Number(draft.poids) : null,
       repetitions: draft.reps.trim() ? Number(draft.reps) : null,
+      difficulte: draft.difficulte ?? null,
     });
     setSeriesParExercice((prev) => ({
       ...prev,
@@ -668,7 +681,8 @@ export default function Today() {
                     {series.map((s) => {
                       if (editingSerieId === s.id) {
                         return (
-                          <div className="set-row" key={s.id}>
+                          <div key={s.id}>
+                          <div className="set-row">
                             <span className="set-row__num">{s.numero_serie}</span>
                             <input
                               type="number"
@@ -704,6 +718,25 @@ export default function Today() {
                             >
                               ✓
                             </button>
+                          </div>
+                          <div className="quick-row">
+                            {DIFFICULTE_OPTIONS.map((o) => (
+                              <button
+                                key={o.value}
+                                type="button"
+                                className={`quick-btn quick-btn--${o.value}`}
+                                style={editDraftFor(s).difficulte === o.value ? { outline: '2px solid currentColor' } : undefined}
+                                onClick={() =>
+                                  setEditDraftParSerie((prev) => ({
+                                    ...prev,
+                                    [s.id]: { ...editDraftFor(s), difficulte: o.value },
+                                  }))
+                                }
+                              >
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
                           </div>
                         );
                       }
@@ -768,32 +801,47 @@ export default function Today() {
                     )}
 
                     {draftVisible && (
-                      <div className="set-row">
-                        <span className="set-row__num">{series.length + 1}</span>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          className="set-row__input"
-                          placeholder="kg"
-                          value={draft.poids}
-                          onChange={(e) => setDraft(item.exercice_id, { poids: e.target.value })}
-                        />
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          className="set-row__input"
-                          placeholder="reps"
-                          value={draft.reps}
-                          onChange={(e) => setDraft(item.exercice_id, { reps: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          className="checkbox"
-                          onClick={() => handleValiderSerie(item)}
-                          aria-label="Valider la série"
-                        >
-                          ✓
-                        </button>
+                      <div>
+                        <div className="set-row">
+                          <span className="set-row__num">{series.length + 1}</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            className="set-row__input"
+                            placeholder="kg"
+                            value={draft.poids}
+                            onChange={(e) => setDraft(item.exercice_id, { poids: e.target.value })}
+                          />
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            className="set-row__input"
+                            placeholder="reps"
+                            value={draft.reps}
+                            onChange={(e) => setDraft(item.exercice_id, { reps: e.target.value })}
+                          />
+                          <button
+                            type="button"
+                            className="checkbox"
+                            onClick={() => handleValiderSerie(item)}
+                            aria-label="Valider la série"
+                          >
+                            ✓
+                          </button>
+                        </div>
+                        <div className="quick-row">
+                          {DIFFICULTE_OPTIONS.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              className={`quick-btn quick-btn--${o.value}`}
+                              style={draft.difficulte === o.value ? { outline: '2px solid currentColor' } : undefined}
+                              onClick={() => setDraft(item.exercice_id, { difficulte: o.value })}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 

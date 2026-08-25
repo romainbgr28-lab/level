@@ -78,6 +78,11 @@ class SerieLoggee(Base):
     numero_serie = Column(Integer, nullable=False)
     poids_kg = Column(Float, nullable=True)
     repetitions = Column(Integer, nullable=True)
+    # Prévu, calculé et persisté côté serveur à la création (voir main.py::_prevu_pour_exercice),
+    # à partir de Seance.exercices — jamais fourni par le client. Nullable : colonne ajoutée après
+    # coup (voir migrate.py), les séries loguées avant restent valides sans ces valeurs.
+    reps_prevues = Column(Integer, nullable=True)
+    charge_prevue_kg = Column(Float, nullable=True)
     coche = Column(Integer, nullable=False, default=0)  # 0/1 bool
     # Validation rapide par bouton : "facile" | "comme_prevu" | "dur" -> rpe_approx
     # calculé côté serveur (voir main.py::DIFFICULTE_RPE_APPROX). L'utilisateur peut

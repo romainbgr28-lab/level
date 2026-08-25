@@ -86,6 +86,10 @@ export interface ApiSerieLoggee {
   coche: boolean;
   difficulte?: ApiDifficulte | null;
   rpe_approx?: number | null;
+  // Prévu, calculé côté serveur à la création (null sur les séries loguées avant
+  // l'introduction de ces champs). Jamais à envoyer depuis le client.
+  reps_prevues?: number | null;
+  charge_prevue_kg?: number | null;
   horodatage: string | null;
 }
 

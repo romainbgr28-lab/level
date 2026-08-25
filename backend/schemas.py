@@ -158,6 +158,10 @@ class SerieLoggeeUpdate(BaseModel):
 class SerieLoggeeOut(SerieLoggeeBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    # Prévu, calculé et persisté côté serveur à la création (voir main.py::_prevu_pour_exercice) —
+    # jamais fourni par le client. None sur les séries loguées avant l'introduction de ce champ.
+    reps_prevues: Optional[int] = None
+    charge_prevue_kg: Optional[float] = None
     horodatage: Optional[datetime] = None
 
 
