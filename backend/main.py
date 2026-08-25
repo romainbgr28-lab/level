@@ -375,23 +375,34 @@ def create_session_apprentissage(payload: schemas.SessionApprentissageCreate, db
 
 
 # ---------- Historique de séances (prévu vs réalisé, contexte, phase calendaire) ----------
+#
+# Pas de POST ici : les entrées sont créées uniquement côté serveur par terminer_seance()
+# (aucun consommateur frontend n'appelait l'ancien POST /api/historique_seances, qui aurait
+# permis d'écrire une entrée arbitraire — chemin client-writable retiré).
+
+
+def _enrichir_noms_exercices_prevus(exercices_prevus: list[dict], db: Session) -> list[dict]:
+    """exercices_prevus (copie brute de Seance.exercices) ne contient que exercice_id, pas de
+    nom : on résout les noms via la bibliothèque pour l'affichage, sans toucher aux données
+    persistées ni au format existant du champ."""
+    ids = {item.get("exercice_id") for item in exercices_prevus if isinstance(item, dict) and item.get("exercice_id") is not None}
+    if not ids:
+        return exercices_prevus
+    noms_par_id = {
+        ex.id: ex.nom for ex in db.query(models.ExerciceBibliotheque).filter(models.ExerciceBibliotheque.id.in_(ids)).all()
+    }
+    return [
+        {**item, "nom": noms_par_id.get(item.get("exercice_id"))} if isinstance(item, dict) else item
+        for item in exercices_prevus
+    ]
+
 
 @app.get("/api/historique_seances", response_model=list[schemas.HistoriqueSeanceOut])
 def list_historique_seances(db: Session = Depends(get_db)):
-    return db.query(models.HistoriqueSeance).order_by(models.HistoriqueSeance.date.desc()).all()
-
-
-@app.post("/api/historique_seances", response_model=schemas.HistoriqueSeanceOut)
-def create_historique_seance(payload: schemas.HistoriqueSeanceCreate, db: Session = Depends(get_db)):
-    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
-    calendrier = profil.calendrier_matchs if profil else None
-    phase = compute_phase(payload.date, calendrier)
-
-    entry = models.HistoriqueSeance(**payload.model_dump(), phase_calendaire=phase)
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return entry
+    entries = db.query(models.HistoriqueSeance).order_by(models.HistoriqueSeance.date.desc()).all()
+    for entry in entries:
+        entry.exercices_prevus = _enrichir_noms_exercices_prevus(entry.exercices_prevus or [], db)
+    return entries
 
 
 # ---------- Génération de séance assistée (moteur de règles + Mistral) ----------
@@ -1392,15 +1403,30 @@ def get_stats(db: Session = Depends(get_db)):
 
 @app.get("/api/progress/charge")
 def get_charge_progress(nom_exercice: str = "Développé couché", limit: int = 8, db: Session = Depends(get_db)):
+    """Charge la plus lourde validée par séance pour l'exercice donné, à partir des vraies
+    séries loguées (series_loggees) — plus fiable que exercices_historique, une table legacy
+    que plus rien n'alimente depuis que le logging passe par SerieLoggee (voir Étape 1)."""
+    exercice = db.query(models.ExerciceBibliotheque).filter(models.ExerciceBibliotheque.nom == nom_exercice).first()
+    if not exercice:
+        return []
+
     rows = (
-        db.query(models.ExerciceHistorique)
-        .filter(models.ExerciceHistorique.nom_exercice == nom_exercice)
-        .order_by(models.ExerciceHistorique.date.desc())
-        .limit(limit)
+        db.query(models.SerieLoggee.poids_kg, models.Seance.date)
+        .join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
+        .filter(
+            models.SerieLoggee.exercice_id == exercice.id,
+            models.SerieLoggee.coche == 1,
+            models.SerieLoggee.poids_kg.isnot(None),
+        )
         .all()
     )
-    rows.reverse()
-    return [{"date": r.date.isoformat(), "loadKg": r.charge_kg} for r in rows]
+
+    charge_max_par_date: dict = {}
+    for poids_kg, seance_date in rows:
+        charge_max_par_date[seance_date] = max(charge_max_par_date.get(seance_date, 0), poids_kg)
+
+    dates_retenues = sorted(charge_max_par_date.keys())[-limit:]
+    return [{"date": d.isoformat(), "loadKg": charge_max_par_date[d]} for d in dates_retenues]
 
 
 @app.get("/api/progress/themes")

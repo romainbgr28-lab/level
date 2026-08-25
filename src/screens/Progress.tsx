@@ -98,8 +98,11 @@ export default function Progress() {
         </div>
       )}
 
-      <button className="btn btn--ghost" style={{ marginBottom: 20 }} onClick={() => navigate('/bilan')}>
+      <button className="btn btn--ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/bilan')}>
         Voir le bilan hebdomadaire
+      </button>
+      <button className="btn btn--ghost" style={{ marginBottom: 20 }} onClick={() => navigate('/historique')}>
+        Voir l'historique des séances
       </button>
 
       {programme ? (

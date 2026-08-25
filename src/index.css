@@ -1248,3 +1248,60 @@ p {
 .chart-wrap {
   margin-bottom: 8px;
 }
+
+/* Historique */
+.historique-entry__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.historique-entry__date {
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.historique-entry__badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.historique-entry__adaptation {
+  margin-bottom: 10px;
+}
+
+.historique-entry__notes {
+  margin-top: 10px;
+  font-style: italic;
+}
+
+.historique-entry__exercices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.historique-exercice {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.historique-exercice:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.historique-exercice__nom {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.historique-exercice__realise {
+  margin-top: 2px;
+}

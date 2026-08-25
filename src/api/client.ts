@@ -269,25 +269,43 @@ export interface ApiEtatDeclareAvant {
   entrainement_club_semaine?: string | null;
 }
 
+export interface ApiExercicePrevu {
+  exercice_id: number;
+  nom?: string | null;
+  series?: number;
+  repetitions?: string;
+  charge_indicative?: string | null;
+}
+
+export interface ApiSerieRealisee {
+  numero_serie: number;
+  poids_kg: number | null;
+  repetitions: number | null;
+}
+
+export interface ApiExerciceRealise {
+  exercice_id: number;
+  nom: string | null;
+  series: ApiSerieRealisee[];
+}
+
 export interface ApiHistoriqueSeance {
   id: number;
   date: string;
   phase_calendaire: string;
   type_seance: string;
-  exercices_prevus: unknown[];
-  exercices_realises: unknown[];
+  exercices_prevus: ApiExercicePrevu[];
+  exercices_realises: ApiExerciceRealise[];
   rpe: number | null;
   pourcentage_complete?: number | null;
   zone_sensible_signalee?: string | null;
   xp_gagne?: number | null;
   notes: string | null;
   etat_declare_avant: ApiEtatDeclareAvant;
+  decision_adaptation?: Record<string, unknown> | null;
 }
 
 export const getHistoriqueSeances = () => request<ApiHistoriqueSeance[]>('/api/historique_seances');
-export const addHistoriqueSeance = (
-  payload: Omit<ApiHistoriqueSeance, 'id' | 'phase_calendaire' | 'xp_gagne'>
-) => request<ApiHistoriqueSeance>('/api/historique_seances', { method: 'POST', body: JSON.stringify(payload) });
 
 // ---------- Génération de séance assistée (moteur de règles + Mistral) ----------
 

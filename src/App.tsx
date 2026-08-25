@@ -4,6 +4,7 @@ import BottomNav from './components/BottomNav';
 import Today from './screens/Today';
 import Module from './screens/Module';
 import Progress from './screens/Progress';
+import Historique from './screens/Historique';
 import Programme from './screens/Programme';
 import WeeklyReview from './screens/WeeklyReview';
 import News from './screens/News';
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/" element={<Today />} />
         <Route path="/module" element={<Module />} />
         <Route path="/progression" element={<Progress />} />
+        <Route path="/historique" element={<Historique />} />
         <Route path="/programme" element={<Programme />} />
         <Route path="/bilan" element={<WeeklyReview />} />
         <Route path="/actu" element={<News />} />

@@ -186,3 +186,7 @@ class HistoriqueSeance(Base):
     xp_gagne = Column(Integer, nullable=True)
     notes = Column(String, nullable=True)
     etat_declare_avant = Column(JSON, nullable=False, default=dict)  # {sommeil, motivation, temps_dispo, envie_texte, entrainement_club_semaine}
+    # Raison/décision du moteur d'adaptation associée à cette séance, si un jour peuplée par
+    # celui-ci (colonne posée d'avance, cf. migrate.py). Non écrite pour l'instant : le moteur
+    # d'adaptation n'est pas modifié par cette étape, donc toujours null en pratique aujourd'hui.
+    decision_adaptation = Column(JSON, nullable=True)

@@ -253,15 +253,12 @@ class HistoriqueSeanceBase(BaseModel):
     etat_declare_avant: EtatDeclareAvant = EtatDeclareAvant()
 
 
-class HistoriqueSeanceCreate(HistoriqueSeanceBase):
-    pass  # phase_calendaire n'est pas fourni par le client : calculé côté serveur
-
-
 class HistoriqueSeanceOut(HistoriqueSeanceBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     phase_calendaire: str
     xp_gagne: Optional[int] = None
+    decision_adaptation: Optional[dict[str, Any]] = None
 
 
 class StatsOut(BaseModel):
