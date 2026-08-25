@@ -570,10 +570,18 @@ def _selectionner_exercices_candidats(
 
 
 def _construire_seance_secours(
-    plan: list[dict], type_seance_suggere: str, rpe_cible: int
+    plan: list[dict], type_seance_suggere: str, rpe_cible: int, charges_cibles: Optional[dict[int, float]] = None
 ) -> dict:
     """Séance de repli, construite sans IA à partir du plan déjà calibré en temps, utilisée
-    quand Mistral échoue à renvoyer des exercice_id valides après une nouvelle tentative."""
+    quand Mistral échoue à renvoyer des exercice_id valides après une nouvelle tentative.
+
+    charges_cibles (voir _construire_charges_cibles, même source de vérité que le garde-fou
+    appliqué au chemin Mistral, calculée une seule fois par generer_seance et simplement
+    transmise ici) : quand un historique réel existe pour un exercice non poids_du_corps, la
+    charge cible déterministe est utilisée directement au lieu du texte générique "à ajuster
+    selon ressenti" — texte qui, sans historique, reste le seul choix possible (aucune charge
+    n'est devinée)."""
+    charges_cibles = charges_cibles or {}
     autres = [p for p in plan if p["exercice"].type != "gainage_prevention"][:4]
     gainage = next((p for p in plan if p["exercice"].type == "gainage_prevention"), None)
 
@@ -581,12 +589,18 @@ def _construire_seance_secours(
     if gainage and gainage not in choisis:
         choisis.append(gainage)
 
+    def _charge_indicative_secours(p: dict) -> str:
+        if p["exercice"].charge_recommandee == "poids_du_corps":
+            return "poids du corps"
+        cible = charges_cibles.get(p["exercice"].id)
+        return f"{cible:g} kg" if cible is not None else "à ajuster selon ressenti"
+
     exercices = [
         {
             "exercice_id": p["exercice"].id,
             "series": p["series"],
             "repetitions": "10-12",
-            "charge_indicative": "poids du corps" if p["exercice"].charge_recommandee == "poids_du_corps" else "à ajuster selon ressenti",
+            "charge_indicative": _charge_indicative_secours(p),
             "notes": None,
             "rpe_cible": rpe_cible,
             "temps_repos_recommande_s": p["temps_repos_recommande_s"],
@@ -1099,11 +1113,15 @@ def generer_seance(
         data = reponse
         break
 
+    # Calculée une seule fois, avant de savoir si on utilisera Mistral ou le secours : même
+    # source de vérité pour les deux chemins (voir _construire_seance_secours et
+    # _corriger_charges_hors_tolerance), aucun calcul dupliqué.
+    charges_cibles = _construire_charges_cibles(plan, recommandation.get("ajustement_charge_pct", 0.0), db)
+
     if data is None:
         logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
-        data = _construire_seance_secours(plan, recommandation["type_seance_suggere"], rpe_cible)
+        data = _construire_seance_secours(plan, recommandation["type_seance_suggere"], rpe_cible, charges_cibles)
 
-    charges_cibles = _construire_charges_cibles(plan, recommandation.get("ajustement_charge_pct", 0.0), db)
     _corriger_charges_hors_tolerance(data["exercices"], charges_cibles)
 
     duree_calibree_min = duree_seance.duree_totale_estimee_min(plan)

@@ -17,6 +17,7 @@ import models
 from main import (
     _charge_prevue_depuis_indicative,
     _construire_charges_cibles,
+    _construire_seance_secours,
     _corriger_charges_hors_tolerance,
     _derniere_charge_reelle,
 )
@@ -329,6 +330,103 @@ class TestGardeFouCharge(unittest.TestCase):
             plan = self._plan(1, db)
             cibles = _construire_charges_cibles(plan, 0.0, db)  # cible 50kg
             exercices = [{"exercice_id": 1, "charge_indicative": "90 kg"}]  # numérique, clair, hors tolérance
+            _corriger_charges_hors_tolerance(exercices, cibles)
+        self.assertEqual(exercices[0]["charge_indicative"], "50 kg")
+
+
+class TestSeanceSecoursChargeCible(unittest.TestCase):
+    """Chemin secours (Mistral indisponible) : doit utiliser directement la charge cible
+    déterministe issue de _construire_charges_cibles (même source de vérité que le garde-fou
+    du chemin Mistral, aucun second calcul) quand un historique réel existe, et conserver
+    "à ajuster selon ressenti" faute de référence fiable — jamais de charge devinée."""
+
+    def setUp(self):
+        self.engine, self.TestSessionLocal = _setup_db_memoire()
+        with self.TestSessionLocal() as db:
+            db.add(models.ExerciceBibliotheque(id=1, nom="Squat", groupe_musculaire="jambes", type="force", charge_recommandee="charge_lourde_progressive"))
+            db.add(models.ExerciceBibliotheque(id=5, nom="Développé couché", groupe_musculaire="pecs", type="force", charge_recommandee="charge_moderee"))
+            db.add(models.ExerciceBibliotheque(id=6, nom="Gainage", groupe_musculaire="abdos", type="gainage_prevention", charge_recommandee="poids_du_corps"))
+            db.commit()
+
+    def _log_seance_avec_charge(self, db, seance_id, exercice_id, poids_kg, jour):
+        db.add(models.Seance(id=seance_id, date=date(2026, 8, jour), nom="Séance", exercices=[]))
+        db.add(
+            models.SerieLoggee(
+                seance_id=seance_id,
+                exercice_id=exercice_id,
+                numero_serie=1,
+                poids_kg=poids_kg,
+                repetitions=8,
+                coche=1,
+            )
+        )
+        db.commit()
+
+    def _plan(self, db, *ex_ids):
+        exs = [db.get(models.ExerciceBibliotheque, ex_id) for ex_id in ex_ids]
+        return [{"exercice": ex, "series": 3, "temps_repos_recommande_s": 90} for ex in exs]
+
+    # --- A : historique réel + charge cible calculée -> charge numérique cible dans le secours ---
+
+    def test_a_secours_avec_historique_reel_utilise_la_charge_cible(self):
+        with self.TestSessionLocal() as db:
+            self._log_seance_avec_charge(db, 1, 1, 50.0, jour=1)  # Squat, historique réel
+            plan = self._plan(db, 1, 6)
+            cibles = _construire_charges_cibles(plan, 0.0, db)  # cible Squat = 50kg
+            data = _construire_seance_secours(plan, "force", rpe_cible=7, charges_cibles=cibles)
+        squat = next(item for item in data["exercices"] if item["exercice_id"] == 1)
+        self.assertEqual(squat["charge_indicative"], "50 kg")
+
+    def test_a_bis_secours_avec_ajustement_positif_utilise_la_charge_cible_ajustee(self):
+        with self.TestSessionLocal() as db:
+            self._log_seance_avec_charge(db, 1, 1, 50.0, jour=1)
+            plan = self._plan(db, 1)
+            cibles = _construire_charges_cibles(plan, 10.0, db)  # 50 * 1.10 = 55kg
+            data = _construire_seance_secours(plan, "force", rpe_cible=7, charges_cibles=cibles)
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "55 kg")
+
+    # --- B : pas d'historique comparable / pas de cible -> "à ajuster selon ressenti" conservé ---
+
+    def test_b_secours_sans_historique_conserve_texte_generique(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 5)  # Développé couché jamais loggé
+            cibles = _construire_charges_cibles(plan, 0.0, db)  # vide : aucune référence
+            data = _construire_seance_secours(plan, "force", rpe_cible=7, charges_cibles=cibles)
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "à ajuster selon ressenti")
+
+    def test_b_bis_secours_sans_charges_cibles_du_tout_conserve_texte_generique(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 5)
+            data = _construire_seance_secours(plan, "force", rpe_cible=7)  # charges_cibles omis
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "à ajuster selon ressenti")
+
+    def test_secours_poids_du_corps_toujours_inchange(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 1, 6)
+            cibles = _construire_charges_cibles(plan, 0.0, db)
+            data = _construire_seance_secours(plan, "force", rpe_cible=7, charges_cibles=cibles)
+        gainage = next(item for item in data["exercices"] if item["exercice_id"] == 6)
+        self.assertEqual(gainage["charge_indicative"], "poids du corps")
+
+    # --- C : chemin Mistral avec texte ambigu -> aucune correction (garde-fou inchangé) ---
+
+    def test_c_mistral_texte_ambigu_aucune_correction(self):
+        with self.TestSessionLocal() as db:
+            self._log_seance_avec_charge(db, 1, 1, 50.0, jour=1)
+            plan = self._plan(db, 1)
+            cibles = _construire_charges_cibles(plan, 0.0, db)  # cible 50kg
+            exercices = [{"exercice_id": 1, "charge_indicative": "2 haltères de 10 kg"}]
+            _corriger_charges_hors_tolerance(exercices, cibles)
+        self.assertEqual(exercices[0]["charge_indicative"], "2 haltères de 10 kg")
+
+    # --- D : chemin Mistral avec charge numérique hors tolérance -> correction normale ---
+
+    def test_d_mistral_charge_numerique_hors_tolerance_corrigee(self):
+        with self.TestSessionLocal() as db:
+            self._log_seance_avec_charge(db, 1, 1, 50.0, jour=1)
+            plan = self._plan(db, 1)
+            cibles = _construire_charges_cibles(plan, 0.0, db)  # cible 50kg
+            exercices = [{"exercice_id": 1, "charge_indicative": "90 kg"}]
             _corriger_charges_hors_tolerance(exercices, cibles)
         self.assertEqual(exercices[0]["charge_indicative"], "50 kg")
 
