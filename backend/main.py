@@ -619,6 +619,94 @@ def _corriger_charges_poids_du_corps(exercices: list[dict], charge_recommandee_p
         item["charge_indicative"] = "poids du corps"
 
 
+TOLERANCE_CHARGE_RELATIVE = 0.075  # 7.5% de la charge cible
+TOLERANCE_CHARGE_MIN_KG = 2.5  # absorbe l'arrondi aux disques de 2.5kg (voir charge_depart.py)
+
+
+def _derniere_charge_reelle(exercice_id: int, db: Session) -> Optional[float]:
+    """Moyenne des poids_kg des séries cochées de la dernière séance (par date, puis id
+    en tie-break) où cet exercice a réellement été effectué, ou None si aucun historique
+    réel n'existe pour cet exercice."""
+    derniere = (
+        db.query(models.SerieLoggee.seance_id)
+        .join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
+        .filter(
+            models.SerieLoggee.exercice_id == exercice_id,
+            models.SerieLoggee.coche == 1,
+            models.SerieLoggee.poids_kg.isnot(None),
+        )
+        .order_by(models.Seance.date.desc(), models.SerieLoggee.id.desc())
+        .first()
+    )
+    if derniere is None:
+        return None
+
+    poids = [
+        row[0]
+        for row in db.query(models.SerieLoggee.poids_kg)
+        .filter(
+            models.SerieLoggee.seance_id == derniere[0],
+            models.SerieLoggee.exercice_id == exercice_id,
+            models.SerieLoggee.coche == 1,
+            models.SerieLoggee.poids_kg.isnot(None),
+        )
+        .all()
+    ]
+    if not poids:
+        return None
+    return sum(poids) / len(poids)
+
+
+def _construire_charges_cibles(
+    plan: list[dict],
+    ajustement_charge_pct: float,
+    db: Session,
+) -> dict[int, float]:
+    """Calcule, pour chaque exercice du plan disposant d'un historique réel loggé
+    (voir _derniere_charge_reelle) et non marqué poids_du_corps, la charge cible (kg)
+    issue de l'ajustement décidé par regles_seance.py. Les exercices sans historique
+    comparable (jamais loggés) sont absents du résultat : aucune charge n'est forcée
+    dessus, faute de référence fiable."""
+    cibles: dict[int, float] = {}
+    for p in plan:
+        ex = p["exercice"]
+        if ex.charge_recommandee == "poids_du_corps":
+            continue
+        reference = _derniere_charge_reelle(ex.id, db)
+        if reference is None:
+            continue
+        cible = reference * (1 + ajustement_charge_pct / 100)
+        cibles[ex.id] = max(round(cible / 2.5) * 2.5, 2.5)
+    return cibles
+
+
+def _corriger_charges_hors_tolerance(exercices: list[dict], charges_cibles: dict[int, float]) -> None:
+    """Garde-fou post-génération : le backend reste l'autorité finale sur la charge quand un
+    historique réel existe. Pour chaque exercice ayant une charge cible calculée (voir
+    _construire_charges_cibles), force charge_indicative à la cible si Mistral a renvoyé une
+    valeur absente, non parsable, ou hors tolérance — sinon laisse la valeur de Mistral
+    inchangée (variations légitimes dans la tolérance)."""
+    for item in exercices:
+        cible = charges_cibles.get(item.get("exercice_id"))
+        if cible is None:
+            continue
+        actuelle = _charge_prevue_depuis_indicative(item.get("charge_indicative"))
+        tolerance = max(TOLERANCE_CHARGE_MIN_KG, cible * TOLERANCE_CHARGE_RELATIVE)
+        if actuelle is not None and abs(actuelle - cible) <= tolerance:
+            continue
+        ancienne = item.get("charge_indicative")
+        item["charge_indicative"] = f"{cible:g} kg"
+        logger.warning(
+            "Charge hors tolérance pour exercice %s : Mistral a renvoyé %r, cible calculée "
+            "%.1fkg (tolérance ±%.1fkg) -> corrigée à %.1fkg.",
+            item.get("exercice_id"),
+            ancienne,
+            cible,
+            tolerance,
+            cible,
+        )
+
+
 def _appliquer_calibrage_temps(exercices: list[dict], plan: list[dict], rpe_cible: int) -> None:
     """Garde-fou post-génération : impose series / temps_repos_recommande_s à partir du plan
     calculé côté serveur (duree_seance.calibrer_exercices) et rpe_cible par défaut, plutôt que
@@ -978,6 +1066,9 @@ def generer_seance(
     if data is None:
         logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
         data = _construire_seance_secours(plan, recommandation["type_seance_suggere"], rpe_cible)
+
+    charges_cibles = _construire_charges_cibles(plan, recommandation.get("ajustement_charge_pct", 0.0), db)
+    _corriger_charges_hors_tolerance(data["exercices"], charges_cibles)
 
     duree_calibree_min = duree_seance.duree_totale_estimee_min(plan)
 
