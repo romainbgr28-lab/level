@@ -74,6 +74,17 @@ def obtenir_priorites_poste(poste: str) -> list[str]:
     return list(PRIORITES_POSTE.get(poste, []))
 
 
+def _rpe_liste(seances: list[dict[str, Any]]) -> str:
+    return ", ".join(str(s.get("rpe")) if s.get("rpe") is not None else "?" for s in seances)
+
+
+def _complete_liste(seances: list[dict[str, Any]]) -> str:
+    return ", ".join(
+        f"{s['pourcentage_complete']:.0f}%" if s.get("pourcentage_complete") is not None else "?"
+        for s in seances
+    )
+
+
 def calculer_ajustement_charge(
     historique_3_dernieres_seances_meme_type: list[dict[str, Any]],
     niveau_physique_onboarding: Optional[str] = None,
@@ -84,6 +95,11 @@ def calculer_ajustement_charge(
     Chaque entrée d'historique attendue : {"date": date|str, "rpe": int|None,
     "pourcentage_complete": float|None}. Retourne
     {"charge_pct": float, "volume_pct": float, "raison": str}.
+
+    Logique en cascade à décision unique (une seule règle s'applique, pas de cumul entre
+    règles) : sécurité/reprise > décharge par accumulation > réduction liée au RPE de la
+    dernière séance > réduction liée à la complétion de la dernière séance > progression sur
+    plusieurs séances consécutives maîtrisées > signal positif isolé > maintien par défaut.
     """
     if not historique_3_dernieres_seances_meme_type:
         return {
@@ -100,41 +116,116 @@ def calculer_ajustement_charge(
 
     seances = sorted(historique_3_dernieres_seances_meme_type, key=lambda s: _as_date(s["date"]), reverse=True)
     derniere = seances[0]
+    rpe = derniere.get("rpe")
+    pourcentage = derniere.get("pourcentage_complete")
 
+    # 1. Sécurité / reprise après interruption : prioritaire sur toute progression ou décharge.
     jours_ecart = ((aujourdhui or date.today()) - _as_date(derniere["date"])).days
     if jours_ecart > 10:
         return {
             "charge_pct": -15.0,
             "volume_pct": 0.0,
-            "raison": f"Dernière séance de ce type il y a {jours_ecart} jours : charge réduite par précaution.",
+            "raison": f"Dernière séance de ce type il y a {jours_ecart} jours : charge réduite par précaution pour une reprise en douceur.",
         }
 
-    rpe = derniere.get("rpe")
-    pourcentage = derniere.get("pourcentage_complete")
+    # 2. Décharge par accumulation : 3 dernières séances toutes dures ou incomplètes.
+    if len(seances) >= 3:
+        trois_dernieres = seances[:3]
+        toutes_dures = all(
+            (s.get("rpe") is not None and s["rpe"] >= 8)
+            or (s.get("pourcentage_complete") is not None and s["pourcentage_complete"] < 70)
+            for s in trois_dernieres
+        )
+        if toutes_dures:
+            return {
+                "charge_pct": -15.0,
+                "volume_pct": -20.0,
+                "raison": (
+                    f"Les trois dernières séances de ce type ont été difficiles ou incomplètes "
+                    f"(RPE {_rpe_liste(trois_dernieres)}, complétion {_complete_liste(trois_dernieres)}). "
+                    "Semaine de décharge : charge et volume fortement réduits."
+                ),
+            }
 
-    if (rpe is not None and rpe >= 8) or (pourcentage is not None and pourcentage < 70):
+    # 3. Réduction liée au RPE de la dernière séance.
+    if rpe is not None and rpe >= 9:
         return {
             "charge_pct": -10.0,
-            "volume_pct": -15.0,
-            "raison": "RPE élevé (≥ 8) ou séance récente incomplète (< 70%) : on réduit charge et volume.",
+            "volume_pct": -12.0,
+            "raison": f"La dernière séance a été très difficile (RPE {rpe}). Je réduis nettement la charge pour favoriser la récupération.",
         }
 
+    if rpe is not None and rpe == 8:
+        return {
+            "charge_pct": -5.0,
+            "volume_pct": -5.0,
+            "raison": "La dernière séance a été difficile (RPE 8). Je réduis légèrement la charge.",
+        }
+
+    # 4. Réduction liée à la complétion de la dernière séance (bloque toute progression).
+    if pourcentage is not None and pourcentage < 70:
+        return {
+            "charge_pct": -5.0,
+            "volume_pct": -10.0,
+            "raison": f"La dernière séance n'a été complétée qu'à {pourcentage:.0f}%. Je réduis le volume plutôt que de progresser.",
+        }
+
+    # 5. Progression modérée : 3 dernières séances consécutives faciles et bien terminées.
+    if len(seances) >= 3:
+        trois_dernieres = seances[:3]
+        toutes_faciles = all(
+            s.get("rpe") is not None
+            and s["rpe"] <= 5
+            and s.get("pourcentage_complete") is not None
+            and s["pourcentage_complete"] >= 90
+            for s in trois_dernieres
+        )
+        if toutes_faciles:
+            return {
+                "charge_pct": 8.0,
+                "volume_pct": 5.0,
+                "raison": (
+                    f"Les trois dernières séances de ce type ont été maîtrisées avec facilité "
+                    f"(RPE {_rpe_liste(trois_dernieres)}, complétion {_complete_liste(trois_dernieres)}). "
+                    "Je fais progresser charge et volume."
+                ),
+            }
+
+    # 6. Progression légère : 2 dernières séances consécutives maîtrisées.
     if len(seances) >= 2:
+        deux_dernieres = seances[:2]
         deux_dernieres_maitrisees = all(
             s.get("rpe") is not None
             and s["rpe"] <= 6
             and s.get("pourcentage_complete") is not None
             and s["pourcentage_complete"] >= 90
-            for s in seances[:2]
+            for s in deux_dernieres
         )
         if deux_dernieres_maitrisees:
             return {
                 "charge_pct": 5.0,
                 "volume_pct": 0.0,
-                "raison": "Deux dernières séances de ce type maîtrisées (RPE ≤ 6, complétion ≥ 90%) : charge légèrement augmentée.",
+                "raison": (
+                    f"Les deux dernières séances de ce type ont été maîtrisées "
+                    f"(RPE {_rpe_liste(deux_dernieres)}, complétion {_complete_liste(deux_dernieres)}). "
+                    "J'augmente légèrement la charge."
+                ),
             }
 
-    return {"charge_pct": 0.0, "volume_pct": 0.0, "raison": "Pas de signal fort dans l'historique récent : charge inchangée."}
+    # 7. Signal positif isolé (une séance facile et bien terminée, mais pas encore de preuve
+    # suffisante pour progresser).
+    if rpe is not None and 4 <= rpe <= 5 and pourcentage is not None and pourcentage >= 90:
+        return {
+            "charge_pct": 0.0,
+            "volume_pct": 0.0,
+            "raison": (
+                f"La dernière séance a été facile et bien terminée (RPE {rpe}, complétion {pourcentage:.0f}%). "
+                "C'est un bon signal, mais j'attends une confirmation avant d'augmenter la charge."
+            ),
+        }
+
+    # 8. Maintien par défaut.
+    return {"charge_pct": 0.0, "volume_pct": 0.0, "raison": "Pas de signal fort dans l'historique récent : charge et volume inchangés."}
 
 
 def appliquer_garde_fous(
