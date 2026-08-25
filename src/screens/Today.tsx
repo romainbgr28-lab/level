@@ -24,7 +24,12 @@ import type {
   ApiSerieLoggee,
   ApiTerminerSeanceResult,
 } from '../api/client';
-import { phaseCourante, semaineActuelle, typeSeanceGabaritAujourdhui } from '../utils/programme';
+import {
+  phaseCourante,
+  prochaineSeanceGabarit,
+  semaineActuelle,
+  typeSeanceGabaritAujourdhui,
+} from '../utils/programme';
 import { typeSeanceMeta } from '../data/programmeTypes';
 
 const dateLabel = new Date().toLocaleDateString('fr-FR', {
@@ -115,17 +120,41 @@ export default function Today() {
   const [resultat, setResultat] = useState<ApiTerminerSeanceResult | null>(null);
 
   useEffect(() => {
-    getProgrammeActif()
-      .then(setProgramme)
-      .catch(() => setProgramme(null));
-    getTodaySeance().then((s) => {
-      if (s) {
-        setSeance(s);
-        setView(s.statut === 'terminee' ? 'terminee' : 'seance');
-      } else {
-        setView('no-seance');
+    (async () => {
+      const prog = await getProgrammeActif().catch(() => null);
+      setProgramme(prog);
+
+      const existante = await getTodaySeance().catch(() => null);
+      if (existante) {
+        setSeance(existante);
+        setView(existante.statut === 'terminee' ? 'terminee' : 'seance');
+        return;
       }
-    });
+
+      const typeGabarit = prog ? typeSeanceGabaritAujourdhui(prog) : undefined;
+      if (prog && typeGabarit && typeGabarit !== 'repos') {
+        // Programme actif avec une séance prévue aujourd'hui : on la génère
+        // automatiquement, sans attendre un clic sur "Générer ma séance".
+        try {
+          const generee = await genererSeance({
+            sommeil: null,
+            motivation: null,
+            temps_dispo: null,
+            envie_texte: null,
+            entrainement_club_semaine: null,
+            type_seance_force: null,
+            forcer_seance_legere: false,
+          });
+          setSeance(generee);
+          setView('seance');
+          return;
+        } catch {
+          // Si la génération automatique échoue, on retombe sur le flux manuel.
+        }
+      }
+
+      setView('no-seance');
+    })();
   }, []);
 
   const planDuJour = useMemo(() => {
@@ -377,11 +406,21 @@ export default function Today() {
       {view === 'no-seance' && planDuJour?.typeGabarit === 'repos' && (
         <section className="card">
           <div className="card__eyebrow">Séance du jour</div>
-          <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour de repos prévu par ton programme</p>
-          <p className="subtle" style={{ margin: '0 0 14px' }}>
-            Semaine {planDuJour.semaine}/{programme?.duree_semaines}
-            {planDuJour.phase ? ` — phase ${planDuJour.phase.nom}` : ''}.
+          <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Repos prévu</p>
+          <p className="subtle" style={{ margin: '0 0 6px' }}>
+            Pourquoi ? Aucune séance programmée aujourd’hui — semaine {planDuJour.semaine}/
+            {programme?.duree_semaines}
+            {planDuJour.phase ? `, phase ${planDuJour.phase.nom}` : ''}.
           </p>
+          {programme &&
+            (() => {
+              const prochaine = prochaineSeanceGabarit(programme);
+              return prochaine ? (
+                <p className="subtle" style={{ margin: '0 0 14px' }}>
+                  Prochaine séance : {prochaine.jourAbbrev} — {typeSeanceMeta(prochaine.typeGabarit).label}
+                </p>
+              ) : null;
+            })()}
           <button
             className="btn btn--ghost"
             onClick={() => {

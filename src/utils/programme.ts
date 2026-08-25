@@ -30,3 +30,19 @@ export function jourAbbrevAujourdhui(): string {
 export function typeSeanceGabaritAujourdhui(programme: ApiProgramme): string | undefined {
   return programme.gabarit_hebdomadaire[jourAbbrevAujourdhui()];
 }
+
+/** Prochain jour (après aujourd'hui) où le gabarit hebdomadaire prévoit une séance
+ * (type différent de "repos"), en cherchant sur les 7 prochains jours. */
+export function prochaineSeanceGabarit(
+  programme: ApiProgramme,
+): { jourAbbrev: string; typeGabarit: string } | undefined {
+  const indexAujourdhui = JOURS_SEMAINE_ABBREV.indexOf(jourAbbrevAujourdhui());
+  for (let offset = 1; offset <= 7; offset++) {
+    const jourAbbrev = JOURS_SEMAINE_ABBREV[(indexAujourdhui + offset) % 7];
+    const typeGabarit = programme.gabarit_hebdomadaire[jourAbbrev];
+    if (typeGabarit && typeGabarit !== 'repos') {
+      return { jourAbbrev, typeGabarit };
+    }
+  }
+  return undefined;
+}
