@@ -302,6 +302,10 @@ class TerminerSeancePayload(BaseModel):
     rpe: Optional[int] = None
     note: Optional[str] = None  # ressenti général en texte libre, optionnel
     duree_reelle_min: Optional[int] = None  # durée réellement écoulée, déclarée par le joueur
+    # Zone sensible ressentie pendant la séance, valeur contrôlée parmi ZONES_SENSIBLES_VALIDES
+    # (voir main.py) — réutilise exactement les libellés attendus par
+    # regles_seance.GROUPES_PAR_TYPE_SEANCE pour garantir le matching côté garde-fous.
+    zone_sensible: Optional[str] = None
 
 
 class TerminerSeanceOut(BaseModel):

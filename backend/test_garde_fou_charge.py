@@ -430,6 +430,67 @@ class TestSeanceSecoursChargeCible(unittest.TestCase):
             _corriger_charges_hors_tolerance(exercices, cibles)
         self.assertEqual(exercices[0]["charge_indicative"], "50 kg")
 
+    # --- Étape 6 : charges_depart utilisé par le secours en priorité 3 (avant le texte
+    # générique), sans jamais recevoir ajustement_charge_pct ---
+
+    def test_secours_sans_historique_avec_estimation_depart_utilisee(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 5)  # Développé couché, jamais loggé
+            cibles = _construire_charges_cibles(plan, 0.0, db)  # vide : aucune référence réelle
+            data = _construire_seance_secours(
+                plan, "force", rpe_cible=7, charges_cibles=cibles, charges_depart={5: 20.0}
+            )
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "20 kg (estimation de départ)")
+
+    def test_secours_priorite_historique_reel_sur_estimation_depart(self):
+        with self.TestSessionLocal() as db:
+            self._log_seance_avec_charge(db, 1, 1, 50.0, jour=1)  # Squat, historique réel
+            plan = self._plan(db, 1)
+            cibles = _construire_charges_cibles(plan, 0.0, db)  # cible réelle = 50kg
+            # charges_depart contient aussi une estimation pour ce même exercice : la charge
+            # cible réelle doit toujours primer sur l'estimation de départ.
+            data = _construire_seance_secours(
+                plan, "force", rpe_cible=7, charges_cibles=cibles, charges_depart={1: 15.0}
+            )
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "50 kg")
+
+    def test_secours_sans_estimation_ni_historique_conserve_texte_generique(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 5)
+            cibles = _construire_charges_cibles(plan, 0.0, db)
+            data = _construire_seance_secours(
+                plan, "force", rpe_cible=7, charges_cibles=cibles, charges_depart={}
+            )
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "à ajuster selon ressenti")
+
+    def test_secours_charges_depart_omis_conserve_comportement_actuel(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 5)
+            data = _construire_seance_secours(plan, "force", rpe_cible=7)  # charges_depart omis
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "à ajuster selon ressenti")
+
+    def test_secours_poids_du_corps_ignore_charges_depart(self):
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 6)  # Gainage, poids_du_corps
+            data = _construire_seance_secours(
+                plan, "force", rpe_cible=7, charges_cibles={}, charges_depart={6: 999.0}
+            )
+        # Un exercice poids_du_corps ne doit jamais afficher de charge estimée, quelle
+        # que soit charges_depart : la nature de l'exercice prime.
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "poids du corps")
+
+    def test_secours_ne_recalcule_pas_charges_depart_a_partir_de_ajustement(self):
+        """charges_depart est transmis tel quel, jamais recombiné avec ajustement_charge_pct
+        (contrairement à charges_cibles) : une estimation de départ à 20kg avec un ajustement
+        fort ne doit surtout pas devenir 20 * 1.5 = 30kg."""
+        with self.TestSessionLocal() as db:
+            plan = self._plan(db, 5)  # jamais loggé
+            cibles = _construire_charges_cibles(plan, 50.0, db)  # ajustement fort mais vide (pas d'historique)
+            data = _construire_seance_secours(
+                plan, "force", rpe_cible=7, charges_cibles=cibles, charges_depart={5: 20.0}
+            )
+        self.assertEqual(data["exercices"][0]["charge_indicative"], "20 kg (estimation de départ)")
+
 
 if __name__ == "__main__":
     unittest.main()

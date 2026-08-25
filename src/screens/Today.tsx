@@ -46,6 +46,18 @@ const CLUB_SEMAINE_OPTIONS: { value: string; label: string }[] = [
   { value: '1_fois', label: 'Oui, 1 fois' },
   { value: '2_fois_ou_plus', label: 'Oui, 2 fois ou plus' },
 ];
+// Valeurs contrôlées identiques à backend/main.py::ZONES_SENSIBLES_VALIDES (groupes musculaires
+// de regles_seance.GROUPES_PAR_TYPE_SEANCE) : ne pas ajouter de libellé qui n'y figure pas, le
+// matching des garde-fous se fait par égalité de chaîne.
+const ZONE_SENSIBLE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Aucune' },
+  { value: 'jambes', label: 'Jambes' },
+  { value: 'dos', label: 'Dos' },
+  { value: 'épaules', label: 'Épaules' },
+  { value: 'bras', label: 'Bras' },
+  { value: 'mollets', label: 'Mollets' },
+  { value: 'abdos', label: 'Abdos' },
+];
 const TYPE_SEANCE_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Automatique (recommandé)' },
   { value: 'force', label: 'Force' },
@@ -120,6 +132,7 @@ export default function Today() {
 
   const [rpe, setRpe] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [zoneSensible, setZoneSensible] = useState('');
   const [resultat, setResultat] = useState<ApiTerminerSeanceResult | null>(null);
 
   useEffect(() => {
@@ -373,6 +386,7 @@ export default function Today() {
         rpe,
         note: note.trim() || null,
         duree_reelle_min: Math.round(elapsedSec / 60),
+        zone_sensible: zoneSensible || null,
       });
       setResultat(res);
       setView('terminee');
@@ -918,6 +932,19 @@ export default function Today() {
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
+          <div className="section-title">Zone sensible ressentie pendant la séance (optionnel)</div>
+          <div className="tag-row">
+            {ZONE_SENSIBLE_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`tag tag--selectable ${zoneSensible === o.value ? 'tag--active' : ''}`}
+                onClick={() => setZoneSensible(o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
           {error && (
             <p className="subtle" style={{ color: '#e5484d', margin: '4px 0 12px' }}>
               {error}

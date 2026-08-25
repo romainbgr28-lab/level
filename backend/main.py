@@ -521,6 +521,13 @@ def _materiel_compatible(materiel_requis: Optional[str], materiel_disponible: st
     return any(mot in md for mot in mots_requis)
 
 
+# Valeurs contrôlées pour TerminerSeancePayload.zone_sensible, exactement les groupes musculaires
+# utilisés par regles_seance.GROUPES_PAR_TYPE_SEANCE (union de toutes les valeurs de cette table) :
+# réutiliser d'autres libellés casserait le matching de appliquer_garde_fous/
+# _groupe_concerne_par_zone_sensible, qui comparent par égalité de chaîne (insensible à la casse).
+ZONES_SENSIBLES_VALIDES = ["jambes", "dos", "épaules", "bras", "mollets", "abdos"]
+
+
 def _groupe_concerne_par_zone_sensible(groupe_musculaire: str, zones_sensibles: list[str]) -> bool:
     gm = (groupe_musculaire or "").lower()
     return any(zone.lower() in gm for zone in zones_sensibles if zone)
@@ -570,7 +577,11 @@ def _selectionner_exercices_candidats(
 
 
 def _construire_seance_secours(
-    plan: list[dict], type_seance_suggere: str, rpe_cible: int, charges_cibles: Optional[dict[int, float]] = None
+    plan: list[dict],
+    type_seance_suggere: str,
+    rpe_cible: int,
+    charges_cibles: Optional[dict[int, float]] = None,
+    charges_depart: Optional[dict[int, float]] = None,
 ) -> dict:
     """Séance de repli, construite sans IA à partir du plan déjà calibré en temps, utilisée
     quand Mistral échoue à renvoyer des exercice_id valides après une nouvelle tentative.
@@ -579,9 +590,15 @@ def _construire_seance_secours(
     appliqué au chemin Mistral, calculée une seule fois par generer_seance et simplement
     transmise ici) : quand un historique réel existe pour un exercice non poids_du_corps, la
     charge cible déterministe est utilisée directement au lieu du texte générique "à ajuster
-    selon ressenti" — texte qui, sans historique, reste le seul choix possible (aucune charge
-    n'est devinée)."""
+    selon ressenti".
+
+    charges_depart (voir _construire_charges_depart, même source de vérité que celle injectée
+    dans le prompt Mistral, calculée une seule fois par generer_seance et simplement transmise
+    ici) : à défaut d'historique réel, sert de repli avant le texte générique — jamais
+    d'ajustement_charge_pct appliqué dessus (charges_depart est une estimation poids du corps
+    sans référence réelle, pas une progression)."""
     charges_cibles = charges_cibles or {}
+    charges_depart = charges_depart or {}
     autres = [p for p in plan if p["exercice"].type != "gainage_prevention"][:4]
     gainage = next((p for p in plan if p["exercice"].type == "gainage_prevention"), None)
 
@@ -593,7 +610,12 @@ def _construire_seance_secours(
         if p["exercice"].charge_recommandee == "poids_du_corps":
             return "poids du corps"
         cible = charges_cibles.get(p["exercice"].id)
-        return f"{cible:g} kg" if cible is not None else "à ajuster selon ressenti"
+        if cible is not None:
+            return f"{cible:g} kg"
+        depart = charges_depart.get(p["exercice"].id)
+        if depart is not None:
+            return f"{depart:g} kg (estimation de départ)"
+        return "à ajuster selon ressenti"
 
     exercices = [
         {
@@ -759,8 +781,12 @@ def _corriger_charges_hors_tolerance(exercices: list[dict], charges_cibles: dict
 
 def _appliquer_calibrage_temps(exercices: list[dict], plan: list[dict], rpe_cible: int) -> None:
     """Garde-fou post-génération : impose series / temps_repos_recommande_s à partir du plan
-    calculé côté serveur (duree_seance.calibrer_exercices) et rpe_cible par défaut, plutôt que
-    de laisser Mistral décider seul du respect du temps disponible."""
+    calculé côté serveur (duree_seance.calibrer_exercices) et plafonne rpe_cible à rpe_cible
+    (dérivé de intensite_max par regles_seance/duree_seance.rpe_cible_pour_intensite — le
+    moteur de règles reste la seule source de vérité, cette fonction ne fait qu'appliquer son
+    plafond), plutôt que de laisser Mistral décider seul du respect du temps disponible et de
+    l'intensité max. Un rpe_cible absent/non entier reprend directement le plafond ; un rpe_cible
+    inférieur ou égal au plafond est laissé inchangé ; seul un dépassement est corrigé."""
     plan_par_id = {item["exercice"].id: item for item in plan}
     for item in exercices:
         p = plan_par_id.get(item.get("exercice_id"))
@@ -768,7 +794,7 @@ def _appliquer_calibrage_temps(exercices: list[dict], plan: list[dict], rpe_cibl
             continue
         item["series"] = p["series"]
         item["temps_repos_recommande_s"] = p["temps_repos_recommande_s"]
-        if not isinstance(item.get("rpe_cible"), int):
+        if not isinstance(item.get("rpe_cible"), int) or item["rpe_cible"] > rpe_cible:
             item["rpe_cible"] = rpe_cible
 
 
@@ -1120,7 +1146,9 @@ def generer_seance(
 
     if data is None:
         logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
-        data = _construire_seance_secours(plan, recommandation["type_seance_suggere"], rpe_cible, charges_cibles)
+        data = _construire_seance_secours(
+            plan, recommandation["type_seance_suggere"], rpe_cible, charges_cibles, charges_depart
+        )
 
     # Capture de l'état pré-correction pour détecter ce que le garde-fou Étape 4 corrige
     # réellement (voir _corriger_charges_hors_tolerance, non modifiée), sans dupliquer sa logique.
@@ -1272,7 +1300,10 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
         exercices_realises=exercices_realises,
         rpe=rpe,
         pourcentage_complete=pourcentage_complete,
-        zone_sensible_signalee=None,
+        # Valeur contrôlée (voir ZONES_SENSIBLES_VALIDES) déclarée en fin de séance par le
+        # joueur ; toute valeur hors liste (ex: "Aucune" côté frontend, ou une valeur invalide)
+        # est traitée comme "pas de zone sensible" plutôt que d'être enregistrée telle quelle.
+        zone_sensible_signalee=payload.zone_sensible if payload.zone_sensible in ZONES_SENSIBLES_VALIDES else None,
         xp_gagne=xp_gagne,
         notes=payload.note,
         # Reportés tels quels depuis la Seance liée (capturés à la génération, cf.

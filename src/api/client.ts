@@ -342,6 +342,7 @@ export const terminerSeanceIA = (payload: {
   rpe: number | null;
   note: string | null;
   duree_reelle_min?: number | null;
+  zone_sensible?: string | null;
 }) => request<ApiTerminerSeanceResult>('/api/seance/terminer', { method: 'POST', body: JSON.stringify(payload) });
 
 // ---------- Programme structuré (8 semaines) ----------

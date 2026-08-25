@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { getHistoriqueSeances } from '../api/client';
-import type { ApiExerciceRealise, ApiHistoriqueSeance } from '../api/client';
+import type { ApiEtatDeclareAvant, ApiExerciceRealise, ApiHistoriqueSeance } from '../api/client';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -21,8 +21,9 @@ function DecisionAdaptation({ decision }: { decision: Record<string, unknown> })
   const chargePct = formatPct(decision.ajustement_charge_pct);
   const volumePct = formatPct(decision.ajustement_volume_pct);
   const intensiteMax = typeof decision.intensite_max === 'string' ? decision.intensite_max : null;
-  const raisons = Array.isArray(decision.raisons) ? (decision.raisons as unknown[]) : [];
-  const raisonPrincipale = typeof raisons[0] === 'string' ? (raisons[0] as string) : null;
+  const raisons = (Array.isArray(decision.raisons) ? (decision.raisons as unknown[]) : []).filter(
+    (r): r is string => typeof r === 'string'
+  );
   const correctionAppliquee = decision.correction_charge_appliquee === true;
 
   return (
@@ -32,8 +33,39 @@ function DecisionAdaptation({ decision }: { decision: Record<string, unknown> })
         {chargePct && <li>Charge : {chargePct}</li>}
         {volumePct && <li>Volume : {volumePct}</li>}
         {intensiteMax && <li>Intensité max : {intensiteMax}</li>}
-        {raisonPrincipale && <li>{raisonPrincipale}</li>}
+        {raisons.map((raison, i) => (
+          <li key={i}>{raison}</li>
+        ))}
         {correctionAppliquee && <li>Une correction automatique de charge a été appliquée.</li>}
+      </ul>
+    </div>
+  );
+}
+
+const LIBELLES_ETAT_DECLARE: Record<keyof ApiEtatDeclareAvant, string> = {
+  sommeil: 'Sommeil',
+  motivation: 'Motivation',
+  temps_dispo: 'Temps dispo',
+  envie_texte: 'Envie',
+  entrainement_club_semaine: 'Club cette semaine',
+};
+
+function EtatDeclare({ etat }: { etat: ApiEtatDeclareAvant }) {
+  const champs = (Object.keys(LIBELLES_ETAT_DECLARE) as (keyof ApiEtatDeclareAvant)[])
+    .map((cle) => ({ cle, valeur: etat[cle] }))
+    .filter((c) => c.valeur != null && c.valeur !== '');
+
+  if (champs.length === 0) return null;
+
+  return (
+    <div className="subtle historique-entry__etat">
+      <strong>État déclaré avant séance</strong>
+      <ul>
+        {champs.map(({ cle, valeur }) => (
+          <li key={cle}>
+            {LIBELLES_ETAT_DECLARE[cle]} : {valeur}
+          </li>
+        ))}
       </ul>
     </div>
   );
@@ -67,6 +99,8 @@ function SeanceCard({ entry }: { entry: ApiHistoriqueSeance }) {
           {entry.rpe != null && <span className="tag">RPE {entry.rpe}</span>}
         </div>
       </div>
+
+      {entry.etat_declare_avant && <EtatDeclare etat={entry.etat_declare_avant} />}
 
       {entry.decision_adaptation && <DecisionAdaptation decision={entry.decision_adaptation} />}
 
