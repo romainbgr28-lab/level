@@ -51,6 +51,17 @@ def repos_recommande_secondes(type_exercice: str) -> int:
     return REPOS_SECONDES_PAR_TYPE.get(type_exercice, REPOS_SECONDES_DEFAUT)
 
 
+def series_cible_depuis_ajustement(ajustement_volume_pct: Optional[float]) -> int:
+    """Convertit l'ajustement de volume calculé par le moteur de règles (regles_seance,
+    ex: -30.0, +5.0) en un nombre de séries cible, arrondi à l'entier le plus proche et
+    jamais en dessous de SERIES_MIN. Sans ajustement (0 ou None), renvoie SERIES_PAR_DEFAUT :
+    comportement inchangé dans ce cas."""
+    if not ajustement_volume_pct:
+        return SERIES_PAR_DEFAUT
+    series = round(SERIES_PAR_DEFAUT * (1 + ajustement_volume_pct / 100))
+    return max(series, SERIES_MIN)
+
+
 def rpe_cible_pour_intensite(intensite_max: Optional[str]) -> int:
     return RPE_CIBLE_PAR_INTENSITE.get(intensite_max or "", RPE_CIBLE_DEFAUT)
 
@@ -88,17 +99,23 @@ def _duree_totale_min(plan: list[dict[str, Any]]) -> float:
     return DUREE_ECHAUFFEMENT_MIN + sum(_duree_exercice_min(item["series"], item["exercice"].type) for item in plan)
 
 
-def calibrer_exercices(candidats: list, temps_dispo_min: Optional[int]) -> list[dict[str, Any]]:
+def calibrer_exercices(
+    candidats: list, temps_dispo_min: Optional[int], series_cible: int = SERIES_PAR_DEFAUT
+) -> list[dict[str, Any]]:
     """Construit, pour chaque exercice candidat, un plan {"exercice", "series",
-    "temps_repos_recommande_s"}, puis réduit d'abord le nombre de séries (jamais en
-    dessous de SERIES_MIN) et, si ça ne suffit pas, le nombre d'exercices (jamais le
-    dernier de la liste, conventionnellement le gainage_prevention de fin de séance),
-    jusqu'à ce que la durée totale estimée (échauffement + exécution + repos) tienne
-    dans temps_dispo_min. Sans temps_dispo déclaré, renvoie le plan par défaut."""
+    "temps_repos_recommande_s"}, en partant de series_cible (le volume recommandé par le
+    moteur de règles via series_cible_depuis_ajustement, SERIES_PAR_DEFAUT par défaut),
+    puis réduit d'abord le nombre de séries (jamais en dessous de SERIES_MIN) et, si ça ne
+    suffit pas, le nombre d'exercices (jamais le dernier de la liste, conventionnellement
+    le gainage_prevention de fin de séance), jusqu'à ce que la durée totale estimée
+    (échauffement + exécution + repos) tienne dans temps_dispo_min. Le calibrage temps
+    reste donc prioritaire : il ne fait que réduire, jamais augmenter, le volume cible.
+    Sans temps_dispo déclaré, renvoie le plan basé sur series_cible tel quel."""
+    series_depart = max(series_cible, SERIES_MIN)
     plan = [
         {
             "exercice": ex,
-            "series": SERIES_PAR_DEFAUT,
+            "series": series_depart,
             "temps_repos_recommande_s": repos_recommande_secondes(ex.type),
         }
         for ex in candidats

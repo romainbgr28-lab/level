@@ -927,7 +927,8 @@ def generer_seance(
     )
 
     temps_dispo_min = duree_seance.parser_temps_dispo_minutes(etat_du_jour.get("temps_dispo"))
-    plan = duree_seance.calibrer_exercices(candidats, temps_dispo_min)
+    series_cible = duree_seance.series_cible_depuis_ajustement(recommandation.get("ajustement_volume_pct"))
+    plan = duree_seance.calibrer_exercices(candidats, temps_dispo_min, series_cible)
     rpe_cible = duree_seance.rpe_cible_pour_intensite(recommandation.get("intensite_max"))
 
     logger.info(
