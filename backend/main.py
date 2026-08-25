@@ -1122,9 +1122,41 @@ def generer_seance(
         logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
         data = _construire_seance_secours(plan, recommandation["type_seance_suggere"], rpe_cible, charges_cibles)
 
+    # Capture de l'état pré-correction pour détecter ce que le garde-fou Étape 4 corrige
+    # réellement (voir _corriger_charges_hors_tolerance, non modifiée), sans dupliquer sa logique.
+    charge_indicative_avant = {
+        item.get("exercice_id"): item.get("charge_indicative") for item in data["exercices"] if isinstance(item, dict)
+    }
     _corriger_charges_hors_tolerance(data["exercices"], charges_cibles)
+    corrections_charge = [
+        {
+            "exercice_id": item.get("exercice_id"),
+            "valeur_proposee": charge_indicative_avant.get(item.get("exercice_id")),
+            "valeur_appliquee": item.get("charge_indicative"),
+        }
+        for item in data["exercices"]
+        if isinstance(item, dict) and item.get("charge_indicative") != charge_indicative_avant.get(item.get("exercice_id"))
+    ]
 
     duree_calibree_min = duree_seance.duree_totale_estimee_min(plan)
+
+    # Décision réellement appliquée à cette séance : la recommandation calculée par le moteur
+    # de règles, plus les valeurs déterministes qui en découlent (série/rpe cibles, charges
+    # cibles) et les corrections effectivement effectuées par le garde-fou Étape 4 — pas
+    # simplement la reco théorique envoyée à Mistral. Volontairement pas de dump complet de la
+    # réponse Mistral (transparence utile, pas de données superflues).
+    decision_adaptation = {
+        "ajustement_charge_pct": recommandation.get("ajustement_charge_pct"),
+        "ajustement_volume_pct": recommandation.get("ajustement_volume_pct"),
+        "intensite_max": recommandation.get("intensite_max"),
+        "exclusions": recommandation.get("exclusions") or [],
+        "raisons": recommandation.get("raisons") or [],
+        "series_cible": series_cible,
+        "rpe_cible": rpe_cible,
+        "charges_cibles": {str(k): v for k, v in charges_cibles.items()},
+        "correction_charge_appliquee": bool(corrections_charge),
+        "corrections_charge": corrections_charge,
+    }
 
     seance = models.Seance(
         date=today,
@@ -1135,6 +1167,8 @@ def generer_seance(
         explication=data.get("explication"),
         duree_prevue=duree_calibree_min,
         duree_reelle=None,
+        etat_declare_avant=schemas.EtatDeclareAvant(**etat_du_jour).model_dump(),
+        decision_adaptation=decision_adaptation,
     )
     db.add(seance)
     db.commit()
@@ -1241,7 +1275,12 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
         zone_sensible_signalee=None,
         xp_gagne=xp_gagne,
         notes=payload.note,
-        etat_declare_avant={},
+        # Reportés tels quels depuis la Seance liée (capturés à la génération, cf.
+        # generer_seance) : lien direct via l'objet déjà chargé plus haut, jamais de
+        # récupération fragile par date/dernier historique. Séances générées avant
+        # l'introduction de ces colonnes -> None/absent, donc {} ici, sans rien inventer.
+        etat_declare_avant=seance.etat_declare_avant or {},
+        decision_adaptation=seance.decision_adaptation,
     )
     db.add(historique)
     db.commit()

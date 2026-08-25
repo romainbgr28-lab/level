@@ -12,6 +12,33 @@ function realiseParExerciceId(entry: ApiHistoriqueSeance): Map<number, ApiExerci
   return new Map(entry.exercices_realises.map((ex) => [ex.exercice_id, ex]));
 }
 
+function formatPct(pct: unknown): string | null {
+  if (typeof pct !== 'number' || pct === 0) return pct === 0 ? 'stable' : null;
+  return `${pct > 0 ? '+' : ''}${Math.round(pct)}%`;
+}
+
+function DecisionAdaptation({ decision }: { decision: Record<string, unknown> }) {
+  const chargePct = formatPct(decision.ajustement_charge_pct);
+  const volumePct = formatPct(decision.ajustement_volume_pct);
+  const intensiteMax = typeof decision.intensite_max === 'string' ? decision.intensite_max : null;
+  const raisons = Array.isArray(decision.raisons) ? (decision.raisons as unknown[]) : [];
+  const raisonPrincipale = typeof raisons[0] === 'string' ? (raisons[0] as string) : null;
+  const correctionAppliquee = decision.correction_charge_appliquee === true;
+
+  return (
+    <div className="subtle historique-entry__adaptation">
+      <strong>Pourquoi cette séance ?</strong>
+      <ul>
+        {chargePct && <li>Charge : {chargePct}</li>}
+        {volumePct && <li>Volume : {volumePct}</li>}
+        {intensiteMax && <li>Intensité max : {intensiteMax}</li>}
+        {raisonPrincipale && <li>{raisonPrincipale}</li>}
+        {correctionAppliquee && <li>Une correction automatique de charge a été appliquée.</li>}
+      </ul>
+    </div>
+  );
+}
+
 function resumeSeries(series: ApiExerciceRealise['series']): string {
   return series
     .map((s) => {
@@ -41,11 +68,7 @@ function SeanceCard({ entry }: { entry: ApiHistoriqueSeance }) {
         </div>
       </div>
 
-      {entry.decision_adaptation && (
-        <p className="subtle historique-entry__adaptation">
-          Adaptation : {JSON.stringify(entry.decision_adaptation)}
-        </p>
-      )}
+      {entry.decision_adaptation && <DecisionAdaptation decision={entry.decision_adaptation} />}
 
       {aDesPrevus ? (
         <ul className="historique-entry__exercices">

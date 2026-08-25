@@ -39,6 +39,15 @@ class Seance(Base):
     duree_prevue = Column(Integer, nullable=True)  # minutes, estimée par le calibrage temps_dispo à la génération
     duree_reelle = Column(Integer, nullable=True)  # minutes, déclarée par le joueur en fin de séance
     note = Column(String, nullable=True)  # ressenti général en fin de séance, texte libre optionnel
+    # État déclaré par le joueur AVANT la génération de cette séance (mêmes champs que
+    # schemas.EtatDeclareAvant) : capturé ici à la génération pour que terminer_seance() puisse
+    # le reporter fidèlement dans HistoriqueSeance, sans le redemander ni le reconstruire.
+    etat_declare_avant = Column(JSON, nullable=True)
+    # Décision d'adaptation réellement appliquée à cette séance (recommandation du moteur de
+    # règles + corrections déterministes post-génération, cf. main.py::generer_seance et
+    # _corriger_charges_hors_tolerance). Copiée telle quelle dans HistoriqueSeance.decision_adaptation
+    # par terminer_seance().
+    decision_adaptation = Column(JSON, nullable=True)
 
 
 class ExerciceBibliotheque(Base):
