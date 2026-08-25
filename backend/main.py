@@ -17,13 +17,14 @@ import schemas
 from dev_date import get_current_date
 from charge_depart import estimer_charge_depart, formater_recommandation_charge
 from calendrier import compute_phase
-from database import Base, SessionLocal, engine, get_db
+from database import SessionLocal, get_db
+from migrate import migrer
 from seed import seed
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("level")
 
-Base.metadata.create_all(bind=engine)
+migrer()  # crée les tables manquantes + ajoute les colonnes additives manquantes
 
 with SessionLocal() as _db:
     seed(_db)
