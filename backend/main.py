@@ -231,11 +231,19 @@ def _reps_prevues_depuis_repetitions(repetitions: Optional[str]) -> Optional[int
     return int(m.group()) if m else None
 
 
+# Motif strict : un seul nombre suivi (immédiatement ou après espace) de "kg", rien d'autre
+# dans la chaîne. Volontairement conservateur : toute formulation contenant plusieurs nombres,
+# une unité par élément ("par haltère"), une fourchette ("-", "à") ou du texte descriptif ne
+# doit PAS être interprétée au jugé (cf. Étape 4 bis, garde-fou charge) — mieux vaut ne pas
+# corriger que corriger sur une fausse lecture (ex: "2 haltères de 10 kg" ≠ 2 kg).
+_CHARGE_NUMERIQUE_STRICTE_RE = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*kg\s*$", re.IGNORECASE)
+
+
 def _charge_prevue_depuis_indicative(charge_indicative: Optional[str]) -> Optional[float]:
     if not charge_indicative or re.search(r"corps", charge_indicative, re.IGNORECASE):
         return None
-    m = re.search(r"\d+(?:[.,]\d+)?", charge_indicative)
-    return float(m.group().replace(",", ".")) if m else None
+    m = _CHARGE_NUMERIQUE_STRICTE_RE.match(charge_indicative)
+    return float(m.group(1).replace(",", ".")) if m else None
 
 
 def _prevu_pour_exercice(
@@ -624,9 +632,15 @@ TOLERANCE_CHARGE_MIN_KG = 2.5  # absorbe l'arrondi aux disques de 2.5kg (voir ch
 
 
 def _derniere_charge_reelle(exercice_id: int, db: Session) -> Optional[float]:
-    """Moyenne des poids_kg des séries cochées de la dernière séance (par date, puis id
-    en tie-break) où cet exercice a réellement été effectué, ou None si aucun historique
-    réel n'existe pour cet exercice."""
+    """MAX des poids_kg des séries cochées de la dernière séance (par date, puis id en
+    tie-break) où cet exercice a réellement été effectué, ou None si aucun historique réel
+    n'existe pour cet exercice.
+
+    Le MAX (et non la moyenne) représente la meilleure charge de travail réellement validée
+    ce jour-là : une moyenne mélange à tort échauffement, top set et éventuel drop set, ce qui
+    fait dériver la référence vers le bas et fausse le garde-fou (ex: 40/60/70/80 kg -> une
+    moyenne à 62.5kg sous-estime largement ce que le joueur a réellement soulevé, alors que la
+    référence pertinente pour la séance suivante est 80kg)."""
     derniere = (
         db.query(models.SerieLoggee.seance_id)
         .join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
@@ -654,7 +668,22 @@ def _derniere_charge_reelle(exercice_id: int, db: Session) -> Optional[float]:
     ]
     if not poids:
         return None
-    return sum(poids) / len(poids)
+    return max(poids)
+
+
+def _arrondir_charge_cible(cible: float, charge_recommandee: str) -> float:
+    """Arrondit la charge cible selon la granularité pertinente pour le type de charge —
+    pas de plancher universel à 2.5kg : ce plancher n'a de sens que pour les charges
+    barbell/lourdes (disques de 2.5kg), pas pour une charge légère (haltères fins,
+    élastiques...) où il transformerait artificiellement une petite charge légitime
+    (1kg, 3kg) en charge supérieure injustifiée."""
+    if charge_recommandee == "charge_legere":
+        # Granularité fine (0.5kg), sans plancher artificiel : une charge légère proche de 0
+        # reste proche de 0.
+        return max(round(cible * 2) / 2, 0.5)
+    # charge_moderee / charge_lourde_progressive (et tout autre cas non prévu) : granularité
+    # 2.5kg, comportement historique conservé.
+    return max(round(cible / 2.5) * 2.5, 2.5)
 
 
 def _construire_charges_cibles(
@@ -676,7 +705,7 @@ def _construire_charges_cibles(
         if reference is None:
             continue
         cible = reference * (1 + ajustement_charge_pct / 100)
-        cibles[ex.id] = max(round(cible / 2.5) * 2.5, 2.5)
+        cibles[ex.id] = _arrondir_charge_cible(cible, ex.charge_recommandee)
     return cibles
 
 
@@ -684,15 +713,22 @@ def _corriger_charges_hors_tolerance(exercices: list[dict], charges_cibles: dict
     """Garde-fou post-génération : le backend reste l'autorité finale sur la charge quand un
     historique réel existe. Pour chaque exercice ayant une charge cible calculée (voir
     _construire_charges_cibles), force charge_indicative à la cible si Mistral a renvoyé une
-    valeur absente, non parsable, ou hors tolérance — sinon laisse la valeur de Mistral
-    inchangée (variations légitimes dans la tolérance)."""
+    valeur numérique claire et hors tolérance — sinon laisse la valeur de Mistral inchangée
+    (variations légitimes dans la tolérance).
+
+    Une valeur ambiguë ou non interprétable (ex: "2 haltères de 10 kg", "20-22 kg", "charge
+    modérée") n'est PAS corrigée : non parsable/ambigu ne veut pas dire que Mistral a tort, et
+    le garde-fou ne doit jamais deviner une charge à partir d'une formulation incertaine (voir
+    _charge_prevue_depuis_indicative)."""
     for item in exercices:
         cible = charges_cibles.get(item.get("exercice_id"))
         if cible is None:
             continue
         actuelle = _charge_prevue_depuis_indicative(item.get("charge_indicative"))
+        if actuelle is None:
+            continue
         tolerance = max(TOLERANCE_CHARGE_MIN_KG, cible * TOLERANCE_CHARGE_RELATIVE)
-        if actuelle is not None and abs(actuelle - cible) <= tolerance:
+        if abs(actuelle - cible) <= tolerance:
             continue
         ancienne = item.get("charge_indicative")
         item["charge_indicative"] = f"{cible:g} kg"
