@@ -9,6 +9,8 @@ export default function Profile() {
   const [stats, setStats] = useState<ApiStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getProfil(), getStats()])
@@ -20,12 +22,13 @@ export default function Profile() {
   }, []);
 
   async function handleReset() {
-    if (!window.confirm('Supprimer le profil et relancer l’onboarding ?')) return;
     setResetting(true);
+    setResetError(null);
     try {
       await deleteProfil();
       window.location.reload();
-    } catch {
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : 'Erreur lors de la réinitialisation.');
       setResetting(false);
     }
   }
@@ -188,14 +191,45 @@ export default function Profile() {
       <p className="subtle" style={{ marginBottom: 10 }}>
         Bouton temporaire, le temps qu'un vrai flux d'édition de profil existe.
       </p>
-      <button
-        className="btn btn--ghost"
-        style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
-        disabled={resetting}
-        onClick={handleReset}
-      >
-        {resetting ? 'Suppression…' : 'Réinitialiser le profil (relance l’onboarding)'}
-      </button>
+      {!confirmingReset ? (
+        <button
+          className="btn btn--ghost"
+          style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+          onClick={() => setConfirmingReset(true)}
+        >
+          Réinitialiser le profil (relance l’onboarding)
+        </button>
+      ) : (
+        <div className="card" style={{ borderColor: 'var(--danger)' }}>
+          <p style={{ marginBottom: 14 }}>Supprimer le profil et relancer l’onboarding ?</p>
+          {resetError && (
+            <p className="subtle" style={{ color: 'var(--danger)', marginBottom: 12 }}>
+              {resetError}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn--ghost"
+              style={{ flex: 1 }}
+              disabled={resetting}
+              onClick={() => {
+                setConfirmingReset(false);
+                setResetError(null);
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              className="btn btn--primary"
+              style={{ flex: 1, background: 'var(--danger)' }}
+              disabled={resetting}
+              onClick={handleReset}
+            >
+              {resetting ? 'Suppression…' : 'Confirmer'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
