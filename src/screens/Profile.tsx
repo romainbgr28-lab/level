@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import { deleteProfil, getProfil, getStats } from '../api/client';
 import type { ApiProfil, ApiStats } from '../api/client';
 import DevDatePanel from '../components/DevDatePanel';
+import { LABELS_THEMES_OBJECTIFS, JOURS_DISPONIBILITES } from './Onboarding';
 
 export default function Profile() {
   const [profil, setProfil] = useState<ApiProfil | null>(null);
@@ -58,18 +59,38 @@ export default function Profile() {
 
       <div className="section-title">Objectifs</div>
       <div className="tag-row">
-        {profil.objectifs.map((g) => (
-          <span className="tag" key={g}>
-            {g}
-          </span>
-        ))}
+        {(profil.objectifs_v2 ?? []).length > 0
+          ? [...profil.objectifs_v2]
+              .sort((a, b) => a.rang - b.rang)
+              .map((o) => (
+                <span className="tag" key={o.theme}>
+                  {o.rang}. {LABELS_THEMES_OBJECTIFS[o.theme] ?? o.theme}
+                </span>
+              ))
+          : (profil.objectifs ?? []).map((g) => (
+              <span className="tag" key={g}>
+                {g}
+              </span>
+            ))}
       </div>
 
-      <div className="section-title">Poste</div>
+      <div className="section-title">Sport pratiqué</div>
       <div className="info-row">
-        <span className="info-row__label">Poste joué</span>
-        <span className="info-row__value">{profil.poste}</span>
+        <span className="info-row__label">Sport</span>
+        <span className="info-row__value">{profil.contexte_sportif?.sport ?? 'Aucun'}</span>
       </div>
+      {profil.contexte_sportif?.sport === 'football' && (
+        <div className="info-row">
+          <span className="info-row__label">Poste joué</span>
+          <span className="info-row__value">{profil.contexte_sportif?.poste ?? profil.poste ?? '—'}</span>
+        </div>
+      )}
+      {profil.contexte_sportif?.frequence_hebdo != null && (
+        <div className="info-row">
+          <span className="info-row__label">Fréquence hebdo</span>
+          <span className="info-row__value">{profil.contexte_sportif.frequence_hebdo}x / semaine</span>
+        </div>
+      )}
 
       <div className="section-title">Biométrie</div>
       <div className="info-row">
@@ -154,11 +175,23 @@ export default function Profile() {
           </>
         )}
 
-      <div className="section-title">Contraintes & matériel</div>
-      <div className="info-row">
-        <span className="info-row__label">Temps disponible</span>
-        <span className="info-row__value">{profil.contraintes_temps}</span>
-      </div>
+      <div className="section-title">Disponibilités</div>
+      {profil.disponibilites && Object.values(profil.disponibilites).some((m) => m != null) ? (
+        JOURS_DISPONIBILITES.map(({ key, label }) => (
+          <div className="info-row" key={key}>
+            <span className="info-row__label">{label}</span>
+            <span className="info-row__value">
+              {profil.disponibilites[key] != null ? `${profil.disponibilites[key]} min` : 'Indisponible'}
+            </span>
+          </div>
+        ))
+      ) : (
+        <div className="info-row">
+          <span className="info-row__label">Temps disponible</span>
+          <span className="info-row__value">{profil.contraintes_temps ?? '—'}</span>
+        </div>
+      )}
+      <div className="section-title">Matériel</div>
       <div className="info-row">
         <span className="info-row__label">Matériel</span>
         <span className="info-row__value">{profil.materiel}</span>

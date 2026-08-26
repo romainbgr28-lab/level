@@ -169,10 +169,50 @@ export interface ApiObjectifEsthetique {
   texte_libre?: string | null;
 }
 
+// ---------- User Model V2 ----------
+
+// Thèmes valides (voir backend/user_model_v2.py::THEMES_OBJECTIFS_V2). Le frontend affiche des
+// libellés lisibles pour chacun (voir LABELS_THEMES_OBJECTIFS dans Onboarding.tsx) mais envoie
+// toujours ces identifiants techniques au backend.
+export type ThemeObjectifV2 =
+  | 'esthetique_hypertrophie'
+  | 'force'
+  | 'perte_de_gras'
+  | 'performance_sport_pratique'
+  | 'endurance'
+  | 'discipline_mentale';
+
+export interface ApiObjectifV2 {
+  theme: ThemeObjectifV2;
+  rang: number;
+  // Calculé côté backend à partir du rang — jamais choisi par l'utilisateur, jamais envoyé
+  // avec une valeur signifiante depuis le frontend (voir Onboarding : toujours 0, ignoré/
+  // recalculé par le backend à l'enregistrement).
+  poids: number;
+}
+
+export interface ApiContexteSportif {
+  sport: string | null; // null | "football" | libellé libre d'un autre sport pratiqué
+  frequence_hebdo: number | null;
+  poste: string | null; // pertinent seulement si sport === "football"
+}
+
+// {lundi: minutes|null, ..., dimanche: minutes|null} — 7 clés toujours présentes.
+export type ApiDisponibilites = Record<string, number | null>;
+
 export interface ApiProfil {
   id: number;
-  objectifs: string[];
-  poste: string;
+  // --- Champs legacy (voir backend/schemas.py::ProfilBase) : conservés en lecture pour la
+  // compatibilité descendante (toujours renvoyés par le backend), mais optionnels à l'écriture
+  // — l'onboarding V2 ci-dessous ne les envoie plus, ils sont dérivés côté backend depuis les
+  // champs V2. ---
+  objectifs?: string[];
+  poste?: string;
+  contraintes_temps?: string;
+  // --- Champs V2 ---
+  objectifs_v2: ApiObjectifV2[];
+  contexte_sportif: ApiContexteSportif;
+  disponibilites: ApiDisponibilites;
   age: number;
   taille_cm: number;
   poids_kg: number;
@@ -180,9 +220,9 @@ export interface ApiProfil {
   niveaux_qualites_physiques: ApiQualitesPhysiques;
   calendrier_matchs: ApiCalendrierMatchs;
   objectif_esthetique: ApiObjectifEsthetique | null;
-  contraintes_temps: string;
   materiel: string;
   date_creation: string | null;
+  niveau_observe?: Record<string, { valeur: number | null; confiance: number; n_seances: number }> | null;
 }
 
 export interface ApiStats {
