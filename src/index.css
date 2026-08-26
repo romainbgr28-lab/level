@@ -657,6 +657,20 @@ p {
   margin-bottom: 10px;
 }
 
+.exercise-block__previous-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.exercise-block__previous-row {
+  line-height: 1.5;
+}
+
+.exercise-block__progression {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
 .set-row__input {
   width: 56px;
   background: var(--surface-2);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Header from '../components/Header';
+import { calculerProgressionExercice } from '../utils/progressionExercice';
 import {
   createSerieLoggee,
   deleteSerieLoggee,
@@ -713,11 +714,37 @@ export default function Today() {
                 {isOpen && (
                   <>
                     <div className="exercise-block__previous">
-                      {precedent && precedent.series.length > 0
-                        ? `Précédent : ${precedent.series
-                            .map((s) => `${s.poids_kg ?? '–'} kg x ${s.repetitions ?? '–'}`)
-                            .join(', ')}`
-                        : `Objectif : ${objectifLabel}`}
+                      {precedent && precedent.series.length > 0 ? (
+                        <>
+                          <div className="exercise-block__previous-title">
+                            Dernière séance
+                            {precedent.date
+                              ? ` · ${new Date(precedent.date).toLocaleDateString('fr-FR', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                })}`
+                              : ''}
+                          </div>
+                          {precedent.series.map((s) => (
+                            <div className="exercise-block__previous-row" key={s.id}>
+                              {s.poids_kg ?? '–'} kg × {s.repetitions ?? '–'}
+                            </div>
+                          ))}
+                          {(() => {
+                            const progression = calculerProgressionExercice(
+                              precedent.series,
+                              seriesValideesPourExercice(item)
+                            );
+                            return progression ? (
+                              <div className={`exercise-block__progression exercise-block__progression--${progression.type}`}>
+                                {progression.label}
+                              </div>
+                            ) : null;
+                          })()}
+                        </>
+                      ) : (
+                        `Objectif : ${objectifLabel}`
+                      )}
                     </div>
 
                     {series.map((s) => {

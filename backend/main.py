@@ -175,8 +175,10 @@ def create_exercice_bibliotheque(payload: schemas.ExerciceBibliothequeCreate, db
 
 @app.get("/api/exercices_bibliotheque/{exercice_id}/derniere_performance", response_model=schemas.DernierePerformanceOut)
 def get_derniere_performance(exercice_id: int, seance_id: Optional[int] = None, db: Session = Depends(get_db)):
-    """« Précédent » façon Hevy : les séries cochées de la dernière séance (autre que
-    `seance_id`, la séance en cours) où cet exercice a été loggé."""
+    """« Précédent » façon Hevy : les séries cochées de la dernière séance TERMINÉE (autre
+    que `seance_id`, la séance en cours) où cet exercice a été loggé. Une séance non
+    terminée (encore « planifiee »/« prévue », y compris abandonnée en cours de route)
+    n'est jamais éligible comme référence."""
     query = db.query(models.SerieLoggee).filter(
         models.SerieLoggee.exercice_id == exercice_id,
         models.SerieLoggee.coche == 1,
@@ -186,6 +188,7 @@ def get_derniere_performance(exercice_id: int, seance_id: Optional[int] = None, 
 
     derniere_seance_id = (
         query.join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
+        .filter(models.Seance.statut == "terminee")
         .order_by(models.Seance.date.desc(), models.SerieLoggee.horodatage.desc())
         .with_entities(models.SerieLoggee.seance_id)
         .first()
