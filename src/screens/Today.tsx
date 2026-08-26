@@ -108,6 +108,11 @@ export default function Today() {
   const [seance, setSeance] = useState<ApiSeance | ApiSeanceGeneree | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [programme, setProgramme] = useState<ApiProgramme | null>(null);
+  // Erreur de chargement initial (réseau, backend indisponible...) distincte d'une absence
+  // légitime de programme/séance : évite d'afficher "Aucune séance" alors qu'on n'a en réalité
+  // pas réussi à savoir s'il y en avait une (cf. audit P0.6 — la génération auto ne doit pas se
+  // désactiver silencieusement sur un simple accroc réseau).
+  const [chargementErreur, setChargementErreur] = useState(false);
 
   const [sommeil, setSommeil] = useState('');
   const [motivation, setMotivation] = useState('');
@@ -148,42 +153,65 @@ export default function Today() {
   const [resultat, setResultat] = useState<ApiTerminerSeanceResult | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const prog = await getProgrammeActif().catch(() => null);
-      setProgramme(prog);
-
-      const existante = await getTodaySeance().catch(() => null);
-      if (existante) {
-        setSeance(existante);
-        setView(existante.statut === 'terminee' ? 'terminee' : 'seance');
-        return;
-      }
-
-      const typeGabarit = prog ? typeSeanceGabaritAujourdhui(prog) : undefined;
-      if (prog && typeGabarit && typeGabarit !== 'repos') {
-        // Programme actif avec une séance prévue aujourd'hui : on la génère
-        // automatiquement, sans attendre un clic sur "Générer ma séance".
-        try {
-          const generee = await genererSeance({
-            sommeil: null,
-            motivation: null,
-            temps_dispo: null,
-            envie_texte: null,
-            entrainement_club_semaine: null,
-            type_seance_force: null,
-            forcer_seance_legere: false,
-          });
-          setSeance(generee);
-          setView('seance');
-          return;
-        } catch {
-          // Si la génération automatique échoue, on retombe sur le flux manuel.
-        }
-      }
-
-      setView('no-seance');
-    })();
+    void chargerToday();
   }, []);
+
+  // Charge le programme actif + la séance du jour, avec une reprise unique sur accroc réseau
+  // (un échec ponctuel du premier fetch ne doit pas être interprété comme "pas de programme" et
+  // faire disparaître silencieusement la génération automatique — cf. audit P0.6).
+  async function fetchAvecReprise<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch {
+      return await fn();
+    }
+  }
+
+  async function chargerToday() {
+    setChargementErreur(false);
+    let prog: ApiProgramme | null;
+    let existante: ApiSeance | ApiSeanceGeneree | null;
+    try {
+      [prog, existante] = await Promise.all([fetchAvecReprise(getProgrammeActif), fetchAvecReprise(getTodaySeance)]);
+    } catch {
+      setChargementErreur(true);
+      setView('no-seance');
+      return;
+    }
+    setProgramme(prog);
+
+    if (existante) {
+      setSeance(existante);
+      setView(existante.statut === 'terminee' ? 'terminee' : 'seance');
+      return;
+    }
+
+    const typeGabarit = prog ? typeSeanceGabaritAujourdhui(prog) : undefined;
+    if (prog && typeGabarit && typeGabarit !== 'repos') {
+      // Programme actif avec une séance prévue aujourd'hui : on la génère
+      // automatiquement, sans attendre un clic sur "Générer ma séance".
+      // generer_seance() est idempotent côté backend (renvoie la séance existante si une
+      // génération concurrente l'a déjà créée), donc pas de risque de doublon ici.
+      try {
+        const generee = await genererSeance({
+          sommeil: null,
+          motivation: null,
+          temps_dispo: null,
+          envie_texte: null,
+          entrainement_club_semaine: null,
+          type_seance_force: null,
+          forcer_seance_legere: false,
+        });
+        setSeance(generee);
+        setView('seance');
+        return;
+      } catch {
+        // Si la génération automatique échoue, on retombe sur le flux manuel (bouton fallback).
+      }
+    }
+
+    setView('no-seance');
+  }
 
   const planDuJour = useMemo(() => {
     if (!programme) return null;
@@ -590,7 +618,22 @@ export default function Today() {
         </section>
       )}
 
-      {view === 'no-seance' && !planDuJour && (
+      {view === 'no-seance' && !planDuJour && chargementErreur && (
+        <section className="card">
+          <div className="card__eyebrow">Séance du jour</div>
+          <p className="subtle" style={{ margin: '4px 0 14px' }}>
+            Impossible de charger ton programme (problème réseau). Réessaie, ou génère ta séance manuellement.
+          </p>
+          <button className="btn btn--primary" onClick={() => void chargerToday()} style={{ marginBottom: 8 }}>
+            Réessayer
+          </button>
+          <button className="btn btn--secondary" onClick={() => setView('form')}>
+            Générer ma séance du jour
+          </button>
+        </section>
+      )}
+
+      {view === 'no-seance' && !planDuJour && !chargementErreur && (
         <section className="card">
           <div className="card__eyebrow">Séance du jour</div>
           <p className="subtle" style={{ margin: '4px 0 14px' }}>

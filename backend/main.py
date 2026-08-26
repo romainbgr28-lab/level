@@ -1156,6 +1156,21 @@ def _calculer_xp(rpe: Optional[int], pourcentage_complete: Optional[float], stre
 def generer_seance(
     payload: schemas.EtatDuJour, db: Session = Depends(get_db), today: date = Depends(get_current_date)
 ):
+    # Idempotence : si une séance existe déjà pour aujourd'hui (génération auto au chargement de
+    # Today, double appel réseau, double montage React...), on la renvoie telle quelle plutôt que
+    # d'en créer une seconde — aucune contrainte d'unicité en base sur Seance.date, donc c'est ce
+    # garde qui évite les doublons silencieux (cf. audit P0.6).
+    seance_existante = db.query(models.Seance).filter(models.Seance.date == today).order_by(models.Seance.id).first()
+    if seance_existante:
+        return schemas.SeanceGenereeOut(
+            id=seance_existante.id,
+            nom_seance=seance_existante.nom,
+            duree_min=seance_existante.duree_prevue,
+            exercices=seance_existante.exercices,
+            explication=seance_existante.explication or "",
+            recommandation=seance_existante.decision_adaptation or {},
+        )
+
     profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
     if not profil:
         raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer une séance.")
