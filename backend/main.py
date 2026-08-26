@@ -16,6 +16,7 @@ import models
 import regles_seance
 import schemas
 import substitution
+import user_model_v2
 from dev_date import get_current_date
 from charge_depart import estimer_charge_depart, formater_recommandation_charge
 from calendrier import compute_phase
@@ -965,17 +966,29 @@ def _charge_cible_programme(programme: models.Programme, type_seance_gabarit: Op
     return None
 
 
-def _construire_system_prompt() -> str:
+def _intitule_coach(sport: Optional[str]) -> str:
+    """Phase 6 : plus de hardcoding football — le rôle du coach dépend de
+    contexte_sportif.sport (générique si absent, sans injecter de contexte football)."""
+    if sport == "football":
+        return "un coach sportif spécialisé en préparation physique football"
+    if sport:
+        return f"un coach sportif de préparation physique pour un pratiquant de {sport}"
+    return "un coach sportif de préparation physique générique"
+
+
+def _construire_system_prompt(sport: Optional[str] = None) -> str:
     notes = connaissances.get_notes_generation_ia()
     notes_txt = "\n".join(f"- {n}" for n in notes)
     return (
-        "Tu es un coach sportif spécialisé en préparation physique football. "
+        f"Tu es {_intitule_coach(sport)}. "
         "Règles de comportement à respecter systématiquement, sans exception :\n"
         f"{notes_txt}\n"
         "- Pour chaque exercice, respecte strictement le champ charge_recommandee fourni. "
         "Ne propose jamais de charge lourde sur un exercice marqué poids_du_corps ou "
         "charge_legere, même si l'utilisateur a un bon niveau de force déclaré — la nature "
-        "de l'exercice prime sur le niveau de l'utilisateur."
+        "de l'exercice prime sur le niveau de l'utilisateur.\n"
+        "- Les objectifs du joueur te sont fournis déjà hiérarchisés (rang + poids) : ne "
+        "devine jamais un objectif principal différent, ne réordonne pas les priorités."
     )
 
 
@@ -1025,7 +1038,18 @@ mais respecte cette trame sinon)
 
     fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
 
-    return f"""Tu es un coach sportif qui construit une séance de sport concrète pour un joueur de football amateur.
+    sport = (profil.get("contexte_sportif") or {}).get("sport")
+    intitule_joueur = "un pratiquant de football amateur" if sport == "football" else (
+        f"un pratiquant de {sport} amateur" if sport else "un pratiquant"
+    )
+    objectifs_v2 = profil.get("objectifs_v2") or []
+    objectifs_txt = (
+        "; ".join(f"{o['theme']} (rang {o['rang']}, poids {o['poids']})" for o in objectifs_v2)
+        if objectifs_v2 else "aucun objectif déclaré"
+    )
+    niveau_effectif = profil.get("_niveau_effectif")
+
+    return f"""Tu es un coach sportif qui construit une séance de sport concrète pour {intitule_joueur}.
 
 EXERCICES DISPONIBLES (présélection déjà filtrée pour ce joueur selon le type de séance, le matériel
 disponible, ses zones sensibles ET le temps disponible aujourd'hui — tu dois obligatoirement choisir
@@ -1057,11 +1081,13 @@ CONTRAINTE OBLIGATOIRE : inclure au moins un exercice de type gainage_prevention
 ci-dessus) et le placer en dernière position de la liste "exercices" (fin de séance).
 
 PROFIL
-- Poste : {profil.get('poste')}
-- Niveau physique global : {profil.get('niveau_physique')}
+- Sport pratiqué : {sport or 'non renseigné'}
+- Poste : {profil.get('poste') or 'non applicable'}
+- Objectifs déclarés, déjà hiérarchisés (backend a déjà déterminé la priorité — ne pas réordonner
+  ni deviner un autre objectif principal) : {objectifs_txt}
+- Niveau physique global (effectif, calibré déclaré/observé) : {niveau_effectif if niveau_effectif is not None else profil.get('niveau_physique')}
 - Qualités physiques déclarées (1 à 5) : {profil.get('niveaux_qualites_physiques')}
 - Matériel disponible : {profil.get('materiel')}
-- Contraintes de temps habituelles : {profil.get('contraintes_temps')}
 
 ÉTAT DU JOUR (déclaré par le joueur)
 - Sommeil : {etat_du_jour.get('sommeil') or 'non renseigné'}
@@ -1237,7 +1263,10 @@ def generer_seance(
     charges_depart = _construire_charges_depart(
         [p["exercice"] for p in plan], profil_dict.get("poids_kg"), profil_dict.get("niveau_physique"), db
     )
-    system_prompt = _construire_system_prompt()
+    # Phase 5/7 : Mistral reçoit le niveau effectif (déclaré recalibré par l'observé selon la
+    # confiance) plutôt que le déclaré brut, quand un niveau observé existe déjà.
+    profil_dict["_niveau_effectif"] = _niveau_physique_effectif(profil, profil_dict)
+    system_prompt = _construire_system_prompt(sport=(profil_dict.get("contexte_sportif") or {}).get("sport"))
     prompt = _construire_prompt_generation(
         profil_dict, recommandation, etat_du_jour, plan, fiches_theoriques, charges_depart, rpe_cible
     )
@@ -1341,6 +1370,108 @@ def generer_seance(
         explication=data.get("explication", ""),
         recommandation=recommandation,
     )
+
+
+# ---------- Niveau déclaré / observé / effectif (Phase 5) ----------
+
+# Mapping conservateur type_seance -> qualité(s) physiques concernées, utilisé pour ne
+# recalculer le niveau observé d'une qualité qu'à partir de séances réellement pertinentes
+# pour elle (voir user_model_v2.calculer_niveau_observe : n'invente jamais une mesure).
+TYPE_SEANCE_VERS_QUALITES: dict[str, list[str]] = {
+    "force": ["force"],
+    "explosivité_vitesse": ["explosivite", "vitesse"],
+    "endurance": ["endurance"],
+}
+
+
+def _recalculer_niveau_observe(db: Session, utilisateur_id: Optional[int]) -> dict:
+    """Recalcule (mémoire, non persisté ici) le niveau observé par qualité à partir de
+    HistoriqueSeance. Reste conservateur : une qualité sans séance pertinente n'a pas
+    d'entrée (voir user_model_v2.calculer_niveau_observe -> None)."""
+    historiques = db.query(models.HistoriqueSeance).order_by(models.HistoriqueSeance.date.asc()).all()
+    resultat: dict[str, dict] = {}
+    for qualite in user_model_v2.QUALITES_PHYSIQUES:
+        seances_pertinentes = [
+            {"rpe": h.rpe, "pourcentage_complete": h.pourcentage_complete}
+            for h in historiques
+            if qualite in TYPE_SEANCE_VERS_QUALITES.get(h.type_seance, [])
+        ]
+        valeur = user_model_v2.calculer_niveau_observe(seances_pertinentes)
+        confiance = user_model_v2.calculer_confiance(len(seances_pertinentes))
+        resultat[qualite] = {"valeur": valeur, "confiance": confiance, "n_seances": len(seances_pertinentes)}
+    return resultat
+
+
+def _niveau_physique_effectif(profil: models.Profil, profil_dict: dict) -> dict[str, float]:
+    """Niveau effectif par qualité (voir user_model_v2.calculer_niveau_effectif), à partir du
+    niveau déclaré (niveaux_qualites_physiques, 1-5) et du dernier niveau observé persisté sur
+    le profil (calculé et écrit par terminer_seance -> _mettre_a_jour_niveau_observe)."""
+    declare = profil_dict.get("niveaux_qualites_physiques") or {}
+    observe = (getattr(profil, "niveau_observe", None) or {}) if profil else {}
+    effectif: dict[str, float] = {}
+    for qualite in user_model_v2.QUALITES_PHYSIQUES:
+        niveau_declare = declare.get(qualite)
+        if niveau_declare is None:
+            continue
+        info_observe = observe.get(qualite) or {}
+        effectif[qualite] = user_model_v2.calculer_niveau_effectif(
+            float(niveau_declare), info_observe.get("valeur"), info_observe.get("confiance") or 0.0
+        )
+    return effectif
+
+
+# Seuil de variation (échelle 1-5) au-delà duquel un changement de niveau effectif est jugé
+# "significatif" et déclenche une entrée NiveauHistorique — évite de journaliser un bruit de
+# +/-0.1 après chaque séance tout en restant réactif à une vraie évolution.
+SEUIL_VARIATION_NIVEAU_HISTORIQUE = 0.5
+
+
+def _mettre_a_jour_niveau_observe(db: Session, profil: models.Profil, today: date) -> None:
+    """Recalcule le niveau observé, le persiste sur le profil, et journalise dans
+    NiveauHistorique toute évolution significative du niveau effectif résultant (Phase 5)."""
+    ancien_effectif = _niveau_physique_effectif(
+        profil, schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
+    )
+
+    nouveau_observe = _recalculer_niveau_observe(db, profil.id)
+    profil.niveau_observe = nouveau_observe
+    db.commit()
+    db.refresh(profil)
+
+    nouveau_effectif = _niveau_physique_effectif(
+        profil, schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
+    )
+
+    for qualite in user_model_v2.QUALITES_PHYSIQUES:
+        avant = ancien_effectif.get(qualite)
+        apres = nouveau_effectif.get(qualite)
+        if avant is None or apres is None:
+            continue
+        if abs(apres - avant) < SEUIL_VARIATION_NIVEAU_HISTORIQUE:
+            continue
+        n_seances = (nouveau_observe.get(qualite) or {}).get("n_seances", 0)
+        db.add(
+            models.NiveauHistorique(
+                utilisateur_id=profil.id,
+                qualite=qualite,
+                ancien_niveau=round(avant),
+                nouveau_niveau=round(apres),
+                date=today,
+                critere_declencheur=(
+                    f"niveau effectif recalculé après {n_seances} séance(s) comparable(s) "
+                    f"(observé={((nouveau_observe.get(qualite) or {}).get('valeur'))}, "
+                    f"confiance={((nouveau_observe.get(qualite) or {}).get('confiance'))})"
+                ),
+            )
+        )
+    db.commit()
+
+
+@app.get("/api/niveau/historique", response_model=list[schemas.NiveauHistoriqueOut])
+def get_niveau_historique(db: Session = Depends(get_db)):
+    """Lecture de l'historique des évolutions de niveau (Phase 5) : traçabilité
+    ancien/nouveau niveau + raison, la plus récente en premier."""
+    return db.query(models.NiveauHistorique).order_by(models.NiveauHistorique.date.desc(), models.NiveauHistorique.id.desc()).all()
 
 
 @app.post("/api/seance/terminer", response_model=schemas.TerminerSeanceOut)
@@ -1491,6 +1622,14 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
     db.commit()
     db.refresh(historique)
 
+    if profil is not None:
+        # Phase 5/9 : ne doit jamais faire échouer la fin de séance si le recalcul du
+        # niveau observé rencontre un cas inattendu (ex: profil legacy) — best effort.
+        try:
+            _mettre_a_jour_niveau_observe(db, profil, seance.date)
+        except Exception:
+            logger.exception("Échec du recalcul du niveau observé après terminer_seance (non bloquant)")
+
     return schemas.TerminerSeanceOut(resume=resume, xp_gagne=xp_gagne, historique_id=historique.id)
 
 
@@ -1524,12 +1663,14 @@ def _normaliser_type_seance_programme(valeur: Optional[str]) -> Optional[str]:
     return None
 
 
-def _construire_system_prompt_programme() -> str:
+def _construire_system_prompt_programme(sport: Optional[str] = None) -> str:
     return (
-        "Tu es un préparateur physique spécialisé en football qui construit un programme "
+        f"Tu es {_intitule_coach(sport)} qui construit un programme "
         "structuré sur plusieurs semaines. Règles impératives :\n"
         "- Ne planifie jamais plus de séances par semaine que le nombre de jours disponibles "
         "déclarés par le joueur : n'invente aucune séance supplémentaire.\n"
+        "- Les objectifs du joueur te sont fournis déjà hiérarchisés (rang + poids) : ne devine "
+        "jamais un objectif principal différent.\n"
         "- Prends en compte TOUS les objectifs déclarés par le joueur (pas seulement son poste "
         "et son calendrier de matchs) pour construire le gabarit_hebdomadaire et la "
         "trajectoire_progression : si l'objectif « Endurance » ou « Perte de poids » est déclaré, "
@@ -1549,22 +1690,31 @@ def _construire_system_prompt_programme() -> str:
 def _construire_prompt_programme(profil: dict, fiches_theoriques: list[str], jours_dispo: list[str]) -> str:
     fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
     jour_match = (profil.get("calendrier_matchs") or {}).get("jour_habituel") or "non renseigné"
-    objectifs = profil.get("objectifs") or []
+    sport = (profil.get("contexte_sportif") or {}).get("sport")
+    intitule_joueur = "un joueur de football amateur" if sport == "football" else (
+        f"un pratiquant de {sport} amateur" if sport else "un pratiquant"
+    )
+    objectifs_v2 = profil.get("objectifs_v2") or []
+    objectifs_txt = (
+        "; ".join(f"{o['theme']} (rang {o['rang']}, poids {o['poids']})" for o in objectifs_v2)
+        if objectifs_v2 else (profil.get("objectifs") or [])
+    )
     types_txt = " | ".join(f'"{t}"' for t in TYPES_SEANCE_PROGRAMME)
 
     return f"""Construis un programme d'entraînement physique structuré sur {DUREE_SEMAINES_PROGRAMME_DEFAUT} semaines
-pour un joueur de football amateur, à partir de son profil complet.
+pour {intitule_joueur}, à partir de son profil complet.
 
 PROFIL
-- Objectifs déclarés (à respecter TOUS dans le gabarit_hebdomadaire et la trajectoire_progression,
-  pas seulement le poste et le calendrier) : {objectifs}
-- Poste : {profil.get('poste')}
+- Objectifs déclarés, déjà hiérarchisés (backend a déjà déterminé la priorité — à respecter TOUS
+  dans le gabarit_hebdomadaire et la trajectoire_progression, pas seulement le poste et le
+  calendrier, ni deviner un autre objectif principal) : {objectifs_txt}
+- Sport pratiqué : {sport or 'non renseigné'}
+- Poste : {profil.get('poste') or 'non applicable'}
 - Niveau physique global : {profil.get('niveau_physique')}
 - Qualités physiques déclarées (1 à 5) : {profil.get('niveaux_qualites_physiques')}
 - Jour de match habituel : {jour_match}
 - Entraînements club : {(profil.get('calendrier_matchs') or {}).get('entrainements_club')}
 - Jours disponibles déclarés (ne pas en inventer d'autres) : {jours_dispo}
-- Durée par séance / contraintes de temps : {profil.get('contraintes_temps')}
 - Matériel disponible : {profil.get('materiel')}
 - Objectif esthétique : {profil.get('objectif_esthetique')}
 
@@ -1598,7 +1748,9 @@ valeurs par qualité, en progression prudente (jamais plus de 5 à 8% cumulés p
 def _construire_programme_secours(jours_dispo: list[str], objectifs: list[str]) -> dict:
     """Programme de repli, construit sans IA, utilisé si Mistral échoue après retentative."""
     objectifs_lower = [o.lower() for o in (objectifs or [])]
-    veut_endurance = any(o in objectifs_lower for o in ("endurance", "perte de poids"))
+    veut_endurance = any(
+        o in objectifs_lower for o in ("endurance", "perte de poids", "perte_de_gras")
+    )
 
     types_cycle = ["force", "explosivité_vitesse", "esthétique", "endurance"] if veut_endurance else ["force", "explosivité_vitesse", "esthétique"]
     gabarit = {jour: types_cycle[i % len(types_cycle)] for i, jour in enumerate(jours_dispo)} if jours_dispo else {}
@@ -1632,10 +1784,13 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
     utilisateur_id = payload.utilisateur_id if payload.utilisateur_id is not None else profil.id
     profil_dict = schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
 
-    jours_dispo = [j.strip() for j in (profil_dict.get("contraintes_temps") or "").split("·")[0].split("/") if j.strip()]
+    # Phase 3 : lecture directe du dict structuré `disponibilites`, plus de parsing fragile
+    # de contraintes_temps (conservé uniquement comme fallback via ProfilBase, déjà appliqué
+    # à l'écriture — profil_dict.disponibilites est donc toujours structuré ici).
+    jours_dispo = user_model_v2.jours_dispo_abbrev(profil_dict.get("disponibilites") or {})
 
     fiches_theoriques = connaissances.selectionner_fiches_programme(profil_dict.get("poste"))
-    system_prompt = _construire_system_prompt_programme()
+    system_prompt = _construire_system_prompt_programme(sport=(profil_dict.get("contexte_sportif") or {}).get("sport"))
     prompt = _construire_prompt_programme(profil_dict, fiches_theoriques, jours_dispo)
 
     required_keys = {"phases", "gabarit_hebdomadaire", "trajectoire_progression"}
@@ -1685,7 +1840,9 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
 
     if data is None:
         logger.error("Génération de programme IA impossible après retentative : repli sur un programme de secours.")
-        data = _construire_programme_secours(jours_dispo, profil_dict.get("objectifs") or [])
+        objectifs_v2 = profil_dict.get("objectifs_v2") or []
+        objectifs_themes = [o["theme"] for o in objectifs_v2] if objectifs_v2 else (profil_dict.get("objectifs") or [])
+        data = _construire_programme_secours(jours_dispo, objectifs_themes)
 
     # Un seul programme actif à la fois : on clôt l'ancien avant de créer le nouveau.
     db.query(models.Programme).filter(

@@ -9,6 +9,8 @@ la séance concrète.
 from datetime import date, timedelta
 from typing import Any, Optional
 
+import user_model_v2
+
 JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 # Onboarding (src/screens/Onboarding.tsx) collecte les jours disponibles sous forme abrégée
@@ -25,12 +27,10 @@ PHASES_INTENSITE = {
     "phase_normale": "normale",
 }
 
-PRIORITES_POSTE: dict[str, list[str]] = {
-    "Défenseur": ["force_duels", "explosivité_verticale", "jeu_aérien"],
-    "Milieu": ["endurance_intermittente", "coordination", "répétition_efforts"],
-    "Attaquant": ["vitesse_linéaire", "explosivité_réactive", "finition_puissance"],
-    "Gardien": ["explosivité_réactive", "souplesse", "réflexes"],
-}
+# Déplacé vers user_model_v2.PRIORITES_PAR_SPORT (Phase 6 : suppression du hardcoding
+# football — le système raisonne via contexte_sportif.sport, avec fallback générique pour
+# tout sport non couvert). Alias conservé pour compatibilité de lecture directe éventuelle.
+PRIORITES_POSTE = user_model_v2.PRIORITES_PAR_SPORT.get("football", {})
 
 # Groupes musculaires typiquement sollicités par type de séance — utilisé par
 # appliquer_garde_fous pour croiser une zone sensible déclarée avec la séance
@@ -70,8 +70,12 @@ def calculer_phase_calendaire(
     return phase, PHASES_INTENSITE[phase]
 
 
-def obtenir_priorites_poste(poste: str) -> list[str]:
-    return list(PRIORITES_POSTE.get(poste, []))
+def obtenir_priorites_poste(poste: str, sport: Optional[str] = "football") -> list[str]:
+    """Priorités liées au poste, désormais dépendantes du sport pratiqué
+    (voir user_model_v2.obtenir_priorites). `sport` par défaut à "football" pour ne
+    pas casser un appelant qui ne le passe pas encore (compat descendante) ; les
+    nouveaux appels (generer_recommandation) passent explicitement profil["contexte_sportif"]["sport"]."""
+    return user_model_v2.obtenir_priorites(sport, poste)
 
 
 def _rpe_liste(seances: list[dict[str, Any]]) -> str:
@@ -358,7 +362,8 @@ def generer_recommandation(
     date_prochain_match, date_dernier_match = _dates_matchs_proches(profil.get("calendrier_matchs"), aujourdhui)
 
     phase, intensite_max = calculer_phase_calendaire(aujourdhui, date_prochain_match, date_dernier_match)
-    priorites = obtenir_priorites_poste(profil.get("poste", ""))
+    sport = (profil.get("contexte_sportif") or {}).get("sport")
+    priorites = obtenir_priorites_poste(profil.get("poste", ""), sport=sport)
     type_seance_suggere = _suggerer_type_seance(phase, priorites, profil.get("objectif_esthetique"), type_seance_gabarit)
 
     historique_meme_type = (historique.get("par_type") or {}).get(type_seance_suggere, [])

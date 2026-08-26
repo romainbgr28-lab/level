@@ -21,6 +21,20 @@ class Profil(Base):
     materiel = Column(String, nullable=False)
     date_creation = Column(DateTime, server_default=func.now())
 
+    # --- User Model V2 (voir user_model_v2.py) --------------------------------------------
+    # Colonnes additives (nullable, ajoutées par migrate.py) : les colonnes ci-dessus
+    # (objectifs, poste, contraintes_temps, calendrier_matchs...) restent la représentation
+    # "legacy" toujours écrite en parallèle par compatibilité descendante (aucune lecture ne
+    # doit crasher sur un profil non migré). Les colonnes ci-dessous sont la nouvelle source
+    # de vérité structurée, normalisée par user_model_v2.py à l'écriture (voir main.py::upsert_profil).
+    objectifs_v2 = Column(JSON, nullable=True)  # list[{theme, rang, poids}], max 3
+    contexte_sportif = Column(JSON, nullable=True)  # {sport, frequence_hebdo, poste}
+    disponibilites = Column(JSON, nullable=True)  # {lundi: minutes|None, ..., dimanche: minutes|None}
+    # Niveau observé recalculé à partir des séances réalisées, par qualité physique :
+    # {force: {"valeur": float|None, "confiance": float, "n_seances": int}, ...}. None tant
+    # qu'aucune séance comparable n'a été terminée pour cette qualité (voir calculer_niveau_observe).
+    niveau_observe = Column(JSON, nullable=True)
+
 
 class Seance(Base):
     __tablename__ = "seances"

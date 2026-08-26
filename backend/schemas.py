@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+import user_model_v2
 
 
 class QualitesPhysiques(BaseModel):
@@ -32,9 +34,44 @@ class ObjectifEsthetique(BaseModel):
     texte_libre: Optional[str] = None
 
 
+# ---------- User Model V2 (voir user_model_v2.py) ----------
+
+
+class ObjectifV2(BaseModel):
+    """Un objectif hiérarchisé. `poids` est toujours recalculé côté backend à
+    partir du rang (voir user_model_v2.poids_par_defaut) — jamais une entrée
+    de confiance venant du client : le frontend ne doit pas être source de
+    vérité sur les poids (Phase 2)."""
+
+    theme: str
+    rang: int
+    poids: float
+
+    @field_validator("theme")
+    @classmethod
+    def _theme_valide(cls, v: str) -> str:
+        if v not in user_model_v2.THEMES_OBJECTIFS_V2:
+            raise ValueError(f"theme invalide : {v!r} (attendu un de {user_model_v2.THEMES_OBJECTIFS_V2})")
+        return v
+
+
+class ContexteSportif(BaseModel):
+    """Sport pratiqué, distinct de l'objectif sportif (voir user_model_v2.py :
+    RÈGLE FONDAMENTALE, sport pratiqué != objectif)."""
+
+    sport: Optional[str] = None  # None | "football" | libellé libre d'un autre sport
+    frequence_hebdo: Optional[int] = None
+    poste: Optional[str] = None  # pertinent seulement si sport == "football"
+
+
 class ProfilBase(BaseModel):
-    objectifs: list[str]
-    poste: str
+    # --- Champs legacy (conservés pour compatibilité descendante, voir Phase 1) ---
+    # Rendus optionnels ici : un client V2 n'a plus à les envoyer, ils sont dérivés
+    # côté backend à partir des champs V2 (voir main.py::upsert_profil et
+    # user_model_v2.py). Restent cependant NOT NULL en base — la dérivation garantit
+    # toujours une valeur avant l'écriture.
+    objectifs: list[str] = []
+    poste: str = ""
     age: int
     taille_cm: float
     poids_kg: float
@@ -42,8 +79,86 @@ class ProfilBase(BaseModel):
     niveaux_qualites_physiques: QualitesPhysiques
     calendrier_matchs: CalendrierMatchs
     objectif_esthetique: Optional[ObjectifEsthetique] = None
-    contraintes_temps: str
+    contraintes_temps: str = ""
     materiel: str
+
+    # --- Champs V2 ---
+    # Optionnels en entrée : si absents, dérivés depuis les champs legacy ci-dessus
+    # (migration automatique, voir user_model_v2.normaliser_objectifs /
+    # normaliser_disponibilites). Toujours normalisés/recalculés côté backend avant
+    # stockage : jamais pris tels quels depuis le client (voir upsert_profil).
+    objectifs_v2: list[ObjectifV2] = []
+    contexte_sportif: ContexteSportif = ContexteSportif()
+    disponibilites: dict[str, Optional[int]] = {}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _tolerer_colonnes_non_migrees(cls, data: Any) -> Any:
+        """Un profil créé avant l'introduction des colonnes V2 (voir migrate.py) a ces
+        colonnes à NULL en base -> l'ORM les expose comme None. Sans ce garde-fou, la
+        validation stricte des champs V2 échouerait à la simple lecture d'un ancien
+        profil (violerait Phase 9 : pas de crash sur données non migrées)."""
+        # `data` est soit un dict (payload entrant), soit un objet ORM (lecture depuis
+        # la DB, model_config.from_attributes=True) : on ne mute que le cas dict ici,
+        # le cas ORM est neutralisé plus bas par une lecture défensive équivalente.
+        if isinstance(data, dict):
+            for champ in ("objectifs_v2", "contexte_sportif", "disponibilites"):
+                if data.get(champ) is None:
+                    data[champ] = [] if champ == "objectifs_v2" else {}
+            return data
+
+        # Objet ORM (lecture DB, from_attributes=True) : on ne mute jamais l'instance
+        # SQLAlchemy suivie par la session (éviterait un flush accidentel d'une valeur
+        # vide écrasant le NULL réel) — on construit un dict détaché à la place.
+        detache = {champ: getattr(data, champ, None) for champ in cls.model_fields}
+        # Un profil lu depuis la DB sans contexte_sportif jamais renseigné est par
+        # construction un ancien profil (l'app n'a longtemps été que football) : on
+        # infère sport="football" à partir de `poste` pour la lecture uniquement, afin
+        # de ne pas régresser le comportement existant (Phase 9). Un payload entrant
+        # (POST /api/profil) n'est jamais concerné par cette inférence — voir la
+        # branche dict ci-dessus, qui respecte toujours ce que le client envoie
+        # explicitement (y compris contexte_sportif.sport=None).
+        if detache.get("contexte_sportif") is None:
+            detache["contexte_sportif"] = {"sport": None, "frequence_hebdo": None, "poste": None}
+            poste_legacy = detache.get("poste")
+            if poste_legacy in user_model_v2.POSTES_FOOTBALL:
+                detache["contexte_sportif"] = {"sport": "football", "frequence_hebdo": None, "poste": poste_legacy}
+        for champ in ("objectifs_v2", "disponibilites"):
+            if detache.get(champ) is None:
+                detache[champ] = [] if champ == "objectifs_v2" else {}
+        return detache
+
+    @model_validator(mode="after")
+    def _normaliser_v2(self) -> "ProfilBase":
+        # Objectifs V2 : si le client envoie déjà objectifs_v2, on le renormalise
+        # quand même (recalcule les poids depuis les rangs, jamais depuis le client) ;
+        # sinon on migre depuis l'ancien format `objectifs` (list[str]).
+        source_objectifs = (
+            [o.model_dump() for o in self.objectifs_v2] if self.objectifs_v2 else self.objectifs
+        )
+        objectifs_normalises = user_model_v2.normaliser_objectifs(source_objectifs)
+        self.objectifs_v2 = [ObjectifV2(**o) for o in objectifs_normalises]
+
+        # Contexte sportif : normalisation (poste ignoré si sport != football).
+        self.contexte_sportif = ContexteSportif(
+            **user_model_v2.normaliser_contexte_sportif(self.contexte_sportif.model_dump())
+        )
+
+        # Disponibilités : dict structuré si fourni, sinon fallback best-effort sur
+        # l'ancien `contraintes_temps` texte libre (Phase 3/4).
+        self.disponibilites = user_model_v2.normaliser_disponibilites(
+            self.disponibilites, fallback_contraintes_temps=self.contraintes_temps or None
+        )
+
+        # Dérivation des champs legacy depuis les champs V2 quand le client V2 ne les
+        # a pas fournis, pour ne jamais violer les contraintes NOT NULL existantes ni
+        # perdre l'info pour le code qui lit encore l'ancien format.
+        if not self.poste and self.contexte_sportif.poste:
+            self.poste = self.contexte_sportif.poste
+        if not self.objectifs and self.objectifs_v2:
+            self.objectifs = [o.theme for o in self.objectifs_v2]
+
+        return self
 
 
 class ProfilCreate(ProfilBase):
@@ -54,6 +169,7 @@ class ProfilOut(ProfilBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     date_creation: Optional[datetime] = None
+    niveau_observe: Optional[dict[str, Any]] = None
 
 
 class SeanceExerciceItem(BaseModel):

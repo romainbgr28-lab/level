@@ -29,6 +29,13 @@ COLONNES_A_AJOUTER = [
     ("exercices_bibliotheque", "pattern_mouvement", "VARCHAR"),
     ("exercices_bibliotheque", "groupe_musculaire_principal", "VARCHAR"),
     ("exercices_bibliotheque", "materiel_requis_liste", "JSON"),
+    # User Model V2 (voir user_model_v2.py) : colonnes additives, nullable, non peuplées pour
+    # les profils déjà existants (pas de backfill destructif) — main.py normalise à la volée
+    # à la lecture pour un ancien profil (aucun crash sur données non migrées, cf. Phase 9).
+    ("profil", "objectifs_v2", "JSON"),
+    ("profil", "contexte_sportif", "JSON"),
+    ("profil", "disponibilites", "JSON"),
+    ("profil", "niveau_observe", "JSON"),
 ]
 
 
