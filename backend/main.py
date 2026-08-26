@@ -13,6 +13,7 @@ import connaissances
 import duree_seance
 import mistral_client
 import models
+import moteur_decision
 import regles_seance
 import schemas
 import substitution
@@ -1000,6 +1001,7 @@ def _construire_prompt_generation(
     fiches_theoriques: list[str],
     charges_depart: Optional[dict[int, float]] = None,
     rpe_cible: int = duree_seance.RPE_CIBLE_DEFAUT,
+    decision: Optional["moteur_decision.DecisionCoaching"] = None,
 ) -> str:
     exclusions = recommandation.get("exclusions") or []
     exclusions_txt = ", ".join(exclusions) if exclusions else "aucune"
@@ -1049,7 +1051,12 @@ mais respecte cette trame sinon)
     )
     niveau_effectif = profil.get("_niveau_effectif")
 
+    strategie_txt = ""
+    if decision is not None:
+        strategie_txt = "\n\n" + moteur_decision.formater_section_prompt(decision)
+
     return f"""Tu es un coach sportif qui construit une séance de sport concrète pour {intitule_joueur}.
+{strategie_txt}
 
 EXERCICES DISPONIBLES (présélection déjà filtrée pour ce joueur selon le type de séance, le matériel
 disponible, ses zones sensibles ET le temps disponible aujourd'hui — tu dois obligatoirement choisir
@@ -1266,9 +1273,26 @@ def generer_seance(
     # Phase 5/7 : Mistral reçoit le niveau effectif (déclaré recalibré par l'observé selon la
     # confiance) plutôt que le déclaré brut, quand un niveau observé existe déjà.
     profil_dict["_niveau_effectif"] = _niveau_physique_effectif(profil, profil_dict)
+
+    # Moteur de décision déterministe (User Model V2 -> stratégie de coaching) : purement
+    # additif, ne doit jamais empêcher la génération de séance existante en cas de souci.
+    decision: Optional[moteur_decision.DecisionCoaching] = None
+    try:
+        decision = moteur_decision.construire_decision(
+            profil_dict,
+            historique_ctx,
+            etat_du_jour,
+            type_seance_gabarit=type_seance_gabarit,
+            aujourdhui=today,
+            niveau_effectif=profil_dict["_niveau_effectif"],
+        )
+    except Exception:
+        logger.exception("Moteur de décision indisponible : génération de séance sans section stratégie.")
+        decision = None
+
     system_prompt = _construire_system_prompt(sport=(profil_dict.get("contexte_sportif") or {}).get("sport"))
     prompt = _construire_prompt_generation(
-        profil_dict, recommandation, etat_du_jour, plan, fiches_theoriques, charges_depart, rpe_cible
+        profil_dict, recommandation, etat_du_jour, plan, fiches_theoriques, charges_depart, rpe_cible, decision
     )
 
     ids_valides = {p["exercice"].id for p in plan}
