@@ -354,6 +354,12 @@ def construire_structure_hebdomadaire(
     """Construit la structure hebdomadaire du programme, DÉTERMINISTE et pure (aucune I/O, aucun
     appel réseau/Mistral) : {jour_lower: {"type": type_seance, "objectif_principal": theme}}.
 
+    `frequence_hebdo` est la fréquence de pratique du SPORT (ex. nb d'entraînements de football/
+    semaine) — une information de charge sportive, gardée dans la signature pour un usage futur
+    (modulation volume/intensité), mais qui NE plafonne PAS le nombre de séances LEVEL retenues
+    ici : c'est `disponibilites` (Profil.disponibilites) qui définit le plafond de jours
+    utilisables par LEVEL, jamais frequence_hebdo (bug corrigé, cf. audit P1.0).
+
     Ordre de priorité appliqué (spécification programme section 8, à ne jamais inverser) :
     1. contraintes absolues (jour de match exclu, veille/lendemain de match) ;
     2. objectifs hiérarchisés (rang 1 pèse plus que rang 2, qui pèse plus que rang 3 —
@@ -394,8 +400,12 @@ def construire_structure_hebdomadaire(
     if not jours_disponibles:
         return {}
 
-    n_max = len(jours_disponibles)
-    n_seances = min(frequence_hebdo, n_max) if frequence_hebdo else n_max
+    # `frequence_hebdo` décrit la fréquence de pratique du SPORT (ex. nb d'entraînements de
+    # football/semaine), pas le nombre de séances LEVEL voulues : il ne doit jamais plafonner
+    # ici le nombre de jours retenus (bug corrigé — voir audit P1.0). Le plafond réel est
+    # `Profil.disponibilites` : tous les jours disponibles pertinents sont considérés, LEVEL
+    # décidant ensuite lui-même (contraintes de match, répartition des types) lesquels utiliser.
+    n_seances = len(jours_disponibles)
 
     # Les jours contraints par le calendrier (veille/lendemain de match) sont sélectionnés en
     # priorité s'ils sont disponibles : une contrainte absolue ne doit jamais être évincée par

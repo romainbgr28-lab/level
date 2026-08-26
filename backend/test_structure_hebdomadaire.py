@@ -193,12 +193,118 @@ class TestRangsInfluenceReelle(unittest.TestCase):
         self.assertGreater(types.count("force"), types.count("esthétique"))
         self.assertGreaterEqual(types.count("esthétique"), types.count("endurance"))
 
-    def test_frequence_hebdo_limite_le_nombre_de_seances(self):
+    def test_frequence_hebdo_ne_limite_plus_le_nombre_de_seances(self):
+        """Régression du bug P1.0 : frequence_hebdo (fréquence du SPORT) ne doit plus plafonner
+        le nombre de jours LEVEL — seules les disponibilités du profil font foi."""
         objectifs = [_obj("force", 1, 1.0)]
         structure = construire_structure_hebdomadaire(
             objectifs_v2=objectifs, sport=None, poste=None, disponibilites=DISPO_5J, frequence_hebdo=3,
         )
-        self.assertEqual(len(structure), 3)
+        self.assertEqual(len(structure), len(DISPO_5J) - 2)  # 5 jours dispo (mardi/samedi indispo)
+
+
+class TestFrequenceHebdoNePlafonnePlusLevel(unittest.TestCase):
+    """Bug P1.0 : contexte_sportif.frequence_hebdo décrit la fréquence de pratique du SPORT
+    (ex. entraînements de football/semaine), pas le nombre de séances LEVEL voulues. Il ne doit
+    jamais plafonner le nombre de jours retenus par construire_structure_hebdomadaire — c'est
+    Profil.disponibilites qui fixe le plafond réel."""
+
+    PROFIL_REEL_DISPO = {
+        "lundi": 60, "mardi": None, "mercredi": 60, "jeudi": 60,
+        "vendredi": 60, "samedi": None, "dimanche": 60,
+    }
+
+    def _objectifs_reels(self):
+        return [
+            _obj("perte_de_gras", 1, 0.6),
+            _obj("esthetique_hypertrophie", 2, 0.3),
+            _obj("performance_sport_pratique", 3, 0.1),
+        ]
+
+    def test_1_frequence_hebdo_1_ne_limite_pas_a_1_seance(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        self.assertGreater(len(structure), 1)
+
+    def test_2_frequence_hebdo_2_ne_limite_pas_a_2_seances(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=2,
+        )
+        self.assertGreater(len(structure), 2)
+
+    def test_3_cinq_jours_disponibles_restent_disponibles_avec_frequence_hebdo_1(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        self.assertEqual(
+            set(structure.keys()),
+            {"lundi", "mercredi", "jeudi", "vendredi", "dimanche"},
+        )
+
+    def test_4_contraintes_match_samedi_conservees(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        self.assertNotIn("samedi", structure)  # jour de match : pas de séance LEVEL
+        self.assertEqual(structure["vendredi"]["type"], "explosivité_vitesse")  # veille
+        self.assertEqual(structure["dimanche"]["type"], "repos")  # lendemain
+
+    def test_5_jour_indisponible_jamais_selectionne(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        self.assertNotIn("mardi", structure)
+
+    def test_6_aucune_disponibilite_aucune_seance(self):
+        dispo_vide = {j: None for j in self.PROFIL_REEL_DISPO}
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=dispo_vide, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        self.assertEqual(structure, {})
+
+    def test_7_frequence_hebdo_reste_accessible_dans_le_contexte_sportif(self):
+        from user_model_v2 import normaliser_contexte_sportif
+        contexte = normaliser_contexte_sportif({"sport": "football", "frequence_hebdo": 1, "poste": "Défenseur"})
+        self.assertIn("frequence_hebdo", contexte)
+        self.assertEqual(contexte["frequence_hebdo"], 1)
+
+    def test_8_objectifs_v2_hierarchises_toujours_respectes(self):
+        objectifs = [
+            _obj("force", 1, 0.6),
+            _obj("esthetique_hypertrophie", 2, 0.3),
+            _obj("performance_sport_pratique", 3, 0.1),
+        ]
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=objectifs, sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        types = [info["type"] for info in structure.values()]
+        self.assertGreaterEqual(types.count("force"), types.count("esthétique"))
+
+    def test_9_perte_de_gras_toujours_pas_automatiquement_endurance(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        types = [info["type"] for info in structure.values()]
+        self.assertNotIn("endurance", types)
+
+    def test_10_pas_de_regression_p05_types_valides(self):
+        structure = construire_structure_hebdomadaire(
+            objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
+            disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
+        )
+        types = {info["type"] for info in structure.values()}
+        self.assertTrue(types.issubset({"force", "explosivité_vitesse", "esthétique", "endurance", "repos"}))
+        for jour, info in structure.items():
+            self.assertTrue(info["objectif_principal"])
 
 
 if __name__ == "__main__":
