@@ -26,6 +26,9 @@ COLONNES_A_AJOUTER = [
     ("historique_seances", "decision_adaptation", "JSON"),
     ("seances", "etat_declare_avant", "JSON"),
     ("seances", "decision_adaptation", "JSON"),
+    ("exercices_bibliotheque", "pattern_mouvement", "VARCHAR"),
+    ("exercices_bibliotheque", "groupe_musculaire_principal", "VARCHAR"),
+    ("exercices_bibliotheque", "materiel_requis_liste", "JSON"),
 ]
 
 

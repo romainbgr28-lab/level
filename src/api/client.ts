@@ -42,6 +42,9 @@ export interface ApiSeanceExercice {
   notes?: string;
   rpe_cible?: number | null;
   temps_repos_recommande_s?: number | null;
+  // Anciens exercice_id de ce slot (Étape 7C, remplacement) : présent uniquement si l'exercice
+  // de ce slot a déjà été remplacé au moins une fois.
+  historique_exercice_ids?: number[];
 }
 
 export interface ApiSeance {
@@ -70,6 +73,28 @@ export interface ApiExerciceBibliotheque {
   sport_specifique: string | null;
   points_securite: string | null;
   charge_recommandee: 'poids_du_corps' | 'charge_legere' | 'charge_moderee' | 'charge_lourde_progressive';
+  pattern_mouvement?: string | null;
+  groupe_musculaire_principal?: string | null;
+  materiel_requis_liste?: string[] | null;
+}
+
+// ---------- Remplacement d'exercice (Étape 7C) ----------
+
+export interface ApiAlternativeExercice {
+  exercice: ApiExerciceBibliotheque;
+  score: number;
+  memes_criteres: string[];
+}
+
+export interface ApiAlternativesExercice {
+  exercice_actuel_id: number;
+  alternatives: ApiAlternativeExercice[];
+}
+
+export interface ApiRemplacerExerciceResult {
+  seance: ApiSeance;
+  series_deja_realisees: number;
+  message_confirmation: string | null;
 }
 
 // ---------- Séries loguées (logging temps réel façon Hevy) ----------
@@ -210,6 +235,20 @@ export const getDernierePerformance = (exerciceId: number, seanceId?: number) =>
   request<ApiDernierePerformance>(
     `/api/exercices_bibliotheque/${exerciceId}/derniere_performance${seanceId ? `?seance_id=${seanceId}` : ''}`
   );
+
+// ---------- Remplacement d'exercice (Étape 7C) ----------
+
+export const getAlternativesExercice = (seanceId: number, exerciceId: number) =>
+  request<ApiAlternativesExercice>(`/api/seance/${seanceId}/exercices/${exerciceId}/alternatives`);
+
+export const remplacerExercice = (
+  seanceId: number,
+  payload: { exercice_id_actuel: number; exercice_id_nouveau: number }
+) =>
+  request<ApiRemplacerExerciceResult>(`/api/seance/${seanceId}/remplacer_exercice`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
 // ---------- Séries loguées ----------
 

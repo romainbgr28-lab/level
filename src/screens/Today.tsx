@@ -6,15 +6,18 @@ import {
   deleteSerieLoggee,
   deleteTodaySeance,
   genererSeance,
+  getAlternativesExercice,
   getDernierePerformance,
   getExercicesBibliotheque,
   getProgrammeActif,
   getSeriesLoggees,
   getTodaySeance,
+  remplacerExercice,
   terminerSeanceIA,
   updateSerieLoggee,
 } from '../api/client';
 import type {
+  ApiAlternativeExercice,
   ApiDernierePerformance,
   ApiDifficulte,
   ApiEtatDuJour,
@@ -132,6 +135,13 @@ export default function Today() {
   >({});
   const [manualOpenId, setManualOpenId] = useState<number | 'auto'>('auto');
 
+  // ---- Remplacement d'exercice (Étape 7C) ----
+  const [replaceTargetId, setReplaceTargetId] = useState<number | null>(null);
+  const [alternatives, setAlternatives] = useState<ApiAlternativeExercice[]>([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const [replaceError, setReplaceError] = useState<string | null>(null);
+
   const [rpe, setRpe] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [zoneSensible, setZoneSensible] = useState('');
@@ -242,9 +252,19 @@ export default function Today() {
     return series.filter((s) => s.coche);
   }
 
+  // Après un remplacement (Étape 7C), les séries déjà validées sur les anciens exercice_id de ce
+  // slot (historique_exercice_ids) comptent pour la complétion du slot, sans jamais être
+  // transférées vers le nouvel exercice_id (vérité historique intacte, cf. remplacerExercice).
+  function validesHistoriquePourExercice(item: ApiSeanceExercice): number {
+    return (item.historique_exercice_ids ?? []).reduce(
+      (acc, id) => acc + (seriesParExercice[id] ?? []).filter((s) => s.coche).length,
+      0
+    );
+  }
+
   function estExerciceComplet(item: ApiSeanceExercice): boolean {
     const series = seriesParExercice[item.exercice_id] ?? [];
-    const cible = item.series ?? series.length;
+    const cible = Math.max(0, (item.series ?? series.length) - validesHistoriquePourExercice(item));
     const validees = seriesValideesPourExercice(item);
     return cible > 0 && validees.length >= cible;
   }
@@ -379,6 +399,73 @@ export default function Today() {
       [exerciceId]: (prev[exerciceId] ?? []).filter((s) => s.id !== serie.id),
     }));
     if (editingSerieId === serie.id) setEditingSerieId(null);
+  }
+
+  async function ouvrirRemplacement(exerciceId: number) {
+    if (!seance) return;
+    setReplaceTargetId(exerciceId);
+    setAlternatives([]);
+    setReplaceError(null);
+    setLoadingAlternatives(true);
+    try {
+      const res = await getAlternativesExercice(seance.id, exerciceId);
+      setAlternatives(res.alternatives);
+    } catch (e) {
+      setReplaceError(e instanceof Error ? e.message : 'Erreur lors du chargement des alternatives.');
+    } finally {
+      setLoadingAlternatives(false);
+    }
+  }
+
+  function fermerRemplacement() {
+    setReplaceTargetId(null);
+    setAlternatives([]);
+    setReplaceError(null);
+  }
+
+  async function choisirAlternative(nouvelExerciceId: number) {
+    if (!seance || replaceTargetId === null) return;
+    const itemActuel = seance.exercices.find((it) => it.exercice_id === replaceTargetId);
+    // Séries déjà réalisées sur l'exercice actuel du slot (pas l'historique complet du slot :
+    // même périmètre que series_deja_realisees côté backend) -> confirmation explicite si >= 1.
+    const nbValideesActuel = itemActuel
+      ? (seriesParExercice[replaceTargetId] ?? []).filter((s) => s.coche).length
+      : 0;
+    if (nbValideesActuel > 0) {
+      const nomActuel = bibliotheque[replaceTargetId]?.nom ?? `Exercice #${replaceTargetId}`;
+      const nomNouveau =
+        bibliotheque[nouvelExerciceId]?.nom ??
+        alternatives.find((a) => a.exercice.id === nouvelExerciceId)?.exercice.nom ??
+        `Exercice #${nouvelExerciceId}`;
+      const ok = window.confirm(
+        `${nbValideesActuel} série(s) déjà réalisée(s) sur ${nomActuel} resteront dans l'historique. ` +
+          `Les prochaines séries seront réalisées sur ${nomNouveau}. Continuer ?`
+      );
+      if (!ok) return;
+    }
+
+    setReplacing(true);
+    setReplaceError(null);
+    try {
+      const res = await remplacerExercice(seance.id, {
+        exercice_id_actuel: replaceTargetId,
+        exercice_id_nouveau: nouvelExerciceId,
+      });
+      setSeance(res.seance);
+      const nouvelExercice = alternatives.find((a) => a.exercice.id === nouvelExerciceId)?.exercice;
+      if (nouvelExercice) {
+        setBibliotheque((prev) => ({ ...prev, [nouvelExerciceId]: nouvelExercice }));
+      }
+      // Ouvre automatiquement le nouvel exercice pour que l'utilisateur voie tout de suite le
+      // remplacement pris en compte, sans perdre les séries déjà réalisées (cf. cible ajustée
+      // via historique_exercice_ids dans le rendu du bloc-exercice).
+      setManualOpenId(nouvelExerciceId);
+      fermerRemplacement();
+    } catch (e) {
+      setReplaceError(e instanceof Error ? e.message : 'Erreur lors du remplacement.');
+    } finally {
+      setReplacing(false);
+    }
   }
 
   async function handleGenerer() {
@@ -672,7 +759,13 @@ export default function Today() {
             const precedent = precedentParExercice[item.exercice_id];
             const draft = draftFor(item.exercice_id);
             const draftVisible = item.exercice_id in draftParExercice;
-            const cible = item.series ?? series.length;
+            // Après un remplacement (Étape 7C), les séries déjà validées sur les anciens
+            // exercice_id de ce slot (historique_exercice_ids) ne sont jamais transférées vers
+            // le nouvel exercice_id : on les déduit du total prévu du slot pour que le badge et
+            // la liste de séries à faire reflètent ce qu'il reste réellement à faire, sans jamais
+            // recalculer/réduire item.series lui-même (qui reste la vérité du total prévu, cf.
+            // pourcentage_complete côté backend).
+            const cible = Math.max(0, (item.series ?? series.length) - validesHistoriquePourExercice(item));
             const prochaineNumero = series.length + 1;
             const seanceTerminee = 'statut' in seance && seance.statut === 'terminee';
             const complet = estExerciceComplet(item);
@@ -689,10 +782,14 @@ export default function Today() {
                 }`}
                 key={item.exercice_id}
               >
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   className="exercise-block__head"
                   onClick={() => setManualOpenId(isOpen ? -1 : item.exercice_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setManualOpenId(isOpen ? -1 : item.exercice_id);
+                  }}
                 >
                   <span className="exercise-block__title-wrap">
                     <span
@@ -706,10 +803,23 @@ export default function Today() {
                     </span>
                     <span className="exercise-block__group">{ex?.groupe_musculaire}</span>
                   </span>
+                  {!seanceTerminee && !complet && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label="Remplacer cet exercice"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        ouvrirRemplacement(item.exercice_id);
+                      }}
+                    >
+                      ⇄
+                    </button>
+                  )}
                   <span className={`exercise-block__status ${complet ? 'exercise-block__status--done' : ''}`}>
                     {complet ? '✓' : `${nbValideesExercice}/${cible}`}
                   </span>
-                </button>
+                </div>
 
                 {isOpen && (
                   <>
@@ -1075,6 +1185,45 @@ export default function Today() {
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {replaceTargetId !== null && (
+        <div className="modal-overlay" onClick={fermerRemplacement}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-sheet__close" onClick={fermerRemplacement}>
+              Fermer
+            </button>
+            <h2 className="card__title" style={{ clear: 'both', marginBottom: 8 }}>
+              Remplacer {bibliotheque[replaceTargetId]?.nom ?? `Exercice #${replaceTargetId}`}
+            </h2>
+            {loadingAlternatives && <p className="subtle">Recherche d’alternatives…</p>}
+            {!loadingAlternatives && !replaceError && alternatives.length === 0 && (
+              <p className="subtle">Aucune alternative disponible avec ton matériel actuel.</p>
+            )}
+            {replaceError && (
+              <p className="subtle" style={{ color: '#e5484d' }}>
+                {replaceError}
+              </p>
+            )}
+            {!loadingAlternatives &&
+              alternatives.map((alt) => (
+                <button
+                  key={alt.exercice.id}
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 8 }}
+                  disabled={replacing}
+                  onClick={() => choisirAlternative(alt.exercice.id)}
+                >
+                  <strong>{alt.exercice.nom}</strong>
+                  <div className="subtle">
+                    {alt.exercice.groupe_musculaire} · {alt.exercice.type}
+                    {alt.exercice.materiel_requis ? ` · ${alt.exercice.materiel_requis}` : ''}
+                  </div>
+                </button>
+              ))}
           </div>
         </div>
       )}

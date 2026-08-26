@@ -1,6 +1,7 @@
 from datetime import date
 
 from connaissances import get_exercices_bibliotheque_extension, get_exercices_musculation_base
+from data.annotations_substitution import ANNOTATIONS
 from database import SessionLocal
 from models import ExerciceBibliotheque, ModuleIntellectuel, Streak
 
@@ -130,6 +131,18 @@ def seed(db):
                 charge_recommandee=fiche.get("charge_recommandee", "charge_moderee"),
             )
         )
+
+    # Rétro-annotation déterministe (Étape 7C, pas d'IA à l'exécution) des exercices dont les
+    # champs de substitution sont encore vides : couvre à la fois les lignes fraîchement créées
+    # ci-dessus et celles déjà en base avant l'introduction de ces colonnes (nullable, ajoutées
+    # par migrate.py). Idempotent : ne touche jamais une ligne déjà annotée.
+    for exercice in db.query(ExerciceBibliotheque).filter(ExerciceBibliotheque.pattern_mouvement.is_(None)).all():
+        annotation = ANNOTATIONS.get(exercice.nom)
+        if not annotation:
+            continue
+        exercice.pattern_mouvement = annotation["pattern_mouvement"]
+        exercice.groupe_musculaire_principal = annotation["groupe_musculaire_principal"]
+        exercice.materiel_requis_liste = annotation["materiel_requis_liste"]
 
     if db.query(Streak).count() == 0:
         db.add(Streak(date=date.today(), sport_fait=0, apprentissage_fait=0))

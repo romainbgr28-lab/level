@@ -116,6 +116,10 @@ class ExerciceBibliothequeBase(BaseModel):
     points_securite: Optional[str] = None
     # poids_du_corps | charge_legere | charge_moderee | charge_lourde_progressive
     charge_recommandee: str = "charge_moderee"
+    # Champs normalisés pour le remplacement d'exercice (Étape 7C) — voir substitution.py.
+    pattern_mouvement: Optional[str] = None
+    groupe_musculaire_principal: Optional[str] = None
+    materiel_requis_liste: Optional[list[str]] = None
 
 
 class ExerciceBibliothequeCreate(ExerciceBibliothequeBase):
@@ -125,6 +129,33 @@ class ExerciceBibliothequeCreate(ExerciceBibliothequeBase):
 class ExerciceBibliothequeOut(ExerciceBibliothequeBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+# ---------- Remplacement d'exercice (Étape 7C) ----------
+
+
+class AlternativeExerciceOut(BaseModel):
+    """Un candidat de remplacement, avec de quoi l'afficher et expliquer le score côté UI."""
+
+    exercice: ExerciceBibliothequeOut
+    score: int
+    memes_criteres: list[str]  # ex: ["pattern_mouvement", "groupe_musculaire_principal"]
+
+
+class AlternativesExerciceOut(BaseModel):
+    exercice_actuel_id: int
+    alternatives: list[AlternativeExerciceOut]
+
+
+class RemplacerExercicePayload(BaseModel):
+    exercice_id_actuel: int
+    exercice_id_nouveau: int
+
+
+class RemplacerExerciceOut(BaseModel):
+    seance: SeanceOut
+    series_deja_realisees: int  # nb de séries cochées sur l'ancien exercice, pour l'UI de confirmation
+    message_confirmation: Optional[str] = None
 
 
 # ---------- Séries loguées en temps réel (façon Hevy) ----------

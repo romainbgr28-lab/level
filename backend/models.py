@@ -31,6 +31,9 @@ class Seance(Base):
     # Chaque item : {"exercice_id": int, "series": int, "repetitions": str,
     # "charge_indicative": str|None, "notes": str|None} — exercice_id référence
     # exercices_bibliotheque.id (plus de nom texte libre inventé par l'IA).
+    # Optionnel : "historique_exercice_ids": list[int], présent uniquement si l'exercice de ce
+    # slot a déjà été remplacé au moins une fois (Étape 7C, voir main.py::remplacer_exercice) —
+    # trace la chaîne A -> B -> C sans jamais réécrire les SerieLoggee déjà persistées.
     exercices = Column(JSON, nullable=False, default=list)
     statut = Column(String, nullable=False, default="planifiee")  # planifiee | prévue | terminee
     type_seance = Column(String, nullable=True)  # force | explosivité_vitesse | esthétique | décharge (moteur de règles)
@@ -69,6 +72,13 @@ class ExerciceBibliotheque(Base):
     materiel_requis = Column(String, nullable=True)  # ex: "aucun", "haltères", "banc ou support surélevé"
     sport_specifique = Column(String, nullable=True)  # "foot" | "généraliste"
     points_securite = Column(String, nullable=True)
+    # --- Étape 7C (remplacement d'exercice) : champs normalisés, en complément du texte
+    # libre ci-dessus, pour permettre un matching déterministe entre exercices (voir
+    # substitution.py). Nullable et rétro-annotés par seed.py plutôt que migrés en dur,
+    # pour rester idempotent sur une base déjà peuplée.
+    pattern_mouvement = Column(String, nullable=True)  # ex: squat | hinge | fente | poussee_horizontale | ...
+    groupe_musculaire_principal = Column(String, nullable=True)  # valeur unique normalisée (vs groupe_musculaire, texte libre)
+    materiel_requis_liste = Column(JSON, nullable=True)  # liste de tags matériel normalisés, ex: ["haltères"], []
     # Nature de la charge adaptée à cet exercice, indépendante du niveau de force déclaré par
     # l'utilisateur : poids_du_corps | charge_legere | charge_moderee | charge_lourde_progressive.
     # Sert de garde-fou pour Mistral (voir main.py::_construire_prompt_generation) afin d'éviter

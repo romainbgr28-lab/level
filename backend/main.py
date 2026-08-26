@@ -15,6 +15,7 @@ import mistral_client
 import models
 import regles_seance
 import schemas
+import substitution
 from dev_date import get_current_date
 from charge_depart import estimer_charge_depart, formater_recommandation_charge
 from calendrier import compute_phase
@@ -147,6 +148,151 @@ def update_seance(seance_id: int, payload: schemas.SeanceUpdate, db: Session = D
     db.commit()
     db.refresh(seance)
     return seance
+
+
+# ---------- Remplacement d'exercice (Étape 7C) ----------
+
+MAX_ALTERNATIVES = 5
+
+
+def _item_pour_exercice(seance: models.Seance, exercice_id: int) -> Optional[dict]:
+    for item in seance.exercices or []:
+        if isinstance(item, dict) and item.get("exercice_id") == exercice_id:
+            return item
+    return None
+
+
+def _materiel_et_zones_pour_seance(seance: models.Seance, db: Session) -> tuple[str, list[str]]:
+    """Réutilise le matériel déclaré au profil et les zones sensibles exclues à la
+    génération de cette séance (Seance.decision_adaptation["exclusions"], calculées par le
+    moteur de règles — voir generer_seance) : le remplacement doit respecter les mêmes
+    garde-fous que la génération initiale, pas des garde-fous recalculés différemment."""
+    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    materiel_disponible = profil.materiel if profil else ""
+    zones_sensibles = (seance.decision_adaptation or {}).get("exclusions") or []
+    return materiel_disponible, zones_sensibles
+
+
+@app.get(
+    "/api/seance/{seance_id}/exercices/{exercice_id}/alternatives",
+    response_model=schemas.AlternativesExerciceOut,
+)
+def get_alternatives_exercice(seance_id: int, exercice_id: int, db: Session = Depends(get_db)):
+    seance = db.get(models.Seance, seance_id)
+    if not seance:
+        raise HTTPException(status_code=404, detail="Séance introuvable")
+
+    if _item_pour_exercice(seance, exercice_id) is None:
+        raise HTTPException(status_code=404, detail="Exercice non présent dans cette séance")
+
+    exercice_actuel = db.get(models.ExerciceBibliotheque, exercice_id)
+    if not exercice_actuel:
+        raise HTTPException(status_code=404, detail="Exercice introuvable")
+
+    bibliotheque = db.query(models.ExerciceBibliotheque).all()
+    bibliotheque_par_id = {ex.id: ex for ex in bibliotheque}
+    exercice_ids_deja_dans_seance = {
+        item.get("exercice_id") for item in (seance.exercices or []) if isinstance(item, dict)
+    }
+    materiel_disponible, zones_sensibles = _materiel_et_zones_pour_seance(seance, db)
+
+    candidats = substitution.trouver_alternatives(
+        substitution.exercice_vers_dict(exercice_actuel),
+        [substitution.exercice_vers_dict(ex) for ex in bibliotheque],
+        exercice_ids_deja_dans_seance,
+        materiel_disponible,
+        zones_sensibles,
+    )
+
+    alternatives = [
+        schemas.AlternativeExerciceOut(
+            exercice=schemas.ExerciceBibliothequeOut.model_validate(bibliotheque_par_id[c["exercice"]["id"]]),
+            score=c["score"],
+            memes_criteres=c["memes_criteres"],
+        )
+        for c in candidats[:MAX_ALTERNATIVES]
+    ]
+    return schemas.AlternativesExerciceOut(exercice_actuel_id=exercice_id, alternatives=alternatives)
+
+
+@app.post("/api/seance/{seance_id}/remplacer_exercice", response_model=schemas.RemplacerExerciceOut)
+def remplacer_exercice(seance_id: int, payload: schemas.RemplacerExercicePayload, db: Session = Depends(get_db)):
+    seance = db.get(models.Seance, seance_id)
+    if not seance:
+        raise HTTPException(status_code=404, detail="Séance introuvable")
+
+    if seance.statut == "terminee":
+        raise HTTPException(status_code=409, detail="Impossible de remplacer un exercice sur une séance terminée.")
+
+    if payload.exercice_id_actuel == payload.exercice_id_nouveau:
+        raise HTTPException(
+            status_code=400, detail="L'exercice de remplacement doit être différent de l'exercice actuel."
+        )
+
+    exercices = list(seance.exercices or [])
+    index_actuel = next(
+        (
+            i
+            for i, item in enumerate(exercices)
+            if isinstance(item, dict) and item.get("exercice_id") == payload.exercice_id_actuel
+        ),
+        None,
+    )
+    if index_actuel is None:
+        raise HTTPException(status_code=404, detail="Exercice non présent dans cette séance")
+
+    autres_ids = {
+        item.get("exercice_id")
+        for i, item in enumerate(exercices)
+        if isinstance(item, dict) and i != index_actuel
+    }
+    if payload.exercice_id_nouveau in autres_ids:
+        raise HTTPException(status_code=409, detail="Cet exercice est déjà présent dans cette séance.")
+
+    exercice_nouveau = db.get(models.ExerciceBibliotheque, payload.exercice_id_nouveau)
+    if not exercice_nouveau:
+        raise HTTPException(status_code=404, detail="Exercice de remplacement introuvable")
+    exercice_actuel = db.get(models.ExerciceBibliotheque, payload.exercice_id_actuel)
+
+    # Ne modifie QUE le slot ciblé : series/repetitions/charge_indicative/notes/rpe_cible/
+    # temps_repos_recommande_s sont conservés strictement tels quels (jamais recalculés), seul
+    # exercice_id change. historique_exercice_ids trace la chaîne de remplacements (A -> B -> C)
+    # pour que terminer_seance() puisse regrouper les séries des anciens exercice_id du slot,
+    # sans jamais réécrire les SerieLoggee déjà persistées (vérité historique intacte).
+    item_actuel = exercices[index_actuel]
+    historique = list(item_actuel.get("historique_exercice_ids") or [])
+    if payload.exercice_id_actuel not in historique:
+        historique.append(payload.exercice_id_actuel)
+
+    nouvel_item = {**item_actuel, "exercice_id": payload.exercice_id_nouveau, "historique_exercice_ids": historique}
+    exercices[index_actuel] = nouvel_item
+    seance.exercices = exercices  # réassignation complète : requis pour que SQLAlchemy détecte la mutation d'une colonne JSON
+    db.commit()
+    db.refresh(seance)
+
+    series_deja_realisees = (
+        db.query(models.SerieLoggee)
+        .filter(
+            models.SerieLoggee.seance_id == seance.id,
+            models.SerieLoggee.exercice_id == payload.exercice_id_actuel,
+            models.SerieLoggee.coche == 1,
+        )
+        .count()
+    )
+
+    message_confirmation = None
+    if series_deja_realisees > 0:
+        nom_ancien = exercice_actuel.nom if exercice_actuel else f"Exercice #{payload.exercice_id_actuel}"
+        message_confirmation = (
+            f"{series_deja_realisees} série(s) déjà réalisée(s) sur {nom_ancien} resteront dans l'historique. "
+            f"Les prochaines séries seront réalisées sur {exercice_nouveau.nom}."
+        )
+
+    return schemas.RemplacerExerciceOut(
+        seance=schemas.SeanceOut.model_validate(seance),
+        series_deja_realisees=series_deja_realisees,
+        message_confirmation=message_confirmation,
+    )
 
 
 # ---------- Bibliothèque d'exercices ----------
@@ -507,34 +653,12 @@ TYPES_PAR_TYPE_SEANCE: dict[str, list[str]] = {
 MAX_CANDIDATS_MISTRAL = 18
 
 
-def _materiel_compatible(materiel_requis: Optional[str], materiel_disponible: str) -> bool:
-    """Heuristique simple de compatibilité matériel : un exercice sans matériel (ou
-    "aucun") est toujours compatible ; sinon on cherche un recoupement de mots entre
-    le matériel requis par l'exercice et le matériel déclaré par l'utilisateur."""
-    if not materiel_requis or "aucun" in materiel_requis.lower():
-        return True
-    if not materiel_disponible:
-        return False
-
-    md = materiel_disponible.lower()
-    mots_ignores = {"ou", "et", "de", "des", "le", "la", "les", "un", "une", "en", "option", "pour"}
-    mots_requis = [
-        mot.strip("()., ") for mot in materiel_requis.lower().replace("/", " ").split() if mot.strip("()., ")
-    ]
-    mots_requis = [mot for mot in mots_requis if mot not in mots_ignores and len(mot) > 2]
-    return any(mot in md for mot in mots_requis)
-
-
 # Valeurs contrôlées pour TerminerSeancePayload.zone_sensible, exactement les groupes musculaires
 # utilisés par regles_seance.GROUPES_PAR_TYPE_SEANCE (union de toutes les valeurs de cette table) :
 # réutiliser d'autres libellés casserait le matching de appliquer_garde_fous/
-# _groupe_concerne_par_zone_sensible, qui comparent par égalité de chaîne (insensible à la casse).
+# substitution.groupe_concerne_par_zone_sensible, qui comparent par égalité de chaîne (insensible
+# à la casse).
 ZONES_SENSIBLES_VALIDES = ["jambes", "dos", "épaules", "bras", "mollets", "abdos"]
-
-
-def _groupe_concerne_par_zone_sensible(groupe_musculaire: str, zones_sensibles: list[str]) -> bool:
-    gm = (groupe_musculaire or "").lower()
-    return any(zone.lower() in gm for zone in zones_sensibles if zone)
 
 
 def _selectionner_exercices_candidats(
@@ -551,9 +675,9 @@ def _selectionner_exercices_candidats(
     types_ok = set(TYPES_PAR_TYPE_SEANCE.get(type_seance_suggere, []))
 
     def _eligible(ex: models.ExerciceBibliotheque) -> bool:
-        if _groupe_concerne_par_zone_sensible(ex.groupe_musculaire, zones_sensibles):
+        if substitution.groupe_concerne_par_zone_sensible(ex.groupe_musculaire, zones_sensibles):
             return False
-        if not _materiel_compatible(ex.materiel_requis, materiel_disponible):
+        if not substitution.materiel_compatible(ex.materiel_requis, materiel_disponible):
             return False
         return True
 
@@ -1239,13 +1363,59 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
     series_prevues = sum(int(item.get("series") or 0) for item in (seance.exercices or []) if isinstance(item, dict))
     pourcentage_complete = round(100 * nb_series_validees / series_prevues, 1) if series_prevues > 0 else None
 
-    exercices_ids = sorted({s.exercice_id for s in series_validees})
+    exercices_seance = [item for item in (seance.exercices or []) if isinstance(item, dict)]
+
+    # Union des exercice_id à résoudre en bibliothèque : ceux des séries validées (pour le nom
+    # d'un exercice remplacé qui n'est plus dans Seance.exercices, filet de sécurité ci-dessous)
+    # et ceux des slots actuels (pour le nom courant de chaque slot, même sans série validée dessus).
+    exercices_ids = sorted(
+        {s.exercice_id for s in series_validees}
+        | {item.get("exercice_id") for item in exercices_seance if item.get("exercice_id") is not None}
+    )
     bibliotheque_par_id = {
         ex.id: ex for ex in db.query(models.ExerciceBibliotheque).filter(models.ExerciceBibliotheque.id.in_(exercices_ids)).all()
     } if exercices_ids else {}
 
+    # Regroupement par « slot » de Seance.exercices plutôt que par exercice_id brut : après un
+    # remplacement (Étape 7C, voir /api/seance/{id}/remplacer_exercice), les séries déjà validées
+    # sur l'ancien exercice restent en base avec l'ancien exercice_id (jamais réécrites), mais
+    # doivent apparaître dans le même résumé que les séries du nouvel exercice — c'est
+    # historique_exercice_ids qui porte la trace de cette chaîne (A -> B -> C).
     exercices_realises = []
-    for exercice_id in exercices_ids:
+    exercice_ids_couverts: set[int] = set()
+    for item in exercices_seance:
+        exercice_id_actuel = item.get("exercice_id")
+        slot_ids = {exercice_id_actuel} | set(item.get("historique_exercice_ids") or [])
+        series_slot = sorted(
+            (s for s in series_validees if s.exercice_id in slot_ids),
+            key=lambda s: (s.horodatage is None, s.horodatage, s.numero_serie),
+        )
+        if not series_slot:
+            continue
+        exercice_ids_couverts |= slot_ids
+        exercice_courant = bibliotheque_par_id.get(exercice_id_actuel)
+        exercices_realises.append(
+            {
+                "exercice_id": exercice_id_actuel,
+                "nom": exercice_courant.nom if exercice_courant else None,
+                "historique_exercice_ids": item.get("historique_exercice_ids") or [],
+                "series": [
+                    {
+                        "numero_serie": s.numero_serie,
+                        "poids_kg": s.poids_kg,
+                        "repetitions": s.repetitions,
+                        "exercice_id": s.exercice_id,
+                    }
+                    for s in series_slot
+                ],
+            }
+        )
+
+    # Filet de sécurité : séries validées sur un exercice qui n'appartient à aucun slot actuel
+    # (ne devrait pas arriver via remplacer_exercice, qui conserve toujours l'ancien id dans
+    # historique_exercice_ids, mais couvre tout autre cas) — un groupe par exercice_id restant,
+    # comportement identique à avant l'Étape 7C.
+    for exercice_id in sorted({s.exercice_id for s in series_validees} - exercice_ids_couverts):
         series_exercice = sorted((s for s in series_validees if s.exercice_id == exercice_id), key=lambda s: s.numero_serie)
         exercices_realises.append(
             {
