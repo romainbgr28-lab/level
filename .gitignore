@@ -10,3 +10,6 @@ backend/level.db
 backend/__pycache__
 backend/.venv
 *.pyc
+
+# session tooling
+.claude/
