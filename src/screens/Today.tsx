@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Header from '../components/Header';
 import {
   createSerieLoggee,
+  deleteSerieLoggee,
   deleteTodaySeance,
   genererSeance,
   getDernierePerformance,
@@ -235,10 +236,16 @@ export default function Today() {
     return { volume, nbValidees };
   }, [seriesParExercice]);
 
+  function seriesValideesPourExercice(item: ApiSeanceExercice): ApiSerieLoggee[] {
+    const series = seriesParExercice[item.exercice_id] ?? [];
+    return series.filter((s) => s.coche);
+  }
+
   function estExerciceComplet(item: ApiSeanceExercice): boolean {
     const series = seriesParExercice[item.exercice_id] ?? [];
     const cible = item.series ?? series.length;
-    return cible > 0 && series.length >= cible;
+    const validees = seriesValideesPourExercice(item);
+    return cible > 0 && validees.length >= cible;
   }
 
   const currentExerciceId = useMemo(() => {
@@ -351,6 +358,26 @@ export default function Today() {
   function handleAjouterSerie(exerciceId: number) {
     // Une série "brouillon" locale : elle n'est persistée qu'au moment où elle est validée.
     setDraftParExercice((prev) => ({ ...prev, [exerciceId]: { poids: '', reps: '' } }));
+  }
+
+  // Retire le brouillon local d'une série pas encore validée : aucun appel API, rien n'a
+  // jamais été créé en base pour cette série.
+  function handleAnnulerDraft(exerciceId: number) {
+    setDraftParExercice((prev) => {
+      const next = { ...prev };
+      delete next[exerciceId];
+      return next;
+    });
+  }
+
+  async function handleSupprimerSerie(exerciceId: number, serie: ApiSerieLoggee) {
+    if (!window.confirm('Supprimer cette série ?')) return;
+    await deleteSerieLoggee(serie.id);
+    setSeriesParExercice((prev) => ({
+      ...prev,
+      [exerciceId]: (prev[exerciceId] ?? []).filter((s) => s.id !== serie.id),
+    }));
+    if (editingSerieId === serie.id) setEditingSerieId(null);
   }
 
   async function handleGenerer() {
@@ -648,6 +675,7 @@ export default function Today() {
             const prochaineNumero = series.length + 1;
             const seanceTerminee = 'statut' in seance && seance.statut === 'terminee';
             const complet = estExerciceComplet(item);
+            const nbValideesExercice = seriesValideesPourExercice(item).length;
             const isOpen = openExerciceId === item.exercice_id;
             const objectifLabel = `${item.series}x${item.repetitions}${
               item.charge_indicative ? ` · ${item.charge_indicative}` : ''
@@ -678,7 +706,7 @@ export default function Today() {
                     <span className="exercise-block__group">{ex?.groupe_musculaire}</span>
                   </span>
                   <span className={`exercise-block__status ${complet ? 'exercise-block__status--done' : ''}`}>
-                    {complet ? '✓' : `${series.length}/${cible}`}
+                    {complet ? '✓' : `${nbValideesExercice}/${cible}`}
                   </span>
                 </button>
 
@@ -778,6 +806,16 @@ export default function Today() {
                           >
                             ✎
                           </button>
+                          {!seanceTerminee && (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Supprimer la série"
+                              onClick={() => handleSupprimerSerie(item.exercice_id, s)}
+                            >
+                              🗑
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -841,6 +879,14 @@ export default function Today() {
                             aria-label="Valider la série"
                           >
                             ✓
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Annuler cette série"
+                            onClick={() => handleAnnulerDraft(item.exercice_id)}
+                          >
+                            🗑
                           </button>
                         </div>
                         <div className="quick-row">

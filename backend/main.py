@@ -131,20 +131,21 @@ def update_seance(seance_id: int, payload: schemas.SeanceUpdate, db: Session = D
     seance = db.get(models.Seance, seance_id)
     if not seance:
         raise HTTPException(status_code=404, detail="Séance introuvable")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+
+    updates = payload.model_dump(exclude_unset=True)
+    if updates.get("statut") == "terminee":
+        # Terminer une séance doit passer par /api/seance/terminer, seul endpoint qui calcule
+        # le pourcentage de complétion, l'historique et l'XP. Ce PATCH générique ne doit pas
+        # permettre de contourner cette logique.
+        raise HTTPException(
+            status_code=400,
+            detail="Utilisez /api/seance/terminer pour terminer une séance.",
+        )
+
+    for key, value in updates.items():
         setattr(seance, key, value)
     db.commit()
     db.refresh(seance)
-
-    if seance.statut == "terminee":
-        today_streak = db.get(models.Streak, seance.date)
-        if not today_streak:
-            today_streak = models.Streak(date=seance.date, sport_fait=1, apprentissage_fait=0)
-            db.add(today_streak)
-        else:
-            today_streak.sport_fait = 1
-        db.commit()
-
     return seance
 
 
