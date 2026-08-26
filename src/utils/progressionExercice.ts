@@ -42,6 +42,29 @@ function formatNombre(n: number): string {
 }
 
 /**
+ * Charge de référence d'un lot de séries validées : la charge la plus fréquente (en cas
+ * d'égalité, la plus élevée), pas la première série — qui peut être un échauffement ou une
+ * série à charge différente du travail principal. Ignore les séries sans poids_kg valide.
+ */
+function chargeReference(series: SerieProgression[]): number | null {
+  const comptes = new Map<number, number>();
+  for (const s of series) {
+    if (s.poids_kg == null) continue;
+    comptes.set(s.poids_kg, (comptes.get(s.poids_kg) ?? 0) + 1);
+  }
+
+  let reference: number | null = null;
+  let meilleurCompte = 0;
+  for (const [poids, compte] of comptes) {
+    if (compte > meilleurCompte || (compte === meilleurCompte && (reference === null || poids > reference))) {
+      reference = poids;
+      meilleurCompte = compte;
+    }
+  }
+  return reference;
+}
+
+/**
  * Ne compare que des séries déjà validées (coche === true) des deux côtés ; c'est à
  * l'appelant de filtrer en amont, cohérent avec la définition backend de "validée".
  */
@@ -55,8 +78,8 @@ export function calculerProgressionExercice(
   const volumeActuel = volumeTotal(actuellesValidees);
   if (volumePrecedent <= 0 || volumeActuel <= 0) return null;
 
-  const chargePrecedente = precedentesValidees[0].poids_kg;
-  const chargeActuelle = actuellesValidees[0].poids_kg;
+  const chargePrecedente = chargeReference(precedentesValidees);
+  const chargeActuelle = chargeReference(actuellesValidees);
   const repsPrecedentes = moyenneReps(precedentesValidees);
   const repsActuelles = moyenneReps(actuellesValidees);
 
