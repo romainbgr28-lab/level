@@ -1662,56 +1662,31 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
 DUREE_SEMAINES_PROGRAMME_DEFAUT = 8
 
 
-TYPES_SEANCE_PROGRAMME = ["force", "explosivité_vitesse", "esthétique", "endurance", "repos"]
-
-
-def _normaliser_type_seance_programme(valeur: Optional[str]) -> Optional[str]:
-    """Fait correspondre une valeur de gabarit_hebdomadaire à un type canonique de
-    TYPES_SEANCE_PROGRAMME, tolérant une casse ou des accents légèrement différents de ce
-    que demande le prompt (déjà observé en pratique dans les réponses Mistral). Retourne None
-    si aucune correspondance, y compris si la valeur est absente (jour non couvert par le
-    gabarit) — à distinguer d'une vraie valeur invalide au moment de la génération (voir
-    generer_programme, qui rejette et retente plutôt que de stocker une valeur non reconnue)."""
-    if not isinstance(valeur, str) or not valeur.strip():
-        return None
-
-    def _sans_accents(s: str) -> str:
-        for a, b in (("é", "e"), ("è", "e"), ("ê", "e"), ("à", "a")):
-            s = s.replace(a, b)
-        return s
-
-    cible = _sans_accents(valeur.strip().lower())
-    for type_ in TYPES_SEANCE_PROGRAMME:
-        if cible == _sans_accents(type_.lower()):
-            return type_
-    return None
+# TYPES_SEANCE_PROGRAMME / _normaliser_type_seance_programme vivent désormais dans
+# moteur_decision.py (réutilisés par la validation post-Mistral, elle-même déplacée là-bas —
+# une seule source de vérité pour la taxonomie des types de séance du programme).
+TYPES_SEANCE_PROGRAMME = moteur_decision.TYPES_SEANCE_PROGRAMME
+_normaliser_type_seance_programme = moteur_decision.normaliser_type_seance_programme
 
 
 def _construire_system_prompt_programme(sport: Optional[str] = None) -> str:
     return (
         f"Tu es {_intitule_coach(sport)} qui construit un programme "
         "structuré sur plusieurs semaines. Règles impératives :\n"
-        "- Ne planifie jamais plus de séances par semaine que le nombre de jours disponibles "
-        "déclarés par le joueur : n'invente aucune séance supplémentaire.\n"
-        "- Les objectifs du joueur te sont fournis déjà hiérarchisés (rang + poids) : ne devine "
-        "jamais un objectif principal différent.\n"
-        "- Prends en compte TOUS les objectifs déclarés par le joueur (pas seulement son poste "
-        "et son calendrier de matchs) pour construire le gabarit_hebdomadaire et la "
-        "trajectoire_progression : si l'objectif « Endurance » ou « Perte de poids » est déclaré, "
-        "le gabarit_hebdomadaire doit obligatoirement inclure une proportion adaptée de séances de "
-        "type endurance (au moins une par semaine si le nombre de jours disponibles le permet), et "
-        "la trajectoire_progression doit inclure une entrée « endurance ».\n"
-        "- Équilibre les types de séance (force, explosivité_vitesse, esthétique, endurance) selon "
-        "les priorités physiques du poste du joueur ET selon ses objectifs déclarés — les deux "
-        "comptent, ni l'un ni l'autre ne doit être ignoré.\n"
+        "- La répartition hebdomadaire (quels jours, quels types de séance, présence ou absence "
+        "de séance) t'est fournie ci-dessous comme une DÉCISION STRUCTURELLE DU COACH déjà prise "
+        "par un moteur déterministe, à partir des objectifs hiérarchisés du joueur et de son "
+        "calendrier de matchs. Tu ne la redéfinis pas, tu ne la réinterprètes pas : tu génères "
+        "uniquement les détails de contenu (exercices, séries, répétitions, durée, progression, "
+        "phase, récupération) pour chaque jour tel qu'imposé.\n"
         "- La progression de charge/volume doit être prudente et réaliste : jamais plus de "
-        "5 à 8% de progression cumulée par semaine.\n"
-        "- Ne place jamais de séance de type force lourde la veille du jour de match habituel "
-        "déclaré : positionne intelligemment le gabarit hebdomadaire par rapport à ce jour."
+        "5 à 8% de progression cumulée par semaine."
     )
 
 
-def _construire_prompt_programme(profil: dict, fiches_theoriques: list[str], jours_dispo: list[str]) -> str:
+def _construire_prompt_programme(
+    profil: dict, fiches_theoriques: list[str], jours_dispo: list[str], structure_hebdomadaire: dict
+) -> str:
     fiches_txt = "\n\n".join(fiches_theoriques) if fiches_theoriques else "aucune"
     jour_match = (profil.get("calendrier_matchs") or {}).get("jour_habituel") or "non renseigné"
     sport = (profil.get("contexte_sportif") or {}).get("sport")
@@ -1723,22 +1698,22 @@ def _construire_prompt_programme(profil: dict, fiches_theoriques: list[str], jou
         "; ".join(f"{o['theme']} (rang {o['rang']}, poids {o['poids']})" for o in objectifs_v2)
         if objectifs_v2 else (profil.get("objectifs") or [])
     )
-    types_txt = " | ".join(f'"{t}"' for t in TYPES_SEANCE_PROGRAMME)
+    structure_txt = moteur_decision.formater_structure_hebdomadaire_prompt(structure_hebdomadaire)
 
     return f"""Construis un programme d'entraînement physique structuré sur {DUREE_SEMAINES_PROGRAMME_DEFAUT} semaines
 pour {intitule_joueur}, à partir de son profil complet.
 
-PROFIL
-- Objectifs déclarés, déjà hiérarchisés (backend a déjà déterminé la priorité — à respecter TOUS
-  dans le gabarit_hebdomadaire et la trajectoire_progression, pas seulement le poste et le
-  calendrier, ni deviner un autre objectif principal) : {objectifs_txt}
+{structure_txt}
+
+PROFIL (pour contexte uniquement — la répartition hebdomadaire ci-dessus est déjà tranchée)
+- Objectifs déclarés, déjà hiérarchisés : {objectifs_txt}
 - Sport pratiqué : {sport or 'non renseigné'}
 - Poste : {profil.get('poste') or 'non applicable'}
 - Niveau physique global : {profil.get('niveau_physique')}
 - Qualités physiques déclarées (1 à 5) : {profil.get('niveaux_qualites_physiques')}
 - Jour de match habituel : {jour_match}
 - Entraînements club : {(profil.get('calendrier_matchs') or {}).get('entrainements_club')}
-- Jours disponibles déclarés (ne pas en inventer d'autres) : {jours_dispo}
+- Jours disponibles déclarés : {jours_dispo}
 - Matériel disponible : {profil.get('materiel')}
 - Objectif esthétique : {profil.get('objectif_esthetique')}
 
@@ -1753,50 +1728,28 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après,
     {{"nom": "accumulation", "semaine_debut": 3, "semaine_fin": 6, "description": "string"}},
     {{"nom": "évaluation", "semaine_debut": 7, "semaine_fin": 8, "description": "string"}}
   ],
-  "gabarit_hebdomadaire": {{"<jour parmi {jours_dispo}>": {types_txt}, "...": "..."}},
+  "gabarit_hebdomadaire": {{"<jour parmi {list(structure_hebdomadaire.keys())}>": "<type IMPOSÉ ci-dessus, recopié tel quel>", "...": "..."}},
   "trajectoire_progression": {{
     "force": [8 nombres, progression en % relatif à la semaine 1 (100 = point de départ)],
     "explosivite": [8 nombres, même logique],
     "esthetique": [8 nombres, même logique],
-    "endurance": [8 nombres, même logique — obligatoire si « Endurance » ou « Perte de poids » figure dans les objectifs déclarés]
+    "endurance": [8 nombres, même logique — inclus seulement si au moins un jour de la structure imposée est de type "endurance"]
   }}
 }}
 
-Le gabarit_hebdomadaire doit contenir une entrée pour chacun des jours disponibles déclarés ci-dessus,
-et uniquement ceux-là. La trajectoire_progression doit contenir exactement {DUREE_SEMAINES_PROGRAMME_DEFAUT}
-valeurs par qualité, en progression prudente (jamais plus de 5 à 8% cumulés par semaine). N'inclus la clé
-"endurance" dans trajectoire_progression que si au moins un jour du gabarit_hebdomadaire est de type
-"endurance"."""
+Le gabarit_hebdomadaire doit reprendre EXACTEMENT les jours et les types de la décision structurelle
+ci-dessus (ni jour ni type ajouté, modifié ou supprimé). La trajectoire_progression doit contenir
+exactement {DUREE_SEMAINES_PROGRAMME_DEFAUT} valeurs par qualité, en progression prudente (jamais plus
+de 5 à 8% cumulés par semaine)."""
 
 
-def _construire_programme_secours(jours_dispo: list[str], objectifs: list[str]) -> dict:
-    """Programme de repli, construit sans IA, utilisé si Mistral échoue après retentative."""
-    objectifs_lower = [o.lower() for o in (objectifs or [])]
-    veut_endurance = any(
-        o in objectifs_lower for o in ("endurance", "perte de poids", "perte_de_gras")
-    )
-
-    types_cycle = ["force", "explosivité_vitesse", "esthétique", "endurance"] if veut_endurance else ["force", "explosivité_vitesse", "esthétique"]
-    gabarit = {jour: types_cycle[i % len(types_cycle)] for i, jour in enumerate(jours_dispo)} if jours_dispo else {}
-    progression = [round(100 + i * 5, 1) for i in range(DUREE_SEMAINES_PROGRAMME_DEFAUT)]
-
-    trajectoire = {
-        "force": progression,
-        "explosivite": progression,
-        "esthetique": progression,
-    }
-    if veut_endurance:
-        trajectoire["endurance"] = progression
-
-    return {
-        "phases": [
-            {"nom": "adaptation", "semaine_debut": 1, "semaine_fin": 2, "description": "Reprise progressive, apprentissage des mouvements."},
-            {"nom": "accumulation", "semaine_debut": 3, "semaine_fin": 6, "description": "Montée en charge et en volume."},
-            {"nom": "évaluation", "semaine_debut": 7, "semaine_fin": 8, "description": "Consolidation et bilan des progrès."},
-        ],
-        "gabarit_hebdomadaire": gabarit,
-        "trajectoire_progression": trajectoire,
-    }
+# _programme_depuis_structure / _construire_programme_secours / _valider_gabarit_contre_structure
+# vivent désormais dans moteur_decision.py (fonctions pures, testables sans FastAPI/SQLAlchemy —
+# voir backend/test_structure_hebdomadaire.py) : main.py se contente de les appeler, pour ne
+# jamais dupliquer la logique de structure/validation dans deux modules (spécification P1.0
+# section 14/19 : une seule source de vérité).
+_construire_programme_secours = moteur_decision.construire_programme_secours
+_valider_gabarit_contre_structure = moteur_decision.valider_gabarit_contre_structure
 
 
 @app.post("/api/programme/generer", response_model=schemas.ProgrammeOut)
@@ -1811,11 +1764,29 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
     # Phase 3 : lecture directe du dict structuré `disponibilites`, plus de parsing fragile
     # de contraintes_temps (conservé uniquement comme fallback via ProfilBase, déjà appliqué
     # à l'écriture — profil_dict.disponibilites est donc toujours structuré ici).
-    jours_dispo = user_model_v2.jours_dispo_abbrev(profil_dict.get("disponibilites") or {})
+    disponibilites = profil_dict.get("disponibilites") or {}
+    jours_dispo = user_model_v2.jours_dispo_abbrev(disponibilites)
+
+    contexte_sportif = profil_dict.get("contexte_sportif") or {}
+    sport = contexte_sportif.get("sport")
+
+    # P1.0 : USER MODEL -> MOTEUR DÉTERMINISTE -> STRUCTURE HEBDOMADAIRE CONTRAIGNANTE -> Mistral.
+    # C'est cette structure (et elle seule) qui arbitre jours/types ; Mistral ne fait que détailler
+    # le contenu autour d'elle (voir _construire_prompt_programme et la validation post-Mistral
+    # ci-dessous). Même fonction utilisée par le fallback (_construire_programme_secours).
+    structure_hebdomadaire = moteur_decision.construire_structure_hebdomadaire(
+        objectifs_v2=profil_dict.get("objectifs_v2"),
+        sport=sport,
+        poste=profil_dict.get("poste"),
+        disponibilites=disponibilites,
+        jour_match_habituel=(profil_dict.get("calendrier_matchs") or {}).get("jour_habituel"),
+        frequence_hebdo=contexte_sportif.get("frequence_hebdo"),
+        objectifs_legacy=profil_dict.get("objectifs"),
+    )
 
     fiches_theoriques = connaissances.selectionner_fiches_programme(profil_dict.get("poste"))
-    system_prompt = _construire_system_prompt_programme(sport=(profil_dict.get("contexte_sportif") or {}).get("sport"))
-    prompt = _construire_prompt_programme(profil_dict, fiches_theoriques, jours_dispo)
+    system_prompt = _construire_system_prompt_programme(sport=sport)
+    prompt = _construire_prompt_programme(profil_dict, fiches_theoriques, jours_dispo, structure_hebdomadaire)
 
     required_keys = {"phases", "gabarit_hebdomadaire", "trajectoire_progression"}
     data: Optional[dict] = None
@@ -1831,32 +1802,23 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
             logger.warning("Réponse Mistral incomplète ou invalide pour le programme (tentative %s) : %s", tentative + 1, reponse)
             continue
 
-        # Valide et normalise gabarit_hebdomadaire : chaque valeur doit correspondre à un type
-        # canonique de TYPES_SEANCE_PROGRAMME (une casse/accentuation légèrement différente est
-        # tolérée et corrigée), sinon la réponse est rejetée et une nouvelle tentative est faite
-        # plutôt que de stocker une valeur qui n'apparaîtra jamais correctement à l'écran.
         gabarit_brut = reponse.get("gabarit_hebdomadaire")
         if not isinstance(gabarit_brut, dict) or not gabarit_brut:
             logger.warning("gabarit_hebdomadaire absent ou vide pour le programme (tentative %s) : %s", tentative + 1, reponse)
             continue
 
-        gabarit_normalise: dict[str, str] = {}
-        gabarit_valide = True
-        for jour, type_brut in gabarit_brut.items():
-            type_norm = _normaliser_type_seance_programme(type_brut)
-            if type_norm is None:
-                logger.warning(
-                    "Type de séance non reconnu dans gabarit_hebdomadaire (tentative %s) : jour=%r valeur=%r",
-                    tentative + 1,
-                    jour,
-                    type_brut,
-                )
-                gabarit_valide = False
-                break
-            gabarit_normalise[jour] = type_norm
-
-        if not gabarit_valide:
-            continue
+        # Validation déterministe post-Mistral (spécification section 13) : la structure
+        # hebdomadaire imposée est la seule source de vérité sur les jours/types. Si Mistral
+        # dévie (split générique, jour ajouté/supprimé, type changé), on applique l'option A
+        # (préférée) : les types déterministes attendus remplacent ceux retournés — jamais un
+        # gabarit incohérent avec la décision structurelle n'est enregistré en DB.
+        gabarit_normalise, conforme = _valider_gabarit_contre_structure(gabarit_brut, structure_hebdomadaire)
+        if not conforme:
+            logger.warning(
+                "gabarit_hebdomadaire Mistral non conforme à la structure déterministe (tentative %s) : "
+                "reçu=%r attendu=%r — types corrigés pour respecter la décision du coach.",
+                tentative + 1, gabarit_brut, gabarit_normalise,
+            )
 
         reponse["gabarit_hebdomadaire"] = gabarit_normalise
         data = reponse
@@ -1864,9 +1826,7 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
 
     if data is None:
         logger.error("Génération de programme IA impossible après retentative : repli sur un programme de secours.")
-        objectifs_v2 = profil_dict.get("objectifs_v2") or []
-        objectifs_themes = [o["theme"] for o in objectifs_v2] if objectifs_v2 else (profil_dict.get("objectifs") or [])
-        data = _construire_programme_secours(jours_dispo, objectifs_themes)
+        data = _construire_programme_secours(structure_hebdomadaire)
 
     # Un seul programme actif à la fois : on clôt l'ancien avant de créer le nouveau.
     db.query(models.Programme).filter(
