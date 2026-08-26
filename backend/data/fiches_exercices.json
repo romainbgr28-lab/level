@@ -1,0 +1,708 @@
+{
+  "_meta": {
+    "description": "Métadonnées statiques (niveau, fiche_ui, fiche_scientifique) pour les 21 exercices ajoutés lors de l'enrichissement de la bibliothèque LEVEL. Fichier de référence, volontairement NON chargé en base ni exposé par l'API dans cette phase (cf. décision d'architecture : pas de migration DB tant qu'aucun consommateur réel n'existe). Clé = nom exact de l'exercice, identique à celle utilisée dans annotations_substitution.py et bibliotheque_exercices_extension.json.",
+    "niveaux_possibles": ["debutant", "intermediaire", "avance"],
+    "perimetre_fiche_scientifique": "Réduit volontairement à objectif_principal, interet_football et sources (pas de biomécanique détaillée, pas de variantes/quand_privilegier — différé tant qu'aucun écran ne les consomme).",
+    "avertissement_sources": "Sources citées de mémoire à partir de la littérature de préparation physique/médecine du sport largement reconnue. Aucun DOI n'est inventé. Quand aucune source dédiée fiable n'est identifiée avec certitude, le champ sources est vide et l'affirmation reste classée [APPLICATION PRATIQUE] plutôt que présentée comme établie."
+  },
+  "exercices": {
+    "Squat poids du corps (air squat)": {
+      "niveau": "debutant",
+      "fiche_ui": {
+        "position_depart": "Debout, pieds largeur épaules, pointes légèrement ouvertes.",
+        "execution": [
+          "Pousser les hanches vers l'arrière et fléchir les genoux simultanément",
+          "Descendre jusqu'à cuisses parallèles au sol ou amplitude maximale sans perte de gainage",
+          "Remonter en poussant le sol, genoux alignés avec les pieds"
+        ],
+        "respiration": "Inspirer en descente, gainage abdominal, expirer en fin de poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète de hanche et de genou, sans hyperextension lombaire.",
+        "criteres_techniques": [
+          "Genou suit la direction du pied",
+          "Talons restent au sol",
+          "Tronc gainé sans arrondi lombaire",
+          "Profondeur constante répétition après répétition"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Talons qui décollent", "probleme": "Mobilité de cheville insuffisante", "correction": "Réduire la profondeur ou surélever légèrement les talons"},
+          {"erreur": "Genoux qui rentrent vers l'intérieur", "probleme": "Contrôle des abducteurs de hanche insuffisant", "correction": "Réduire la profondeur, renforcer en parallèle"},
+          {"erreur": "Dos qui s'arrondit en bas de mouvement", "probleme": "Mobilité de hanche ou gainage insuffisant", "correction": "Limiter la profondeur au range contrôlé"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Apprentissage moteur du pattern squat et endurance musculaire des extenseurs de hanche/genou à charge de corps entier.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "La force des extenseurs de hanche/genou intervient dans la production de force lors de l'accélération et du saut.",
+          "application_pratique": "Sert d'échauffement, d'apprentissage technique ou de maintien du pattern squat en l'absence de matériel."
+        },
+        "sources": []
+      }
+    },
+    "Goblet squat": {
+      "niveau": "debutant",
+      "fiche_ui": {
+        "position_depart": "Haltère tenu verticalement contre la poitrine, coudes pointant vers le bas.",
+        "execution": [
+          "Descendre en gardant la charge proche du sternum",
+          "Coudes qui viennent frôler l'intérieur des genoux en bas d'amplitude",
+          "Remonter en extension complète de hanche/genou"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète, tronc vertical.",
+        "criteres_techniques": [
+          "Charge reste proche du corps",
+          "Coudes orientés vers le bas",
+          "Genou suit le pied",
+          "Tronc vertical maintenu"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Charge qui s'éloigne du corps", "probleme": "Bras de levier augmenté", "correction": "Rapprocher la charge du sternum"},
+          {"erreur": "Buste qui bascule en avant en fin d'amplitude", "probleme": "Mobilité insuffisante", "correction": "Réduire la profondeur"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force/hypertrophie des jambes en charge légère à modérée, apprentissage d'un tronc vertical en squat.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "Le renforcement des extenseurs de hanche/genou contribue aux qualités de force nécessaires à l'accélération et au saut.",
+          "application_pratique": "Squat d'entrée pour un joueur sans accès à une barre ou en phase de reprise."
+        },
+        "sources": []
+      }
+    },
+    "Sumo squat": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Pieds bien plus larges que les épaules, pointes de pied ouvertes à 30-45°.",
+        "execution": [
+          "Descendre en poussant les genoux dans l'axe des pieds",
+          "Descendre jusqu'à cuisses parallèles ou légèrement en dessous",
+          "Remonter en extension complète"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète de hanche et de genou.",
+        "criteres_techniques": [
+          "Genoux suivent l'axe des pieds",
+          "Bassin descend verticalement",
+          "Tronc reste droit",
+          "Amplitude symétrique gauche/droite"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Genoux qui rentrent vers l'intérieur", "probleme": "Mobilité/contrôle insuffisant pour la stance large", "correction": "Réduire la largeur de stance"},
+          {"erreur": "Stance insuffisamment ouverte", "probleme": "Contrainte articulaire du genou", "correction": "Ouvrir davantage les pointes de pied"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force des jambes avec emphase adducteurs/fessiers, mobilité de hanche en abduction.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "Le renforcement combiné jambes/adducteurs peut contribuer à la robustesse de la région inguinale, zone à risque de blessure au football.",
+          "application_pratique": "Complément (pas remplacement) d'un travail d'adducteurs dédié type Copenhague."
+        },
+        "sources": []
+      }
+    },
+    "Front squat": {
+      "niveau": "avance",
+      "fiche_ui": {
+        "position_depart": "Barre posée sur les deltoïdes antérieurs, coudes hauts, prise rack ou bras croisés.",
+        "execution": [
+          "Descendre en gardant les coudes hauts et le tronc vertical",
+          "Descendre jusqu'à cuisses parallèles ou en dessous selon mobilité",
+          "Remonter en gardant les coudes levés tout du long"
+        ],
+        "respiration": "Inspirer en haut, gainage, expirer en fin de poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète, coudes toujours hauts.",
+        "criteres_techniques": [
+          "Coudes restent hauts sur toute l'amplitude",
+          "Tronc vertical maintenu",
+          "Genoux suivent les pieds",
+          "Barre reste sur les épaules"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Coudes qui chutent", "probleme": "Mobilité épaule/poignet insuffisante", "correction": "Travailler la mobilité ou utiliser la prise bras croisés"},
+          {"erreur": "Buste qui bascule en avant", "probleme": "Perte de gainage thoracique", "correction": "Réduire la charge"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force/hypertrophie des quadriceps en particulier, capacité à maintenir un tronc rigide en position antérieure chargée.",
+        "interet_football": {
+          "etabli": "Des comparaisons cinétiques montrent une réduction relative des forces de compression lombaire au front squat par rapport au back squat à charge relative équivalente, avec une exigence quadriceps plus marquée.",
+          "etaye": "La force des extenseurs du genou contribue à la production de force lors des actions d'impulsion (accélération, saut).",
+          "application_pratique": "Variante complémentaire du back squat pour joueur avancé en musculation, notamment en cas de limitation lombaire relative."
+        },
+        "sources": [
+          {"titre": "Kinematic and kinetic comparison of back squat and front squat", "auteurs": "Gullett, Tillman, Gutierrez, Chow", "annee": 2009, "type_preuve": "étude expérimentale (cinétique/cinématique)", "justifie": "Réduction relative des forces de compression lombaire et emphase quadriceps accrue au front squat"}
+        ]
+      }
+    },
+    "Romanian deadlift (RDL)": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Barre ou haltères devant les cuisses, pieds largeur hanches, genoux en légère flexion fixe.",
+        "execution": [
+          "Pousser les hanches vers l'arrière, buste qui descend en gardant le dos plat",
+          "La charge glisse le long des jambes, descendre jusqu'à un étirement franc des ischio-jambiers",
+          "Remonter par extension de hanche"
+        ],
+        "respiration": "Inspirer en descente, expirer en extension de hanche.",
+        "tempo": null,
+        "fin_repetition": "Extension complète de hanche, pas d'hyperextension lombaire.",
+        "criteres_techniques": [
+          "Genoux en flexion fixe, pas de squat",
+          "Dos plat sur toute l'amplitude",
+          "Charge proche du corps",
+          "Hanches reculent avant que le buste ne descende"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Dos qui s'arrondit", "probleme": "Perte de gainage ou mobilité insuffisante", "correction": "Réduire l'amplitude"},
+          {"erreur": "Genoux qui plient davantage pendant la descente", "probleme": "Le mouvement devient un squat/deadlift", "correction": "Fixer consciemment l'angle du genou"},
+          {"erreur": "Charge qui s'éloigne du corps", "probleme": "Bras de levier augmenté, risque lombaire accru", "correction": "Garder la barre au contact des cuisses/tibias"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Extension de hanche sous charge en amplitude étirée, sollicitation importante des ischio-jambiers en position allongée, contrôle lombo-pelvien.",
+        "interet_football": {
+          "etabli": "Le RDL est un mouvement de charnière de hanche qui sollicite fortement les extenseurs de hanche et les ischio-jambiers.",
+          "etaye": "La force des ischio-jambiers et de la chaîne postérieure intervient dans la production de force lors de la course et est associée dans la littérature à la prévention des lésions des ischio-jambiers chez le sportif.",
+          "application_pratique": "Utilisable comme exercice de renforcement de la chaîne postérieure en complément du Nordic hamstring curl déjà présent dans la bibliothèque."
+        },
+        "sources": []
+      }
+    },
+    "RDL unilatéral haltère": {
+      "niveau": "avance",
+      "fiche_ui": {
+        "position_depart": "Haltère dans une main, appui sur la jambe homolatérale ou controlatérale.",
+        "execution": [
+          "Basculer le buste vers l'avant en tendant la jambe libre vers l'arrière, dos plat",
+          "Descendre jusqu'à l'horizontale ou selon l'équilibre contrôlé",
+          "Remonter par extension de hanche jusqu'à la position debout stable"
+        ],
+        "respiration": "Inspirer en descente, expirer en extension de hanche.",
+        "tempo": null,
+        "fin_repetition": "Retour à la position debout stable.",
+        "criteres_techniques": [
+          "Hanches restent globalement face à l'avant",
+          "Genou d'appui en légère flexion fixe",
+          "Dos plat",
+          "Jambe libre et buste descendent en miroir"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Bassin qui s'ouvre vers l'extérieur", "probleme": "Perte de contrôle rotatoire", "correction": "Ralentir, réduire l'amplitude"},
+          {"erreur": "Genou d'appui qui s'effondre en valgus", "probleme": "Stabilisateurs de hanche insuffisants", "correction": "Réduire la charge, retravailler le RDL bilatéral"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force unilatérale de la chaîne postérieure et stabilité de hanche/cheville en appui unique.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "Le football est un sport à dominante unipodale (appui simple lors de la course, du duel, du tir) ; le renforcement unilatéral de la chaîne postérieure est une qualité pertinente pour ces situations.",
+          "application_pratique": "Intérêt pour corriger des asymétries de force entre jambes, fréquentes chez le footballeur."
+        },
+        "sources": []
+      }
+    },
+    "Pompes (push-up)": {
+      "niveau": "debutant",
+      "fiche_ui": {
+        "position_depart": "Mains au sol légèrement plus larges que les épaules, corps aligné tête-bassin-chevilles.",
+        "execution": [
+          "Descendre en fléchissant les coudes jusqu'à la poitrine proche du sol, coudes à environ 45°",
+          "Remonter en extension complète des coudes"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète des coudes sans verrouillage brutal.",
+        "criteres_techniques": [
+          "Corps aligné en planche",
+          "Coudes à environ 45°",
+          "Amplitude complète",
+          "Tête dans le prolongement du corps"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Bassin qui s'affaisse", "probleme": "Gainage insuffisant", "correction": "Régresser sur les genoux ou en incliné"},
+          {"erreur": "Coudes trop écartés à 90°", "probleme": "Stress accru sur l'épaule", "correction": "Ramener à 45°"},
+          {"erreur": "Amplitude partielle systématique", "probleme": "Perte de bénéfice", "correction": "Réduire la difficulté via un plan incliné plutôt que tricher l'amplitude"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force et endurance de poussée horizontale du haut du corps, gainage global sous contrainte de poussée.",
+        "interet_football": {
+          "etabli": "Les comparaisons EMG montrent une activation du grand pectoral et du triceps comparable à celle du développé couché à charge relative équivalente.",
+          "etaye": null,
+          "application_pratique": "Transfert direct limité vers la performance football ; contribue à la robustesse générale du haut du corps utile en contact/duel, option accessible sans matériel."
+        },
+        "sources": [
+          {"titre": "EMG comparative studies of push-up and bench press", "auteurs": "Cogley et al. ; Gouvali & Boudolos", "annee": 2005, "type_preuve": "études EMG", "justifie": "Activation pectoraux/triceps comparable entre push-up et développé couché à charge relative équivalente"}
+        ]
+      }
+    },
+    "Pompes inclinées (incline push-up)": {
+      "niveau": "debutant",
+      "fiche_ui": {
+        "position_depart": "Mains posées sur un banc, corps incliné, aligné tête-bassin-chevilles.",
+        "execution": [
+          "Descendre poitrine vers le banc en fléchissant les coudes à 45°",
+          "Remonter en extension complète"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète des coudes.",
+        "criteres_techniques": [
+          "Corps aligné en planche",
+          "Coudes à 45°",
+          "Amplitude complète",
+          "Tempo contrôlé"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Banc trop haut", "probleme": "Exercice trop facile pour progresser", "correction": "Ajuster la hauteur à la difficulté recherchée"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force de poussée horizontale à charge relative réduite, préparation technique à la pompe standard.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": null,
+          "application_pratique": "Étape de progression pour débutant ne maîtrisant pas encore la pompe au sol ; même limite de transfert que la pompe standard."
+        },
+        "sources": []
+      }
+    },
+    "Développé couché haltères": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Allongé sur un banc, un haltère dans chaque main au niveau de la poitrine.",
+        "execution": [
+          "Pousser les haltères vers le haut jusqu'à extension quasi complète des coudes au-dessus de la poitrine",
+          "Descendre en contrôlant jusqu'à un étirement confortable de la poitrine"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension quasi complète sans verrouillage brutal.",
+        "criteres_techniques": [
+          "Trajectoire des haltères stable",
+          "Coudes ni collés ni à 90°",
+          "Omoplates légèrement rétractées et fixées sur le banc",
+          "Amplitude complète et symétrique"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Haltères qui partent en dehors de l'alignement", "probleme": "Perte de contrôle", "correction": "Réduire la charge"},
+          {"erreur": "Rebond des haltères en bas d'amplitude", "probleme": "Triche pour aider la remontée", "correction": "Contrôler la descente"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force/hypertrophie des pectoraux avec amplitude et liberté articulaire accrues, stabilité scapulaire.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": null,
+          "application_pratique": "Transfert limité et indirect ; pertinence essentiellement pour la robustesse générale du haut du corps et l'équilibre droite/gauche."
+        },
+        "sources": []
+      }
+    },
+    "Développé épaules haltères assis": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Assis, dos droit contre le dossier, un haltère dans chaque main au niveau des épaules.",
+        "execution": [
+          "Pousser verticalement jusqu'à extension quasi complète des coudes au-dessus de la tête",
+          "Redescendre en contrôlant jusqu'au niveau des épaules"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension complète sans hyperextension lombaire.",
+        "criteres_techniques": [
+          "Pas de cambrure lombaire excessive",
+          "Trajectoire verticale des haltères",
+          "Coudes restent globalement sous les poignets",
+          "Amplitude complète sans verrouillage brutal"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Cambrure lombaire excessive", "probleme": "Compensation d'un manque de mobilité d'épaule", "correction": "Réduire la charge, travailler la mobilité"},
+          {"erreur": "Haltères qui dérivent vers l'avant", "probleme": "Perte d'efficacité", "correction": "Repositionner au-dessus des épaules"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force/hypertrophie des deltoïdes et triceps en poussée verticale pure.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": null,
+          "application_pratique": "Transfert direct très limité ; intérêt pour l'équilibre musculaire du haut du corps et la robustesse de l'épaule."
+        },
+        "sources": []
+      }
+    },
+    "Pike push-up": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Position de pompe, hanches levées haut, corps formant un V inversé.",
+        "execution": [
+          "Descendre en fléchissant les coudes, sommet du crâne qui s'approche du sol entre les mains",
+          "Remonter en extension des coudes en gardant les hanches hautes"
+        ],
+        "respiration": "Inspirer en descente, expirer en poussée.",
+        "tempo": null,
+        "fin_repetition": "Extension des coudes, hanches toujours hautes.",
+        "criteres_techniques": [
+          "Hanches restent hautes tout du long",
+          "Trajectoire de la tête verticale",
+          "Coudes à environ 45°",
+          "Tempo contrôlé"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Hanches qui redescendent progressivement", "probleme": "L'exercice devient une pompe classique", "correction": "Repositionner consciemment les hanches hautes"},
+          {"erreur": "Amplitude très réduite", "probleme": "Manque de mobilité d'épaule", "correction": "Travailler la mobilité en parallèle"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force de poussée verticale à charge de corps entier, accessible sans matériel.",
+        "interet_football": {
+          "etabli": "Des études EMG situent l'activation du deltoïde antérieur en pike push-up entre celle d'une pompe standard et celle d'un développé militaire.",
+          "etaye": null,
+          "application_pratique": "Intérêt pratique principal : accessibilité (aucun matériel requis) pour maintenir le pattern poussée verticale."
+        },
+        "sources": []
+      }
+    },
+    "Push press": {
+      "niveau": "avance",
+      "fiche_ui": {
+        "position_depart": "Barre en position de rack sur les épaules avant, pieds largeur hanches.",
+        "execution": [
+          "Fléchir légèrement les genoux et les hanches (quart de flexion)",
+          "Étendre rapidement les jambes pour initier la poussée de la barre",
+          "Enchaîner immédiatement une extension des coudes pour terminer la trajectoire au-dessus de la tête"
+        ],
+        "respiration": "Expirer pendant la phase de poussée.",
+        "tempo": null,
+        "fin_repetition": "Redescendre la barre au niveau des épaules en contrôlant.",
+        "criteres_techniques": [
+          "Flexion de jambes courte et rapide, pas un squat complet",
+          "Transmission fluide entre l'impulsion des jambes et la poussée des bras",
+          "Trajectoire de la barre verticale, proche du visage",
+          "Gainage maintenu tout du long"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Flexion de jambes trop profonde", "probleme": "Transforme le mouvement en squat-press découplé", "correction": "Limiter à un quart de flexion"},
+          {"erreur": "Timing décalé entre jambes et bras", "probleme": "Perte d'efficacité de transfert d'énergie", "correction": "Ralentir l'apprentissage, décomposer le mouvement"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Capacité de production de force rapide en poussée verticale (puissance), coordination jambes-bras sous charge.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "La capacité à produire de la force rapidement (puissance) est une qualité physique générale transférable à des efforts explosifs.",
+          "application_pratique": "Transfert indirect et général ; intérêt pour développer la qualité puissance chez un athlète déjà techniquement compétent, pas un transfert spécifique au geste."
+        },
+        "sources": []
+      }
+    },
+    "Rowing haltère unilatéral": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Genou et main du même côté posés sur un banc, dos plat, haltère dans la main libre.",
+        "execution": [
+          "Tirer l'haltère vers la hanche en rétractant l'omoplate en premier",
+          "Coude qui longe le corps",
+          "Redescendre en contrôlant jusqu'à extension complète du bras"
+        ],
+        "respiration": "Inspirer en position basse, expirer en tirant.",
+        "tempo": null,
+        "fin_repetition": "Extension complète du bras et de l'omoplate.",
+        "criteres_techniques": [
+          "Dos reste plat, pas de rotation du tronc",
+          "Omoplate se rétracte avant que le coude ne plie",
+          "Coude longe le corps",
+          "Amplitude complète"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Rotation du tronc pour aider le tirage", "probleme": "Triche", "correction": "Réduire la charge, gainage"},
+          {"erreur": "Coude qui s'écarte du corps", "probleme": "Change le muscle sollicité", "correction": "Ramener le coude près du corps"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force/hypertrophie du dos en tirage horizontal unilatéral, gainage anti-rotation.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": null,
+          "application_pratique": "Transfert direct limité ; intérêt pour l'équilibre postural général et la correction d'asymétries."
+        },
+        "sources": []
+      }
+    },
+    "Rowing inversé (inverted row)": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Sous une barre fixe basse, mains en prise pronation ou neutre, corps aligné tête-bassin-chevilles.",
+        "execution": [
+          "Tirer la poitrine vers la barre en rétractant les omoplates",
+          "Redescendre en contrôlant jusqu'à extension complète des bras"
+        ],
+        "respiration": "Inspirer en position basse, expirer en tirant.",
+        "tempo": null,
+        "fin_repetition": "Extension complète des bras, corps toujours gainé.",
+        "criteres_techniques": [
+          "Corps aligné en planche du début à la fin",
+          "Omoplates se rétractent avant la flexion du coude",
+          "Poitrine qui se rapproche de la barre",
+          "Bassin ne s'affaisse pas"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Bassin qui s'affaisse", "probleme": "Gainage insuffisant", "correction": "Relever l'angle du corps, support plus haut"},
+          {"erreur": "Amplitude partielle", "probleme": "Mouvement du coude sans rétraction scapulaire", "correction": "Penser omoplates d'abord"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force de tirage horizontal à charge de corps entier, gainage global sous tirage.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": null,
+          "application_pratique": "Option accessible sans charge externe pour le pattern tirage horizontal, en complément du push-up."
+        },
+        "sources": []
+      }
+    },
+    "Tractions strictes (pull-up)": {
+      "niveau": "avance",
+      "fiche_ui": {
+        "position_depart": "Suspendu à la barre, prise pronation ou neutre légèrement plus large que les épaules.",
+        "execution": [
+          "Tirer le corps vers le haut jusqu'à ce que le menton dépasse la barre, coudes qui descendent vers les hanches",
+          "Redescendre en contrôlant jusqu'à extension complète des bras"
+        ],
+        "respiration": "Inspirer en position basse, expirer en tirant.",
+        "tempo": null,
+        "fin_repetition": "Extension complète des bras.",
+        "criteres_techniques": [
+          "Pas de balancement du corps",
+          "Menton dépasse la barre à chaque répétition",
+          "Descente contrôlée",
+          "Omoplates engagées dès le départ"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Amplitude partielle", "probleme": "Le menton n'atteint pas la barre", "correction": "Réduire le nombre de répétitions plutôt que l'amplitude"},
+          {"erreur": "Balancement des jambes pour créer de l'élan", "probleme": "Triche", "correction": "Ralentir, gainage"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force/hypertrophie du dos en tirage vertical à charge de corps entier, force de préhension.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": null,
+          "application_pratique": "Transfert direct très limité ; intérêt pour la robustesse générale du haut du corps et du grip, utile en contact/duel aérien."
+        },
+        "sources": []
+      }
+    },
+    "Extension mollets unilatérale": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Debout sur un pied, haltère dans la main du même côté ou controlatérale pour l'équilibre.",
+        "execution": [
+          "Monter sur la pointe du pied en contractant le mollet",
+          "Redescendre contrôlé jusqu'à un étirement confortable"
+        ],
+        "respiration": "Expirer en montée, inspirer en descente.",
+        "tempo": null,
+        "fin_repetition": "Descente jusqu'à étirement, pas de rebond.",
+        "criteres_techniques": [
+          "Genou reste stable",
+          "Amplitude complète",
+          "Équilibre maintenu",
+          "Tempo contrôlé, pas de rebond"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Rebond en bas d'amplitude", "probleme": "Perte de tension musculaire", "correction": "Contrôler la descente jusqu'à l'arrêt"},
+          {"erreur": "Amplitude réduite par manque d'équilibre", "probleme": "Perte de bénéfice", "correction": "Appui léger de la main libre le temps de progresser"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force et hypertrophie du triceps sural sous charge, avec exigence de stabilité unipodale.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "Le triceps sural intervient dans la propulsion lors de la course et du saut, notamment en fin de phase d'appui.",
+          "application_pratique": "Renforcement du mollet couramment intégré aux programmes de prévention des lésions du tendon d'Achille et du mollet chez le sportif."
+        },
+        "sources": []
+      }
+    },
+    "Extension mollets unilatérale poids du corps": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Debout sur un pied, l'autre légèrement fléchie devant.",
+        "execution": [
+          "Monter sur la pointe du pied en contractant le mollet",
+          "Redescendre contrôlé jusqu'à un étirement confortable"
+        ],
+        "respiration": "Expirer en montée, inspirer en descente.",
+        "tempo": null,
+        "fin_repetition": "Descente jusqu'à étirement, pas de rebond.",
+        "criteres_techniques": [
+          "Genou reste stable",
+          "Amplitude complète",
+          "Équilibre maintenu sans appui systématique",
+          "Tempo contrôlé"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Rebond en bas d'amplitude", "probleme": "Perte de tension musculaire", "correction": "Contrôler la descente"},
+          {"erreur": "Perte d'équilibre systématique", "probleme": "Niveau insuffisant", "correction": "Utiliser un appui léger d'un doigt sur un support"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force et endurance du triceps sural par jambe, à charge de corps entier uniquement.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "Le triceps sural intervient dans la propulsion lors de la course et du saut.",
+          "application_pratique": "Option d'entrée en renforcement/prévention du mollet sans matériel, avant progression vers une charge externe."
+        },
+        "sources": []
+      }
+    },
+    "Adduction de hanche au sol": {
+      "niveau": "debutant",
+      "fiche_ui": {
+        "position_depart": "Allongé sur le côté, jambe du dessous tendue, jambe du dessus fléchie et posée devant au sol.",
+        "execution": [
+          "Lever la jambe du dessous vers le plafond en gardant le genou tendu",
+          "Redescendre sans reposer complètement"
+        ],
+        "respiration": "Expirer en levant, inspirer en descendant.",
+        "tempo": null,
+        "fin_repetition": "Redescente contrôlée, répéter puis changer de côté.",
+        "criteres_techniques": [
+          "Bassin reste stable, pas de bascule vers l'arrière",
+          "Jambe qui travaille reste tendue et dans l'axe",
+          "Mouvement lent et contrôlé, pas d'élan",
+          "Tronc gainé tout du long"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Élan pour lever la jambe plus haut", "probleme": "Perte de tension musculaire", "correction": "Ralentir"},
+          {"erreur": "Bassin qui roule vers l'arrière", "probleme": "Compensation", "correction": "Repositionner, réduire l'amplitude"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Force et endurance des adducteurs de hanche en amplitude complète, à charge très inférieure au Copenhague.",
+        "interet_football": {
+          "etabli": "Les adducteurs de hanche jouent un rôle dans le contrôle du membre inférieur lors des actions de frappe, de changement de direction et de duel.",
+          "etaye": "Un déficit de force des adducteurs est associé dans la littérature à un risque accru de blessure de la région inguinale chez le footballeur, et des programmes de renforcement ciblés ont montré une réduction de ce risque dans des essais contrôlés en football.",
+          "application_pratique": "Sert d'entrée en renforcement des adducteurs avant de progresser vers l'exercice de Copenhague, plus exigeant."
+        },
+        "sources": [
+          {"titre": "Prevention of adductor-related groin injuries in football (soccer): an RCT of the Copenhagen Adduction exercise programme", "auteurs": "Harøy, Thorborg, Serner et al.", "annee": 2019, "type_preuve": "essai contrôlé randomisé en clubs de football", "justifie": "Un programme de renforcement des adducteurs (incluant l'exercice de Copenhague) réduit l'incidence des blessures de la région inguinale chez le footballeur"}
+        ]
+      }
+    },
+    "Saut en longueur (broad jump)": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Debout, pieds largeur hanches.",
+        "execution": [
+          "Fléchir rapidement hanches-genoux-chevilles avec un balancement des bras vers l'arrière",
+          "Projeter le corps vers l'avant en étendant explosivement hanches-genoux-chevilles",
+          "Réceptionner à deux pieds en fléchissant activement pour absorber l'impact"
+        ],
+        "respiration": "Expirer pendant l'impulsion.",
+        "tempo": null,
+        "fin_repetition": "Équilibre stabilisé après réception.",
+        "criteres_techniques": [
+          "Contre-mouvement bref avant l'impulsion",
+          "Extension complète des trois articulations à l'impulsion",
+          "Réception à deux pieds simultanée",
+          "Flexion active à la réception"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Réception jambes tendues", "probleme": "Transmission d'impact excessive aux articulations", "correction": "Insister sur la flexion active"},
+          {"erreur": "Perte d'équilibre arrière à la réception", "probleme": "Impulsion trop horizontale sans contrôle", "correction": "Travailler la technique à distance sous-maximale d'abord"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Capacité de production de force horizontale en un seul effort maximal.",
+        "interet_football": {
+          "etabli": null,
+          "etaye": "La performance en saut horizontal est corrélée dans plusieurs études à la performance de sprint chez le footballeur, sans que cela n'implique une relation de cause à effet directe.",
+          "application_pratique": "Sert d'exercice d'entraînement de la puissance horizontale et d'outil de suivi de la progression, en complément du travail de sprint et de squat/hinge."
+        },
+        "sources": [
+          {"titre": "Correlation between horizontal jump and sprint performance in professional soccer players", "auteurs": "Loturco et al.", "annee": 2015, "type_preuve": "étude de corrélation", "justifie": "Corrélation entre performance de saut horizontal et performance de sprint chez le footballeur"}
+        ]
+      }
+    },
+    "Countermovement jump (CMJ)": {
+      "niveau": "intermediaire",
+      "fiche_ui": {
+        "position_depart": "Debout, pieds largeur épaules.",
+        "execution": [
+          "Fléchir rapidement hanches-genoux-chevilles jusqu'à environ mi-cuisse (contre-mouvement)",
+          "Inverser immédiatement en une extension explosive pour décoller du sol, bras qui accompagnent vers le haut",
+          "Réceptionner en fléchissant activement les jambes"
+        ],
+        "respiration": "Expirer pendant l'impulsion.",
+        "tempo": null,
+        "fin_repetition": "Réception stable, flexion active.",
+        "criteres_techniques": [
+          "Transition immédiate entre flexion et extension, pas de pause",
+          "Profondeur de contre-mouvement modérée et répétable",
+          "Extension complète des trois articulations au décollage",
+          "Réception à deux pieds avec flexion active"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Pause en bas du contre-mouvement", "probleme": "Perte du bénéfice du cycle étirement-raccourcissement, le mouvement devient un squat jump", "correction": "Travailler la vitesse de transition"},
+          {"erreur": "Réception jambes raides", "probleme": "Transmission d'impact excessive", "correction": "Insister sur la flexion active"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Capacité à utiliser le cycle étirement-raccourcissement pour produire de la puissance verticale.",
+        "interet_football": {
+          "etabli": "Le CMJ produit une hauteur de saut supérieure au squat jump (départ statique pausé, sans cycle étirement-raccourcissement) à effort perçu équivalent.",
+          "etaye": "La plupart des sauts en football (duel de tête, contre un adversaire) impliquent un contre-mouvement naturel plutôt qu'un départ arrêté.",
+          "application_pratique": "Complément du squat jump existant, et outil de suivi de forme neuromusculaire (hauteur de saut dans le temps)."
+        },
+        "sources": [
+          {"titre": "Why is countermovement jump height greater than squat jump height?", "auteurs": "Bobbert, Gerritsen, Litjens, Van Soest", "annee": 1996, "type_preuve": "étude expérimentale biomécanique", "justifie": "Hauteur de saut supérieure en CMJ vs squat jump du fait du cycle étirement-raccourcissement"}
+        ]
+      }
+    },
+    "Décélération / réception unilatérale contrôlée": {
+      "niveau": "avance",
+      "fiche_ui": {
+        "position_depart": "Position debout, prêt à réaliser un petit élan.",
+        "execution": [
+          "Réaliser 3-4 pas d'élan modéré",
+          "Freiner sur un seul appui (jambe avant) en fléchissant activement hanche-genou-cheville jusqu'à un arrêt complet",
+          "Maintenir l'arrêt stable 1-2 secondes sans oscillation"
+        ],
+        "respiration": "Expirer pendant la phase de freinage.",
+        "tempo": null,
+        "fin_repetition": "Arrêt stable maintenu, bassin orienté vers l'avant.",
+        "criteres_techniques": [
+          "Genou suit l'axe du pied, pas de valgus",
+          "Arrêt complet et stable, pas de pas de rattrapage",
+          "Bassin reste orienté vers l'avant",
+          "Flexion progressive et contrôlée"
+        ],
+        "erreurs_frequentes": [
+          {"erreur": "Genou qui part en valgus au freinage", "probleme": "Contrôle des abducteurs de hanche insuffisant", "correction": "Réduire la vitesse d'élan"},
+          {"erreur": "Freinage sur jambe quasi tendue", "probleme": "Absorption insuffisante, transmission d'impact articulaire", "correction": "Insister sur la flexion active"},
+          {"erreur": "Pas de rattrapage après l'arrêt", "probleme": "Contrôle insuffisant", "correction": "Réduire la vitesse d'élan jusqu'à maîtriser l'arrêt stable"}
+        ]
+      },
+      "fiche_scientifique": {
+        "objectif_principal": "Contrôle excentrique du membre inférieur en appui unipodal lors d'un freinage (capacité d'absorption de force).",
+        "interet_football": {
+          "etabli": "Le football comporte de nombreuses actions de freinage et de changement de direction.",
+          "etaye": "La capacité de décélération est décrite dans la littérature récente de préparation physique comme une qualité distincte de l'accélération, nécessitant un entraînement spécifique du contrôle excentrique.",
+          "application_pratique": "Amorce de travail dédié à la décélération, en complément des exercices d'agilité existants qui combinent déjà accélération et freinage sans l'isoler."
+        },
+        "sources": [
+          {"titre": "The Neuromuscular Demands of Sprinting and Deceleration", "auteurs": "Harper & Kiely", "annee": 2018, "type_preuve": "revue narrative", "justifie": "La décélération est une qualité physique distincte de l'accélération nécessitant un entraînement spécifique"}
+        ]
+      }
+    }
+  }
+}

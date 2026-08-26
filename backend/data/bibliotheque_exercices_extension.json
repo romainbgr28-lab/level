@@ -716,6 +716,334 @@
       ],
       "points_securite": "Idéal le lendemain d'un match ou d'une séance intense (phase récupération).",
       "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "squat_poids_du_corps",
+      "nom": "Squat poids du corps (air squat)",
+      "type": "force",
+      "groupe_musculaire": "jambes, fessiers, ischio-jambiers",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Pieds largeur épaules, pointes légèrement ouvertes",
+        "Descendre en poussant les hanches vers l'arrière puis en fléchissant les genoux",
+        "Descendre jusqu'à cuisses parallèles au sol ou amplitude maximale sans perte de gainage",
+        "Remonter en extension complète de hanche et de genou"
+      ],
+      "points_securite": "Genou qui suit la direction du pied, talons ancrés au sol.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "goblet_squat",
+      "nom": "Goblet squat",
+      "type": "force",
+      "groupe_musculaire": "jambes, fessiers, tronc",
+      "materiel_requis": "haltère",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Tenir un haltère verticalement contre la poitrine, coudes vers le bas",
+        "Descendre en gardant la charge proche du sternum",
+        "Coudes qui frôlent l'intérieur des genoux en bas d'amplitude",
+        "Remonter en extension complète de hanche et de genou"
+      ],
+      "points_securite": "Charge qui reste proche du corps, tronc vertical.",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "squat_sumo",
+      "nom": "Sumo squat",
+      "type": "force",
+      "groupe_musculaire": "jambes, adducteurs, fessiers",
+      "materiel_requis": "barre ou haltères",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Pieds bien plus larges que les épaules, pointes ouvertes à 30-45°",
+        "Descendre en poussant les genoux dans l'axe des pieds",
+        "Descendre jusqu'à cuisses parallèles ou légèrement en dessous",
+        "Remonter en extension complète"
+      ],
+      "points_securite": "Genoux qui suivent l'axe des pieds, éviter le valgus.",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "front_squat",
+      "nom": "Front squat",
+      "type": "force",
+      "groupe_musculaire": "jambes, tronc",
+      "materiel_requis": "barre",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Barre posée sur les deltoïdes antérieurs, coudes hauts",
+        "Descendre en gardant les coudes hauts et le tronc vertical",
+        "Descendre jusqu'à cuisses parallèles ou en dessous selon mobilité",
+        "Remonter en gardant les coudes levés tout du long"
+      ],
+      "points_securite": "Exige une bonne mobilité épaule/poignet ; réduire la charge si les coudes chutent.",
+      "charge_recommandee": "charge_lourde_progressive"
+    },
+    {
+      "id": "romanian_deadlift",
+      "nom": "Romanian deadlift (RDL)",
+      "type": "force",
+      "groupe_musculaire": "ischio-jambiers, fessiers, lombaires",
+      "materiel_requis": "barre ou haltères",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Barre ou haltères devant les cuisses, genoux en légère flexion fixe",
+        "Pousser les hanches vers l'arrière, buste qui descend en gardant le dos plat",
+        "Descendre jusqu'à un étirement franc des ischio-jambiers, charge proche du corps",
+        "Remonter par extension de hanche"
+      ],
+      "points_securite": "Dos plat sur toute l'amplitude, genoux en flexion fixe (pas un squat).",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "rdl_unilateral_haltere",
+      "nom": "RDL unilatéral haltère",
+      "type": "force",
+      "groupe_musculaire": "ischio-jambiers, fessiers, stabilisateurs",
+      "materiel_requis": "haltère",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Haltère dans une main, appui sur une jambe",
+        "Basculer le buste vers l'avant en tendant la jambe libre vers l'arrière, dos plat",
+        "Descendre jusqu'à l'horizontale ou selon l'équilibre contrôlé",
+        "Remonter par extension de hanche jusqu'à la position debout stable"
+      ],
+      "points_securite": "Hanches restent face à l'avant, réduire la charge si l'équilibre est instable.",
+      "charge_recommandee": "charge_legere"
+    },
+    {
+      "id": "pompes",
+      "nom": "Pompes (push-up)",
+      "type": "force",
+      "groupe_musculaire": "pectoraux, triceps, gainage",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Mains au sol légèrement plus larges que les épaules, corps aligné tête-bassin-chevilles",
+        "Descendre en fléchissant les coudes jusqu'à la poitrine proche du sol",
+        "Coudes à environ 45° du corps",
+        "Remonter en extension complète des coudes"
+      ],
+      "points_securite": "Corps aligné en planche, pas de bassin affaissé.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "pompes_inclinees",
+      "nom": "Pompes inclinées (incline push-up)",
+      "type": "force",
+      "groupe_musculaire": "pectoraux, triceps",
+      "materiel_requis": "banc",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Mains posées sur un banc, corps incliné et aligné tête-bassin-chevilles",
+        "Descendre poitrine vers le banc en fléchissant les coudes à 45°",
+        "Remonter en extension complète"
+      ],
+      "points_securite": "Régression de la pompe au sol, utile en apprentissage ou reprise.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "developpe_couche_halteres",
+      "nom": "Développé couché haltères",
+      "type": "force",
+      "groupe_musculaire": "pectoraux, triceps, épaules",
+      "materiel_requis": "haltères, banc",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Allongé sur un banc, un haltère dans chaque main au niveau de la poitrine",
+        "Pousser les haltères vers le haut jusqu'à extension quasi complète des coudes",
+        "Descendre en contrôlant jusqu'à un étirement confortable de la poitrine"
+      ],
+      "points_securite": "Omoplates fixées sur le banc, trajectoire stable des haltères.",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "developpe_epaules_halteres_assis",
+      "nom": "Développé épaules haltères assis",
+      "type": "force",
+      "groupe_musculaire": "épaules, triceps",
+      "materiel_requis": "haltères, banc",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Assis, dos droit, un haltère dans chaque main au niveau des épaules",
+        "Pousser verticalement jusqu'à extension quasi complète des coudes au-dessus de la tête",
+        "Redescendre en contrôlant jusqu'au niveau des épaules"
+      ],
+      "points_securite": "Éviter la cambrure lombaire excessive en poussée.",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "pike_push_up",
+      "nom": "Pike push-up",
+      "type": "force",
+      "groupe_musculaire": "épaules, triceps",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Position de pompe, hanches levées haut, corps en V inversé",
+        "Descendre en fléchissant les coudes, sommet du crâne qui s'approche du sol",
+        "Remonter en extension des coudes en gardant les hanches hautes"
+      ],
+      "points_securite": "Hanches restent hautes tout du long, sinon le mouvement devient une pompe classique.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "push_press",
+      "nom": "Push press",
+      "type": "explosivité",
+      "groupe_musculaire": "épaules, triceps, jambes",
+      "materiel_requis": "barre",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Barre en position de rack sur les épaules avant, pieds largeur hanches",
+        "Fléchir légèrement les genoux et les hanches (quart de flexion)",
+        "Étendre rapidement les jambes pour initier la poussée, enchaîner l'extension des coudes",
+        "Redescendre la barre au niveau des épaules en contrôlant"
+      ],
+      "points_securite": "Flexion de jambes courte, pas un squat complet ; niveau technique avancé requis.",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "rowing_haltere_unilateral",
+      "nom": "Rowing haltère unilatéral",
+      "type": "force",
+      "groupe_musculaire": "dos, biceps, gainage",
+      "materiel_requis": "haltère, banc",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Genou et main du même côté posés sur un banc, dos plat, haltère dans la main libre",
+        "Tirer l'haltère vers la hanche en rétractant l'omoplate en premier",
+        "Coude qui longe le corps",
+        "Redescendre en contrôlant jusqu'à extension complète du bras"
+      ],
+      "points_securite": "Dos plat, pas de rotation du tronc pour aider le tirage.",
+      "charge_recommandee": "charge_moderee"
+    },
+    {
+      "id": "rowing_inverse",
+      "nom": "Rowing inversé (inverted row)",
+      "type": "force",
+      "groupe_musculaire": "dos, biceps, gainage",
+      "materiel_requis": "barre fixe",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Sous une barre fixe basse, mains en prise pronation ou neutre, corps aligné",
+        "Tirer la poitrine vers la barre en rétractant les omoplates",
+        "Redescendre en contrôlant jusqu'à extension complète des bras"
+      ],
+      "points_securite": "Corps aligné en planche du début à la fin, pas de bassin affaissé.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "tractions_strictes",
+      "nom": "Tractions strictes (pull-up)",
+      "type": "force",
+      "groupe_musculaire": "dos, biceps",
+      "materiel_requis": "barre fixe",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Suspendu à la barre, prise pronation ou neutre légèrement plus large que les épaules",
+        "Tirer le corps vers le haut jusqu'à ce que le menton dépasse la barre",
+        "Redescendre en contrôlant jusqu'à extension complète des bras"
+      ],
+      "points_securite": "Pas de balancement du corps, descente contrôlée.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "mollets_unilaterale_haltere",
+      "nom": "Extension mollets unilatérale",
+      "type": "force",
+      "groupe_musculaire": "mollets",
+      "materiel_requis": "haltère",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Debout sur un pied, haltère dans une main pour la charge ou l'équilibre",
+        "Monter sur la pointe du pied en contractant le mollet",
+        "Redescendre contrôlé jusqu'à un étirement confortable"
+      ],
+      "points_securite": "Genou stable, pas de rebond en bas d'amplitude.",
+      "charge_recommandee": "charge_legere"
+    },
+    {
+      "id": "mollets_unilaterale_poids_du_corps",
+      "nom": "Extension mollets unilatérale poids du corps",
+      "type": "force",
+      "groupe_musculaire": "mollets",
+      "materiel_requis": "aucun",
+      "sport_specifique": "généraliste",
+      "instructions": [
+        "Debout sur un pied, l'autre légèrement fléchie devant",
+        "Monter sur la pointe du pied en contractant le mollet",
+        "Redescendre contrôlé jusqu'à un étirement confortable"
+      ],
+      "points_securite": "Utiliser un appui léger de la main si l'équilibre est insuffisant.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "adduction_hanche_sol",
+      "nom": "Adduction de hanche au sol",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "adducteurs",
+      "materiel_requis": "aucun",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Allongé sur le côté, jambe du dessous tendue",
+        "Jambe du dessus fléchie et posée devant au sol pour stabiliser le bassin",
+        "Lever la jambe du dessous vers le plafond en gardant le genou tendu",
+        "Redescendre sans reposer complètement, répéter puis changer de côté"
+      ],
+      "points_securite": "Mouvement lent et contrôlé, bassin stable, pas d'élan.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "broad_jump",
+      "nom": "Saut en longueur (broad jump)",
+      "type": "explosivité",
+      "groupe_musculaire": "jambes, fessiers, gainage",
+      "materiel_requis": "aucun",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Debout, pieds largeur hanches, contre-mouvement bref avec balancement des bras",
+        "Projeter le corps vers l'avant en étendant explosivement hanches-genoux-chevilles",
+        "Réceptionner à deux pieds en fléchissant activement pour absorber l'impact",
+        "Stabiliser la réception avant de répéter"
+      ],
+      "points_securite": "Réception à deux pieds, flexion active, pas de jambes tendues à l'atterrissage.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "countermovement_jump",
+      "nom": "Countermovement jump (CMJ)",
+      "type": "explosivité",
+      "groupe_musculaire": "jambes, fessiers, gainage",
+      "materiel_requis": "aucun",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Debout, pieds largeur épaules",
+        "Fléchir rapidement hanches-genoux-chevilles jusqu'à mi-cuisse (contre-mouvement)",
+        "Inverser immédiatement en extension explosive pour décoller du sol, bras qui accompagnent",
+        "Réceptionner en fléchissant activement les jambes"
+      ],
+      "points_securite": "Transition rapide entre flexion et extension, réception avec flexion active.",
+      "charge_recommandee": "poids_du_corps"
+    },
+    {
+      "id": "deceleration_reception_unilaterale",
+      "nom": "Décélération / réception unilatérale contrôlée",
+      "type": "gainage_prevention",
+      "groupe_musculaire": "jambes, fessiers, stabilisateurs",
+      "materiel_requis": "aucun (espace dégagé)",
+      "sport_specifique": "foot",
+      "instructions": [
+        "Réaliser 3-4 pas d'élan modéré",
+        "Freiner sur un seul appui (jambe avant) en fléchissant activement hanche-genou-cheville",
+        "Arrêt complet et stable, maintenu 1-2 secondes sans oscillation",
+        "Bassin orienté vers l'avant, genou qui suit l'axe du pied"
+      ],
+      "points_securite": "Réduire la vitesse d'élan si le genou part en valgus ou si l'arrêt n'est pas stable.",
+      "charge_recommandee": "poids_du_corps"
     }
   ]
 }

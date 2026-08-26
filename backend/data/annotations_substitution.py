@@ -272,4 +272,110 @@ ANNOTATIONS: dict[str, dict] = {
         "groupe_musculaire_principal": "corps_entier",
         "materiel_requis_liste": [],
     },
+    # --- Enrichissement bibliothèque (21 exercices, cf. audit patterns pauvres) ---
+    "Squat poids du corps (air squat)": {
+        "pattern_mouvement": "squat",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": [],
+    },
+    "Goblet squat": {
+        "pattern_mouvement": "squat",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": ["halteres"],
+    },
+    "Sumo squat": {
+        "pattern_mouvement": "squat",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": ["barre", "halteres"],
+    },
+    "Front squat": {
+        "pattern_mouvement": "squat",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": ["barre"],
+    },
+    "Romanian deadlift (RDL)": {
+        "pattern_mouvement": "hinge",
+        "groupe_musculaire_principal": "ischio_jambiers",
+        "materiel_requis_liste": ["barre", "halteres"],
+    },
+    "RDL unilatéral haltère": {
+        "pattern_mouvement": "hinge",
+        "groupe_musculaire_principal": "ischio_jambiers",
+        "materiel_requis_liste": ["halteres"],
+    },
+    "Pompes (push-up)": {
+        "pattern_mouvement": "poussee_horizontale",
+        "groupe_musculaire_principal": "pectoraux",
+        "materiel_requis_liste": [],
+    },
+    "Pompes inclinées (incline push-up)": {
+        "pattern_mouvement": "poussee_horizontale",
+        "groupe_musculaire_principal": "pectoraux",
+        "materiel_requis_liste": ["banc"],
+    },
+    "Développé couché haltères": {
+        "pattern_mouvement": "poussee_horizontale",
+        "groupe_musculaire_principal": "pectoraux",
+        "materiel_requis_liste": ["halteres", "banc"],
+    },
+    "Développé épaules haltères assis": {
+        "pattern_mouvement": "poussee_verticale",
+        "groupe_musculaire_principal": "epaules",
+        "materiel_requis_liste": ["halteres", "banc"],
+    },
+    "Pike push-up": {
+        "pattern_mouvement": "poussee_verticale",
+        "groupe_musculaire_principal": "epaules",
+        "materiel_requis_liste": [],
+    },
+    "Push press": {
+        "pattern_mouvement": "poussee_verticale",
+        "groupe_musculaire_principal": "epaules",
+        "materiel_requis_liste": ["barre"],
+    },
+    "Rowing haltère unilatéral": {
+        "pattern_mouvement": "tirage_horizontal",
+        "groupe_musculaire_principal": "dos",
+        "materiel_requis_liste": ["halteres", "banc"],
+    },
+    "Rowing inversé (inverted row)": {
+        "pattern_mouvement": "tirage_horizontal",
+        "groupe_musculaire_principal": "dos",
+        "materiel_requis_liste": ["barre_fixe"],
+    },
+    "Tractions strictes (pull-up)": {
+        "pattern_mouvement": "tirage_vertical",
+        "groupe_musculaire_principal": "dos",
+        "materiel_requis_liste": ["barre_fixe"],
+    },
+    "Extension mollets unilatérale": {
+        "pattern_mouvement": "isolation_mollet",
+        "groupe_musculaire_principal": "mollets",
+        "materiel_requis_liste": ["halteres"],
+    },
+    "Extension mollets unilatérale poids du corps": {
+        "pattern_mouvement": "isolation_mollet",
+        "groupe_musculaire_principal": "mollets",
+        "materiel_requis_liste": [],
+    },
+    "Adduction de hanche au sol": {
+        "pattern_mouvement": "stabilite_hanche",
+        "groupe_musculaire_principal": "adducteurs",
+        "materiel_requis_liste": [],
+    },
+    "Saut en longueur (broad jump)": {
+        "pattern_mouvement": "saut_horizontal",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": [],
+    },
+    "Countermovement jump (CMJ)": {
+        "pattern_mouvement": "saut_vertical",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": [],
+    },
+    "Décélération / réception unilatérale contrôlée": {
+        "pattern_mouvement": "deplacement_agilite",
+        "groupe_musculaire_principal": "jambes",
+        "materiel_requis_liste": [],
+    },
 }

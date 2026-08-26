@@ -155,7 +155,7 @@ class TestPertinenceEtMateriel(unittest.TestCase):
     # --- 10. Les 50 annotations existantes sont toutes remontées par exercice_vers_dict() ---
 
     def test_10_toutes_les_annotations_remontees_par_exercice_vers_dict(self):
-        self.assertEqual(len(ANNOTATIONS), 50)
+        self.assertEqual(len(ANNOTATIONS), 71)
         for nom, annotation in ANNOTATIONS.items():
             faux_orm = SimpleNamespace(
                 id=1,
