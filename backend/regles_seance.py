@@ -314,17 +314,26 @@ def _suggerer_type_seance(
     priorites: list[str],
     objectif_esthetique: Optional[dict[str, Any]],
     type_seance_gabarit: Optional[str] = None,
+    objectifs_v2_themes: Optional[list[str]] = None,
+    sport: Optional[str] = None,
 ) -> str:
     """Choisit un type de séance parmi force / explosivité_vitesse / esthétique / endurance / décharge.
 
     Priorité (la plus haute d'abord) :
     1. Phase calendaire contraignante (lendemain/veille/approche de match) — l'emporte
-       toujours, y compris sur ce que prévoit le gabarit hebdomadaire d'un programme actif.
+       toujours, y compris sur ce que prévoit le gabarit hebdomadaire d'un programme actif ou
+       sur les objectifs déclarés : la sécurité/récupération prime toujours sur l'objectif.
     2. type_seance_gabarit : ce que prévoit le gabarit hebdomadaire du programme actif pour
-       aujourd'hui, s'il y en a un (remplace l'ancienne heuristique par défaut).
-    3. À défaut de programme actif, heuristique de repli : objectif esthétique déclaré,
-       sinon force par défaut. Le cahier des charges ne fixe pas cette dernière règle à la
-       lettre — elle ne sert que de filet de sécurité quand aucun programme n'encadre la séance.
+       aujourd'hui, s'il y en a un (le gabarit encode déjà les objectifs à l'échelle de la
+       semaine lors de la génération du programme, voir main.py::generer_programme).
+    3. Objectifs V2 hiérarchisés (P0.5) : à défaut de programme actif, c'est l'objectif
+       principal déclaré qui détermine le type de séance (user_model_v2.type_seance_pour_objectifs),
+       PAS le sport pratiqué — le sport ne sert qu'à désambiguïser entre deux types compatibles
+       avec un objectif déjà choisi (voir type_seance_pour_objectifs). Un utilisateur jouant au
+       football dont l'objectif principal est l'esthétique/hypertrophie obtient bien "esthétique"
+       ici, jamais un type football-first implicite.
+    4. Repli legacy : objectif esthétique texte libre déclaré (profils sans objectifs_v2
+       exploitable), sinon "force" par défaut — filet de sécurité final.
     """
     if phase == "lendemain_match":
         return "décharge"
@@ -332,6 +341,9 @@ def _suggerer_type_seance(
         return "explosivité_vitesse"
     if type_seance_gabarit:
         return type_seance_gabarit
+    type_depuis_objectifs = user_model_v2.type_seance_pour_objectifs(objectifs_v2_themes or [], sport=sport)
+    if type_depuis_objectifs:
+        return type_depuis_objectifs
     if objectif_esthetique and (objectif_esthetique.get("tags") or objectif_esthetique.get("texte_libre")):
         return "esthétique"
     return "force"
@@ -364,19 +376,41 @@ def generer_recommandation(
     phase, intensite_max = calculer_phase_calendaire(aujourdhui, date_prochain_match, date_dernier_match)
     sport = (profil.get("contexte_sportif") or {}).get("sport")
     priorites = obtenir_priorites_poste(profil.get("poste", ""), sport=sport)
-    type_seance_suggere = _suggerer_type_seance(phase, priorites, profil.get("objectif_esthetique"), type_seance_gabarit)
+    objectifs_v2_themes = user_model_v2.objectifs_ordonnes(profil.get("objectifs_v2"))
+    type_seance_suggere = _suggerer_type_seance(
+        phase,
+        priorites,
+        profil.get("objectif_esthetique"),
+        type_seance_gabarit,
+        objectifs_v2_themes=objectifs_v2_themes,
+        sport=sport,
+    )
 
     historique_meme_type = (historique.get("par_type") or {}).get(type_seance_suggere, [])
     ajustement = calculer_ajustement_charge(historique_meme_type, profil.get("niveau_physique"), aujourdhui)
+
+    raisons_type: list[str] = []
+    if phase != "phase_normale":
+        raisons_type.append(f"Type de séance imposé par le calendrier (phase « {phase} »), prioritaire sur les objectifs.")
+    elif type_seance_gabarit:
+        raisons_type.append(f"Type de séance issu du gabarit hebdomadaire du programme actif : « {type_seance_gabarit} ».")
+    elif objectifs_v2_themes and user_model_v2.type_seance_pour_objectifs(objectifs_v2_themes, sport=sport):
+        raisons_type.append(
+            f"Type de séance déterminé par l'objectif principal déclaré « {objectifs_v2_themes[0]} » "
+            f"(indépendamment du sport pratiqué)."
+        )
+    else:
+        raisons_type.append("Aucun objectif V2 exploitable : type de séance déterminé par repli (esthétique déclaré ou force par défaut).")
 
     recommandation: dict[str, Any] = {
         "phase_calendaire": phase,
         "intensite_max": intensite_max,
         "priorites_poste": priorites,
+        "objectifs_v2_themes": objectifs_v2_themes,
         "type_seance_suggere": type_seance_suggere,
         "ajustement_charge_pct": ajustement["charge_pct"],
         "ajustement_volume_pct": ajustement["volume_pct"],
-        "raisons": [ajustement["raison"]],
+        "raisons": raisons_type + [ajustement["raison"]],
     }
 
     # "2_fois_ou_plus" / "1_fois" / "non" -> nombre d'entraînements club déclarés cette semaine.

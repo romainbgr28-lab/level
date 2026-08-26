@@ -213,6 +213,70 @@ def obtenir_priorites(sport: Optional[str], poste: Optional[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Objectifs V2 -> type de séance (P0.5 : le moteur de décision doit réellement
+# piloter type_seance_suggere, pas seulement le texte envoyé à Mistral).
+# ---------------------------------------------------------------------------
+
+
+def objectifs_ordonnes(objectifs_v2: Any) -> list[str]:
+    """Thèmes V2 triés par rang (1 = priorité principale), à partir d'un
+    `objectifs_v2` déjà normalisé (list[{"theme","rang","poids"}]) tel que
+    stocké sur le profil. Ne réinterprète jamais les poids/rangs (déjà
+    calculés par normaliser_objectifs) : ici on ne fait que trier/extraire.
+    Fonction pure, réutilisée à la fois par regles_seance (décision du type de
+    séance) et moteur_decision (reporting/traçabilité) pour ne jamais dupliquer
+    ce tri à deux endroits."""
+    themes = sorted(objectifs_v2 or [], key=lambda o: o.get("rang", 99))
+    return [o["theme"] for o in themes if o.get("theme")]
+
+
+# Mapping direct thème -> type de séance, pour les thèmes qui déterminent sans
+# ambiguïté un type. Les thèmes absents de ce dict (perte_de_gras,
+# discipline_mentale, performance_sport_pratique) ne doivent JAMAIS imposer un
+# type à eux seuls : voir type_seance_pour_objectifs ci-dessous, qui passe au
+# thème suivant dans l'ordre de priorité plutôt que d'inventer un mapping
+# arbitraire pour ces thèmes-là.
+_MAPPING_THEME_VERS_TYPE_SEANCE: dict[str, str] = {
+    "esthetique_hypertrophie": "esthétique",
+    "force": "force",
+    "endurance": "endurance",
+}
+
+
+def type_seance_pour_objectifs(themes_ordonnes: list[str], sport: Optional[str] = None) -> Optional[str]:
+    """Détermine le type de séance à partir des objectifs V2 hiérarchisés,
+    dans l'ordre de priorité déclaré (le premier thème qui permet de trancher
+    l'emporte). Retourne None si aucun thème ne permet de trancher (l'appelant
+    doit alors retomber sur son propre repli, jamais inventé ici).
+
+    Règles (cf. spécification P0.5) :
+    - esthetique_hypertrophie -> "esthétique" ; force -> "force" ;
+      endurance -> "endurance" : mapping direct et sans ambiguïté.
+    - performance_sport_pratique : oriente vers "explosivité_vitesse" par
+      défaut (qualité la plus généralement pertinente pour la performance
+      sportive), sauf si "endurance" est explicitement déclaré comme objectif
+      secondaire/tertiaire -> dans ce cas le type "endurance" est choisi pour
+      respecter cette intention déclarée plutôt que d'imposer un choix par
+      défaut. Le sport ne fait ici que désambiguïser entre deux types
+      compatibles avec un objectif déjà choisi par l'utilisateur ; il n'écrase
+      jamais le thème lui-même (le thème doit avoir été classé par
+      l'utilisateur pour être pris en compte).
+    - perte_de_gras / discipline_mentale : ne déterminent jamais seuls un
+      type -> ignorés ici, on passe au thème suivant dans l'ordre de rang.
+    """
+    for theme in themes_ordonnes:
+        if theme in _MAPPING_THEME_VERS_TYPE_SEANCE:
+            return _MAPPING_THEME_VERS_TYPE_SEANCE[theme]
+        if theme == "performance_sport_pratique":
+            if "endurance" in themes_ordonnes:
+                return "endurance"
+            return "explosivité_vitesse"
+        # perte_de_gras, discipline_mentale ou thème inconnu : ne tranche pas,
+        # on continue vers le thème suivant (rang inférieur) sans l'imposer.
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Disponibilités structurées
 # ---------------------------------------------------------------------------
 
