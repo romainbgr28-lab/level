@@ -94,9 +94,9 @@ class TestCalendrierMatch(unittest.TestCase):
             objectifs_v2=objectifs, sport="football", poste="Défenseur",
             disponibilites=DISPO_5J, jour_match_habituel="Samedi",
         )
-        self.assertIn("vendredi", structure)
-        self.assertEqual(structure["vendredi"]["type"], "explosivité_vitesse")
-        self.assertNotIn("samedi", structure)
+        self.assertIn("Ven", structure)
+        self.assertEqual(structure["Ven"]["type"], "explosivité_vitesse")
+        self.assertNotIn("Sam", structure)
 
     def test_lendemain_de_match_recuperation(self):
         objectifs = [_obj("force", 1, 1.0)]
@@ -104,7 +104,7 @@ class TestCalendrierMatch(unittest.TestCase):
             objectifs_v2=objectifs, sport="football", poste="Défenseur",
             disponibilites=DISPO_5J, jour_match_habituel="Samedi",
         )
-        self.assertEqual(structure["dimanche"]["type"], "repos")
+        self.assertEqual(structure["Dim"]["type"], "repos")
 
 
 class TestDisponibilites(unittest.TestCase):
@@ -113,8 +113,8 @@ class TestDisponibilites(unittest.TestCase):
         structure = construire_structure_hebdomadaire(
             objectifs_v2=objectifs, sport=None, poste=None, disponibilites=DISPO_5J,
         )
-        self.assertNotIn("mardi", structure)
-        self.assertNotIn("samedi", structure)
+        self.assertNotIn("Mar", structure)
+        self.assertNotIn("Sam", structure)
 
     def test_aucune_disponibilite_aucun_entrainement(self):
         objectifs = [_obj("force", 1, 1.0)]
@@ -134,8 +134,8 @@ class TestValidationMistralIncoherent(unittest.TestCase):
             objectifs_v2=objectifs, sport="football", poste="Défenseur", disponibilites=DISPO_5J,
         )
         gabarit_generique_mistral = {
-            "lundi": "force", "mercredi": "endurance", "jeudi": "explosivité_vitesse",
-            "vendredi": "explosivité_vitesse", "dimanche": "repos",
+            "Lun": "force", "Mer": "endurance", "Jeu": "explosivité_vitesse",
+            "Ven": "explosivité_vitesse", "Dim": "repos",
         }
         gabarit_corrige, conforme = valider_gabarit_contre_structure(gabarit_generique_mistral, structure)
         self.assertFalse(conforme)
@@ -242,7 +242,7 @@ class TestFrequenceHebdoNePlafonnePlusLevel(unittest.TestCase):
         )
         self.assertEqual(
             set(structure.keys()),
-            {"lundi", "mercredi", "jeudi", "vendredi", "dimanche"},
+            {"Lun", "Mer", "Jeu", "Ven", "Dim"},
         )
 
     def test_4_contraintes_match_samedi_conservees(self):
@@ -250,16 +250,16 @@ class TestFrequenceHebdoNePlafonnePlusLevel(unittest.TestCase):
             objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
             disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
         )
-        self.assertNotIn("samedi", structure)  # jour de match : pas de séance LEVEL
-        self.assertEqual(structure["vendredi"]["type"], "explosivité_vitesse")  # veille
-        self.assertEqual(structure["dimanche"]["type"], "repos")  # lendemain
+        self.assertNotIn("Sam", structure)  # jour de match : pas de séance LEVEL
+        self.assertEqual(structure["Ven"]["type"], "explosivité_vitesse")  # veille
+        self.assertEqual(structure["Dim"]["type"], "repos")  # lendemain
 
     def test_5_jour_indisponible_jamais_selectionne(self):
         structure = construire_structure_hebdomadaire(
             objectifs_v2=self._objectifs_reels(), sport="football", poste="Défenseur",
             disponibilites=self.PROFIL_REEL_DISPO, jour_match_habituel="samedi", frequence_hebdo=1,
         )
-        self.assertNotIn("mardi", structure)
+        self.assertNotIn("Mar", structure)
 
     def test_6_aucune_disponibilite_aucune_seance(self):
         dispo_vide = {j: None for j in self.PROFIL_REEL_DISPO}

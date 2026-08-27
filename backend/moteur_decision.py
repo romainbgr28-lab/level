@@ -260,6 +260,19 @@ _JOUR_COMPLET_PAR_NOM_LOWER = {j: j for j in JOURS_SEMAINE_STRUCTURE}
 # dans calendrier_matchs.jour_habituel) : même ordre/index, seule la casse diffère.
 _NOMS_CAPITALISES = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
+# Correction du bug de format de clé identifié en audit : construire_structure_hebdomadaire
+# calcule en interne avec des jours complets en minuscules (format aligné sur Profil.disponibilites,
+# voir user_model_v2.JOURS_DISPONIBILITES), mais TOUS les lecteurs de Programme.gabarit_hebdomadaire
+# (main.py::generer_seance via regles_seance.JOURS_SEMAINE_ABBREV, et le frontend via
+# src/utils/programme.ts::JOURS_SEMAINE_ABBREV) attendent des clés abrégées capitalisées
+# ("Lun".."Dim"). Sans cette conversion, gabarit_hebdomadaire est stocké en base avec des clés
+# ("lundi", "mercredi", ...) qu'aucun consommateur ne recherche jamais : le lookup échoue tous
+# les jours, silencieusement, même quand le programme actif prévoit bel et bien une séance
+# aujourd'hui. La conversion est appliquée une seule fois, au point de sortie de
+# construire_structure_hebdomadaire, pour que tous les consommateurs en aval (validation Mistral,
+# repli sans IA, prompt, DB) héritent automatiquement du bon format sans double conversion.
+_ABBREV_PAR_JOUR_STRUCTURE: dict[str, str] = dict(zip(JOURS_SEMAINE_STRUCTURE, regles_seance.JOURS_SEMAINE_ABBREV))
+
 
 def _jour_match_lower(jour_habituel: Optional[str]) -> Optional[str]:
     if not jour_habituel or not isinstance(jour_habituel, str):
@@ -445,7 +458,11 @@ def construire_structure_hebdomadaire(
                 "objectif_principal": _objectif_principal_pour_type(type_, themes_ordonnes),
             }
 
-    return structure
+    # Conversion finale vers le format de clé attendu par tous les consommateurs de
+    # Programme.gabarit_hebdomadaire (abrégé capitalisé "Lun".."Dim") -- voir
+    # _ABBREV_PAR_JOUR_STRUCTURE ci-dessus. Tout le calcul qui précède reste en jours complets
+    # minuscules (aligné sur Profil.disponibilites), seule la sortie change de format.
+    return {_ABBREV_PAR_JOUR_STRUCTURE[jour]: info for jour, info in structure.items()}
 
 
 DUREE_SEMAINES_PROGRAMME_DEFAUT = 8
