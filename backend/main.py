@@ -585,6 +585,8 @@ def _construire_contexte_historique(db: Session) -> dict:
     recent: list[dict] = []
     zones_sensibles_recentes: list[str] = []
 
+    toutes: list[dict] = []
+
     for r in rows:
         entry = {
             "date": r.date,
@@ -602,6 +604,10 @@ def _construire_contexte_historique(db: Session) -> dict:
             recent.append(entry)
         if r.zone_sensible_signalee and r.zone_sensible_signalee not in zones_sensibles_recentes:
             zones_sensibles_recentes.append(r.zone_sensible_signalee)
+        # Non tronqué à 3 comme `recent`/`par_type` : sert uniquement à _resoudre_chaine_remplacement
+        # (voir plus bas), qui doit pouvoir remonter au-delà des 3 dernières séances pour retrouver
+        # une chaîne de remplacement (A -> B -> C) plus ancienne.
+        toutes.append(entry)
 
     par_type = {k: v[:3] for k, v in par_type.items()}
 
@@ -609,7 +615,50 @@ def _construire_contexte_historique(db: Session) -> dict:
         "par_type": par_type,
         "recent": recent,
         "zones_sensibles_recentes": zones_sensibles_recentes[:5],
+        "toutes": toutes,
     }
+
+
+def _resoudre_chaine_remplacement(
+    exercice_id: int, entries_historique: list[dict], profondeur_max: int = 5
+) -> list[int]:
+    """Reconstruit, pour un exercice donné (survivant courant d'un slot), la liste des
+    exercice_id qu'il a remplacés au fil des séances passées (A -> B -> C, etc.).
+
+    Ne réimplémente pas construire_historique_exercice : se contente de retrouver les
+    `historique_exercice_ids` déjà persistés par terminer_seance() dans
+    HistoriqueSeance.exercices_realises (voir remplacer_exercice / terminer_seance
+    plus haut dans ce fichier), en remontant la chaîne au besoin sur plusieurs séances
+    successives, puisque chaque remplacement n'enregistre que le lien avec son
+    prédécesseur immédiat au moment où il a eu lieu.
+
+    `entries_historique` doit être trié du plus récent au plus ancien (comme
+    _construire_contexte_historique le fait déjà) : pour un exercice_id donné, seule
+    la première occurrence (la plus récente) fait foi.
+    """
+    trouves: list[int] = []
+    vus = {exercice_id}
+    a_chercher = [exercice_id]
+    profondeur = 0
+
+    while a_chercher and profondeur < profondeur_max:
+        courant = a_chercher.pop(0)
+        for entry in entries_historique:
+            correspondance = next(
+                (item for item in (entry.get("exercices_realises") or []) if item.get("exercice_id") == courant),
+                None,
+            )
+            if correspondance is None:
+                continue
+            for ancetre in correspondance.get("historique_exercice_ids") or []:
+                if ancetre not in vus:
+                    vus.add(ancetre)
+                    trouves.append(ancetre)
+                    a_chercher.append(ancetre)
+            break  # occurrence la plus récente de `courant` déjà traitée, inutile d'aller plus loin
+        profondeur += 1
+
+    return trouves
 
 
 def _construire_liste_bibliotheque(db: Session) -> list[models.ExerciceBibliotheque]:
@@ -1299,6 +1348,36 @@ def generer_seance(
     # confiance) plutôt que le déclaré brut, quand un niveau observé existe déjà.
     profil_dict["_niveau_effectif"] = _niveau_physique_effectif(profil, profil_dict)
 
+    # Moteur d'Adaptation v2 (Étape 6, branchement) : exercices de la séance du jour, au format
+    # attendu par moteur_decision.construire_decision(exercices_seance=...) / composer_par_exercice
+    # (voir moteur_decision.py). Un plan tout juste calibré (nouvelle séance du jour) n'a pas de
+    # historique_exercice_ids en soi -- ce champ n'est écrit directement que sur le slot d'une
+    # séance DÉJÀ générée et modifiée par /api/seance/{id}/remplacer_exercice (voir plus haut dans
+    # ce fichier). Mais un remplacement qui a eu lieu lors d'une séance précédente doit rester
+    # retrouvable ici : terminer_seance() persiste déjà ce lien dans
+    # HistoriqueSeance.exercices_realises[].historique_exercice_ids (voir plus bas), donc on le
+    # reconstruit via _resoudre_chaine_remplacement (remonte la chaîne A -> B -> C sur plusieurs
+    # séances si besoin) plutôt que de partir d'une liste vide -- sans quoi
+    # adaptation_exercice.construire_historique_exercice ne verrait plus l'historique d'un exercice
+    # remplacé dès la génération suivante. `charge_reference_kg` réutilise _derniere_charge_reelle
+    # (même source que l'ancien mécanisme _construire_charges_cibles, jamais recalculée deux fois).
+    exercices_seance_v2 = [
+        {
+            "exercice_id": p["exercice"].id,
+            "nom": p["exercice"].nom,
+            "historique_exercice_ids": _resoudre_chaine_remplacement(
+                p["exercice"].id, historique_ctx.get("toutes") or []
+            ),
+            "charge_reference_kg": (
+                _derniere_charge_reelle(p["exercice"].id, db)
+                if p["exercice"].charge_recommandee != "poids_du_corps"
+                else None
+            ),
+            "series_cible": p["series"],
+        }
+        for p in plan
+    ]
+
     # Moteur de décision déterministe (User Model V2 -> stratégie de coaching) : purement
     # additif, ne doit jamais empêcher la génération de séance existante en cas de souci.
     decision: Optional[moteur_decision.DecisionCoaching] = None
@@ -1310,6 +1389,7 @@ def generer_seance(
             type_seance_gabarit=type_seance_gabarit,
             aujourdhui=today,
             niveau_effectif=profil_dict["_niveau_effectif"],
+            exercices_seance=exercices_seance_v2,
         )
     except Exception:
         logger.exception("Moteur de décision indisponible : génération de séance sans section stratégie.")
@@ -1349,6 +1429,23 @@ def generer_seance(
     # source de vérité pour les deux chemins (voir _construire_seance_secours et
     # _corriger_charges_hors_tolerance), aucun calcul dupliqué.
     charges_cibles = _construire_charges_cibles(plan, recommandation.get("ajustement_charge_pct", 0.0), db)
+
+    # Moteur d'Adaptation v2 (Étape 6, branchement) : quand une décision individuelle par
+    # exercice est disponible (decision.par_exercice, voir moteur_decision.composer_par_exercice),
+    # sa charge_cible_kg devient la source de vérité POUR CET EXERCICE PRÉCIS -- elle remplace le
+    # scalaire global uniquement pour les exercices qu'elle couvre réellement (charge_cible_kg non
+    # None, c'est-à-dire un historique réel exploitable pour cet exercice). Un exercice resté sans
+    # historique individuel (jamais réalisé, ou composition indisponible) garde le mécanisme
+    # existant (charges_depart / charges_cibles scalaire) inchangé : aucune valeur n'est inventée.
+    if decision is not None and decision.par_exercice:
+        for exercice_id, item in decision.par_exercice.items():
+            charge_cible_kg = item.get("charge_cible_kg")
+            if charge_cible_kg is None:
+                continue
+            charge_recommandee = charge_recommandee_par_id.get(exercice_id)
+            if charge_recommandee == "poids_du_corps":
+                continue
+            charges_cibles[exercice_id] = _arrondir_charge_cible(charge_cible_kg, charge_recommandee or "charge_moderee")
 
     if data is None:
         logger.error("Génération de séance IA impossible après retentative : repli sur une séance de secours.")
@@ -1390,6 +1487,10 @@ def generer_seance(
         "charges_cibles": {str(k): v for k, v in charges_cibles.items()},
         "correction_charge_appliquee": bool(corrections_charge),
         "corrections_charge": corrections_charge,
+        # Moteur d'Adaptation v2 (Étape 6, branchement) : décision individuelle réellement
+        # utilisée (charges_cibles ci-dessus), clés stringifiées comme pour charges_cibles
+        # (contrainte JSON), aucun champ historique existant retiré.
+        "par_exercice": {str(k): v for k, v in (decision.par_exercice if decision is not None else {}).items()},
     }
 
     seance = models.Seance(
