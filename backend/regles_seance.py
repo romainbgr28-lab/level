@@ -89,6 +89,64 @@ def _complete_liste(seances: list[dict[str, Any]]) -> str:
     )
 
 
+def _ratio_reps_exercice(series: list[dict[str, Any]]) -> Optional[float]:
+    """Ratio répétitions réalisées / prévues pour un exercice, agrégé sur toutes ses séries
+    validées. None si aucune série de cet exercice ne porte de prévu exploitable (donnée
+    absente ou séance antérieure à la persistance de reps_prevues, cf. migrate.py)."""
+    total_prevu = 0
+    total_realise = 0
+    for s in series:
+        if not isinstance(s, dict):
+            continue
+        prevu = s.get("reps_prevues")
+        realise = s.get("repetitions")
+        if prevu is None or realise is None:
+            continue
+        total_prevu += prevu
+        total_realise += realise
+    if total_prevu <= 0:
+        return None
+    return total_realise / total_prevu
+
+
+def _signal_reps_derniere_seance(derniere: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Signal de performance basé sur l'écart reps prévues/réalisées de la dernière séance du
+    même type, calculé à partir de SerieLoggee.reps_prevues (persisté côté serveur à la
+    création de la série, cf. main.py::_prevu_pour_exercice) vs SerieLoggee.repetitions
+    (réalisé) -- seule source de vérité fiable pour le "prévu" (jamais un reparse de champ
+    texte libre ici).
+
+    Conserve le lien exercice -> cible -> réalisation plutôt qu'une moyenne globale : le pire
+    exercice (ratio le plus faible) détermine la catégorie retenue pour la séance, et son
+    identité est renvoyée pour que la raison textuelle reste nominative. Retourne None si
+    aucun exercice de la séance ne porte de prévu exploitable (séance trop ancienne, ou aucune
+    série cochée) -- absence de signal, jamais une valeur inventée.
+    """
+    exercices = derniere.get("exercices_realises") or []
+    pire: Optional[dict[str, Any]] = None
+    for exo in exercices:
+        if not isinstance(exo, dict):
+            continue
+        ratio = _ratio_reps_exercice(exo.get("series") or [])
+        if ratio is None:
+            continue
+        if pire is None or ratio < pire["ratio"]:
+            pire = {"ratio": ratio, "exercice_id": exo.get("exercice_id"), "nom": exo.get("nom")}
+
+    if pire is None:
+        return None
+
+    ratio = pire["ratio"]
+    if ratio >= 0.95:
+        categorie = "conforme_ou_superieur"
+    elif ratio >= 0.75:
+        categorie = "legerement_inferieur"
+    else:
+        categorie = "nettement_inferieur"
+
+    return {"categorie": categorie, "ratio": ratio, "exercice_id": pire["exercice_id"], "nom": pire.get("nom")}
+
+
 def calculer_ajustement_charge(
     historique_3_dernieres_seances_meme_type: list[dict[str, Any]],
     niveau_physique_onboarding: Optional[str] = None,
@@ -102,8 +160,10 @@ def calculer_ajustement_charge(
 
     Logique en cascade à décision unique (une seule règle s'applique, pas de cumul entre
     règles) : sécurité/reprise > décharge par accumulation > réduction liée au RPE de la
-    dernière séance > réduction liée à la complétion de la dernière séance > progression sur
-    plusieurs séances consécutives maîtrisées > signal positif isolé > maintien par défaut.
+    dernière séance > écart reps prévues/réalisées de la dernière séance (cf.
+    _signal_reps_derniere_seance) > réduction liée à la complétion de la dernière séance >
+    progression sur plusieurs séances consécutives maîtrisées > signal positif isolé >
+    maintien par défaut.
     """
     if not historique_3_dernieres_seances_meme_type:
         return {
@@ -165,6 +225,43 @@ def calculer_ajustement_charge(
             "volume_pct": -5.0,
             "raison": "La dernière séance a été difficile (RPE 8). Je réduis légèrement la charge.",
         }
+
+    # 3bis. Écart reps prévues/réalisées de la dernière séance (nouveau signal, cf.
+    # SerieLoggee.reps_prevues) : ferme la boucle "reps prévues vs reps réalisées" qui ne
+    # participait pas encore à l'adaptation. Placée après les règles RPE (3) et avant la
+    # complétion (4) : reste une cascade à décision unique, donc si RPE>=8 a déjà tranché
+    # ci-dessus, ce signal n'est jamais évalué -- pas de cumul de réductions sur les mêmes
+    # symptômes (ex: RPE élevé + reps faibles + complétion faible ne doit produire qu'UNE
+    # décision, cf. mission). Elle intervient en revanche précisément dans le cas que RPE et
+    # complétion (comptage de séries, pas de répétitions) ne peuvent pas détecter : toutes les
+    # séries validées, RPE modéré, mais la cible de répétitions non atteinte.
+    signal_reps = _signal_reps_derniere_seance(derniere)
+    if signal_reps is not None:
+        nom_exo = f" sur « {signal_reps['nom']} »" if signal_reps.get("nom") else ""
+        if signal_reps["categorie"] == "nettement_inferieur":
+            return {
+                "charge_pct": -8.0,
+                "volume_pct": -5.0,
+                "raison": (
+                    f"Les répétitions réalisées{nom_exo} lors de la dernière séance sont nettement "
+                    f"inférieures à la cible ({signal_reps['ratio'] * 100:.0f}% de l'objectif atteint). "
+                    "Je réduis la charge pour retrouver le volume de répétitions prévu."
+                ),
+            }
+        if signal_reps["categorie"] == "legerement_inferieur":
+            return {
+                "charge_pct": 0.0,
+                "volume_pct": 0.0,
+                "raison": (
+                    f"Les répétitions réalisées{nom_exo} lors de la dernière séance sont légèrement "
+                    f"inférieures à la cible ({signal_reps['ratio'] * 100:.0f}% de l'objectif atteint). "
+                    "Je maintiens la charge : pas encore de progression tant que la cible n'est pas "
+                    "pleinement atteinte."
+                ),
+            }
+        # "conforme_ou_superieur" : la cible de répétitions est atteinte, ce n'est pas en soi
+        # une raison de réduire -- on laisse la cascade continuer (RPE/complétion tranchent la
+        # progression éventuelle, règles 5 à 7 ci-dessous).
 
     # 4. Réduction liée à la complétion de la dernière séance (bloque toute progression).
     if pourcentage is not None and pourcentage < 70:

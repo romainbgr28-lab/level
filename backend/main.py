@@ -586,7 +586,17 @@ def _construire_contexte_historique(db: Session) -> dict:
     zones_sensibles_recentes: list[str] = []
 
     for r in rows:
-        entry = {"date": r.date, "rpe": r.rpe, "pourcentage_complete": r.pourcentage_complete}
+        entry = {
+            "date": r.date,
+            "rpe": r.rpe,
+            "pourcentage_complete": r.pourcentage_complete,
+            # Réalisation exercice par exercice (reps prévues vs réalisées, cf.
+            # terminer_seance) : source pour le signal reps de calculer_ajustement_charge
+            # (regles_seance._signal_reps_derniere_seance). Additif : les entrées
+            # historiques sans cette clé (séances terminées avant cet ajout) restent
+            # exploitables, le signal reps est simplement absent pour elles.
+            "exercices_realises": r.exercices_realises,
+        }
         par_type.setdefault(r.type_seance, []).append(entry)
         if len(recent) < 3:
             recent.append(entry)
@@ -1575,6 +1585,19 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
                         "poids_kg": s.poids_kg,
                         "repetitions": s.repetitions,
                         "exercice_id": s.exercice_id,
+                        # Prévu persisté côté serveur à la création de la série (voir
+                        # main.py::_prevu_pour_exercice) : seule source de vérité fiable pour
+                        # comparer réalisé/prévu (jamais reparse de champs texte libre en aval,
+                        # voir regles_seance._signal_reps_derniere_seance).
+                        "reps_prevues": s.reps_prevues,
+                        "charge_prevue_kg": s.charge_prevue_kg,
+                        # Moteur d'Adaptation v2 : RPE propre à cette série, persisté pour que
+                        # adaptation_exercice.construire_historique_exercice() puisse calculer un
+                        # RPE par exercice (rpe_exercice), distinct du RPE unique de toute la
+                        # séance calculé plus bas. Absent sur les séries loguées avant cet ajout
+                        # (colonne nullable existante, aucune migration) : traité comme signal
+                        # RPE indisponible pour cet exercice, jamais comme RPE=0.
+                        "rpe_approx": s.rpe_approx,
                     }
                     for s in series_slot
                 ],
@@ -1591,7 +1614,17 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
             {
                 "exercice_id": exercice_id,
                 "nom": bibliotheque_par_id[exercice_id].nom if exercice_id in bibliotheque_par_id else None,
-                "series": [{"numero_serie": s.numero_serie, "poids_kg": s.poids_kg, "repetitions": s.repetitions} for s in series_exercice],
+                "series": [
+                    {
+                        "numero_serie": s.numero_serie,
+                        "poids_kg": s.poids_kg,
+                        "repetitions": s.repetitions,
+                        "reps_prevues": s.reps_prevues,
+                        "charge_prevue_kg": s.charge_prevue_kg,
+                        "rpe_approx": s.rpe_approx,
+                    }
+                    for s in series_exercice
+                ],
             }
         )
 

@@ -20,13 +20,18 @@ pour rester strictement additif au flux existant (main.py doit pouvoir
 continuer sans lui en cas de souci).
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Optional
 
+import adaptation_exercice
+import composition_decision
 import duree_seance
 import regles_seance
 import user_model_v2
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -67,6 +72,13 @@ class DecisionCoaching:
     - recommandation_brute : la recommandation regles_seance.generer_recommandation
       complète (non retravaillée), conservée pour les appelants qui en ont
       encore besoin telle quelle (rétro-compatibilité du flux existant).
+    - par_exercice (Étape 4, additif) : {exercice_id: DecisionFinaleExercice.to_dict()} produit
+      par le Moteur d'Adaptation v2 (historique par exercice -> décision exercice ->
+      composition avec la décision séance ci-dessus), voir composer_par_exercice() plus bas.
+      Vide par défaut (aucun appelant existant ne passe encore `exercices_seance` à
+      construire_decision) : ce champ n'existe QUE pour être rempli par les futurs appelants
+      (Étapes 5/6/7), personne ne le lit encore aujourd'hui — rétrocompatibilité totale du
+      flux existant garantie par cette valeur par défaut vide.
     """
 
     objectifs_prioritaires: list[str] = field(default_factory=list)
@@ -81,6 +93,7 @@ class DecisionCoaching:
     raisons: list[str] = field(default_factory=list)
     confiance_decision: float = 0.5
     recommandation_brute: dict[str, Any] = field(default_factory=dict)
+    par_exercice: dict[int, dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -95,6 +108,10 @@ class DecisionCoaching:
             "ajustements": self.ajustements,
             "raisons": self.raisons,
             "confiance_decision": self.confiance_decision,
+            # Additif (Étape 4) : ajouté en dernier, jamais en remplacement d'une clé existante
+            # -- un appelant qui ne connaît que l'ancien contrat peut continuer à ignorer cette
+            # clé sans que rien d'autre ne change dans le dict.
+            "par_exercice": self.par_exercice,
         }
 
 
@@ -149,6 +166,133 @@ def _contraintes(
     return contraintes
 
 
+def _decision_seance_depuis_recommandation(recommandation: dict[str, Any]) -> composition_decision.DecisionSeance:
+    """Construit la DecisionSeance (Étape 3, composition_decision.py) à partir de la
+    recommandation déjà calculée par regles_seance.generer_recommandation (+ garde-fous) plus
+    haut dans construire_decision -- ne recalcule RIEN, se contente de relire les champs déjà
+    produits par le moteur de règles (spec P0.5/P1.0), pour ne jamais dupliquer sa logique.
+
+    Limitation connue (signalée en fin d'Étape 4) : regles_seance n'expose aujourd'hui qu'un
+    signal binaire "mode décharge activé" (recommandation["type_seance_suggere"] == "décharge",
+    déclenché par appliquer_garde_fous sur 3 séances consécutives ratées/dures) -- pas d'état
+    intermédiaire "fatigue élevée" distinct du deload. `fatigue_globale` ne peut donc valoir que
+    "critique" (deload actif) ou "normale" ici ; la branche "elevee" de composer() (plafond de
+    progression à +2%) existe dans composition_decision.py mais n'est pour l'instant jamais
+    déclenchée depuis ce point d'entrée, faute de signal source dédié côté regles_seance.
+    """
+    type_seance = recommandation.get("type_seance_suggere") or "force"
+    deload_actif = type_seance == "décharge"
+    return composition_decision.DecisionSeance(
+        type_seance=type_seance,
+        intensite_max=recommandation.get("intensite_max") or "normale",
+        deload_actif=deload_actif,
+        fatigue_globale="critique" if deload_actif else "normale",
+        jours_ecart=None,
+        volume_global_pct=recommandation.get("ajustement_volume_pct") or 0.0,
+        charge_pct=recommandation.get("ajustement_charge_pct") or 0.0,
+        exclusions=list(recommandation.get("exclusions") or []),
+        raisons=list(recommandation.get("raisons") or []),
+        confiance=0.5,
+        source="regles_seance",
+    )
+
+
+def _seances_pour_historique_exercice(historique: dict[str, Any]) -> list[dict[str, Any]]:
+    """Reconstitue une liste de séances passées exploitable par
+    adaptation_exercice.construire_historique_exercice à partir du contexte historique déjà
+    construit par main.py::_construire_contexte_historique pour regles_seance (Étape 4 : ne
+    touche pas main.py, donc pas de nouvelle clé "toutes séances" ajoutée à ce contexte --
+    reconstitution en lecture seule à partir de ce qui existe déjà).
+
+    Union de historique["recent"] (3 dernières séances toutes confondues) et de toutes les
+    listes de historique["par_type"] (jusqu'à 3 séances par type), dédupliquée par date --
+    c'est la meilleure fenêtre disponible sans étendre le contrat de main.py. Limitation connue
+    (signalée en fin d'Étape 4) : ceci ne couvre donc pas la totalité des 30 séances chargées
+    par main.py, seulement l'union déjà transmise à regles_seance (au plus 3 par type)."""
+    par_date: dict[Any, dict[str, Any]] = {}
+    toutes = list(historique.get("recent") or [])
+    for liste in (historique.get("par_type") or {}).values():
+        toutes.extend(liste or [])
+    for entree in toutes:
+        if isinstance(entree, dict) and entree.get("date") is not None:
+            par_date.setdefault(entree["date"], entree)
+    return list(par_date.values())
+
+
+def composer_par_exercice(
+    decision_seance: composition_decision.DecisionSeance,
+    seances_historique: list[dict[str, Any]],
+    exercices_seance: list[dict[str, Any]],
+) -> dict[int, composition_decision.DecisionFinaleExercice]:
+    """Assemble le flux complet du Moteur d'Adaptation v2 pour chaque exercice de la séance du
+    jour : historique exercice (adaptation_exercice.construire_historique_exercice) -> décision
+    exercice (adaptation_exercice.evaluer_exercice) -> composition avec la décision séance
+    (composition_decision.composer). Fonction pure, additive : n'écrit rien, ne recalcule ni
+    charge_reference_kg ni series_cible (transmis tels quels par l'appelant -- Étapes 5/6/7,
+    voir composition_decision.composer).
+
+    `exercices_seance` : liste de dicts {"exercice_id": int, "historique_exercice_ids":
+    Optional[list[int]], "charge_reference_kg": Optional[float], "series_cible": Optional[int]}
+    -- même contrat que Seance.exercices[i].historique_exercice_ids (main.py). Un exercice sans
+    exercice_id exploitable est simplement ignoré, jamais une exception."""
+    resultat: dict[int, composition_decision.DecisionFinaleExercice] = {}
+    for item in exercices_seance or []:
+        if not isinstance(item, dict):
+            continue
+        exercice_id = item.get("exercice_id")
+        if exercice_id is None:
+            continue
+        ids_lies = set(item.get("historique_exercice_ids") or [])
+        historique_exercice = adaptation_exercice.construire_historique_exercice(
+            seances_historique, exercice_id, ids_lies
+        )
+        decision_exercice = adaptation_exercice.evaluer_exercice(historique_exercice)
+        resultat[exercice_id] = composition_decision.composer(
+            decision_seance,
+            decision_exercice,
+            exercice_id,
+            charge_reference_kg=item.get("charge_reference_kg"),
+            series_cible=item.get("series_cible") or 0,
+        )
+    return resultat
+
+
+def _decision_finale_exercice_to_dict(
+    decision: composition_decision.DecisionFinaleExercice, nom: Optional[str] = None
+) -> dict[str, Any]:
+    """Sérialise une DecisionFinaleExercice en dict JSON-compatible pour DecisionCoaching.par_exercice
+    / to_dict(). Aplati volontairement decision_seance/decision_exercice en sous-dicts (pas de
+    dataclass imbriquée dans le contrat public) plutôt que de dupliquer la définition ici.
+
+    `nom` (Étape 5, additif) : nom de l'exercice, purement pour l'affichage dans le bloc de
+    prompt par exercice (voir _formater_bloc_par_exercice) -- transmis par l'appelant
+    (construire_decision, à partir de exercices_seance), jamais recalculé ni stocké ailleurs.
+    Fonction toujours pure : aucun état partagé entre deux appels."""
+    de = decision.decision_exercice
+    return {
+        "exercice_id": decision.exercice_id,
+        "nom": nom,
+        "charge_pct": decision.charge_pct,
+        "volume_pct": decision.volume_pct,
+        "charge_cible_kg": decision.charge_cible_kg,
+        "series_cible": decision.series_cible,
+        "raison": decision.raison,
+        "confiance": decision.confiance,
+        "source": decision.source,
+        "garde_fou_applique": decision.garde_fou_applique,
+        "decision_exercice": {
+            "charge_pct": de.charge_pct,
+            "volume_pct": de.volume_pct,
+            "raison": de.raison,
+            "confiance": de.confiance,
+            "source": de.source,
+            "regle_gagnante": de.regle_gagnante,
+        }
+        if de is not None
+        else None,
+    }
+
+
 def construire_decision(
     profil: dict[str, Any],
     historique: dict[str, Any],
@@ -156,6 +300,7 @@ def construire_decision(
     type_seance_gabarit: Optional[str] = None,
     aujourdhui: Optional[date] = None,
     niveau_effectif: Optional[dict[str, float]] = None,
+    exercices_seance: Optional[list[dict[str, Any]]] = None,
 ) -> DecisionCoaching:
     """Construit la décision de coaching structurée pour la séance du jour.
 
@@ -165,6 +310,11 @@ def construire_decision(
     produit simplement une décision plus pauvre (listes vides, valeurs par
     défaut), jamais une exception — la génération de séance existante doit
     pouvoir continuer même si l'appelant n'utilise pas cette décision.
+
+    `exercices_seance` (Étape 4, additif) : liste optionnelle des exercices de la séance du
+    jour (voir composer_par_exercice ci-dessus pour le contrat exact) permettant de peupler
+    DecisionCoaching.par_exercice. Absent (None, valeur par défaut) -> par_exercice reste {}
+    et rien d'autre ne change : aucun appelant existant ne passe ce paramètre aujourd'hui.
     """
     aujourdhui = aujourdhui or date.today()
 
@@ -221,6 +371,27 @@ def construire_decision(
         profil.get("objectif_esthetique"),
     )
 
+    par_exercice: dict[int, dict[str, Any]] = {}
+    if exercices_seance:
+        try:
+            decision_seance = _decision_seance_depuis_recommandation(recommandation)
+            seances_historique = _seances_pour_historique_exercice(historique)
+            decisions_finales = composer_par_exercice(decision_seance, seances_historique, exercices_seance)
+            noms_par_id = {
+                item.get("exercice_id"): item.get("nom")
+                for item in exercices_seance
+                if isinstance(item, dict) and item.get("exercice_id") is not None
+            }
+            par_exercice = {
+                exercice_id: _decision_finale_exercice_to_dict(decision_finale, nom=noms_par_id.get(exercice_id))
+                for exercice_id, decision_finale in decisions_finales.items()
+            }
+        except Exception:
+            # Même filet de sécurité que le reste de construire_decision (voir docstring) : la
+            # composition par exercice est additive, jamais bloquante pour la décision globale.
+            logger.exception("Composition par exercice (Étape 4) indisponible : par_exercice reste vide.")
+            par_exercice = {}
+
     return DecisionCoaching(
         objectifs_prioritaires=objectifs_prioritaires,
         objectif_principal=objectifs_prioritaires[0] if objectifs_prioritaires else None,
@@ -237,6 +408,7 @@ def construire_decision(
         raisons=raisons,
         confiance_decision=confiance,
         recommandation_brute=recommandation,
+        par_exercice=par_exercice,
     )
 
 
@@ -571,6 +743,37 @@ tu N'AJOUTES aucune séance un autre jour, tu N'EN SUPPRIMES aucune. Tu peux uni
 le contenu de chaque séance (exercices, séries, répétitions, durée, progression, phase, récupération)."""
 
 
+def _formater_bloc_par_exercice(par_exercice: dict[int, dict[str, Any]]) -> str:
+    """Étape 5 : formate DecisionCoaching.par_exercice en bloc de prompt structuré par
+    exercice (spec section 11), un exercice par paragraphe, dans l'ordre d'exercice_id (ordre
+    déterministe, pas l'ordre d'insertion du dict qui dépend de l'itération de exercices_seance).
+
+    Chaque paragraphe affiche la charge cible déjà calculée par le backend (ou "à définir selon
+    la charge de départ" si aucune charge historique n'existe encore pour cet exercice — jamais
+    une valeur inventée) et l'ajustement en %, jamais recalculés par Mistral. `raison` reprend
+    telle quelle celle de la composition (déjà déterministe, cf. composition_decision.composer)."""
+    if not par_exercice:
+        return ""
+
+    paragraphes = []
+    for exercice_id in sorted(par_exercice.keys()):
+        item = par_exercice[exercice_id]
+        nom = item.get("nom") or f"Exercice #{exercice_id}"
+        charge_cible_kg = item.get("charge_cible_kg")
+        charge_txt = f"{charge_cible_kg:.1f} kg" if charge_cible_kg is not None else "à définir selon la charge de départ (aucun historique réel pour cet exercice)"
+        series_cible = item.get("series_cible")
+        series_txt = str(series_cible) if series_cible else "selon calibrage global de la séance"
+        paragraphes.append(
+            f"""{nom} (id {exercice_id}) :
+  charge cible : {charge_txt}
+  ajustement : {item.get("charge_pct", 0.0):+.0f}%
+  séries : {series_txt}
+  raison : {item.get("raison", "")}"""
+        )
+
+    return "\n\n".join(paragraphes)
+
+
 def formater_section_prompt(decision: DecisionCoaching) -> str:
     """Formate la décision en section de prompt, injectée avant la consigne de
     génération concrète de la séance (voir main.py::_construire_prompt_generation).
@@ -587,7 +790,7 @@ def formater_section_prompt(decision: DecisionCoaching) -> str:
     raisons_txt = "; ".join(decision.raisons) or "aucune"
     niveau_txt = ", ".join(f"{q} : {v}" for q, v in decision.niveau_effectif.items()) or "non disponible"
 
-    return f"""VOICI LA DÉCISION DU COACH — TU DOIS LA RESPECTER (moteur de décision déterministe,
+    entete = f"""VOICI LA DÉCISION DU COACH — TU DOIS LA RESPECTER (moteur de décision déterministe,
 non négociable ; tu concrétises cette décision, tu ne la redéfinis pas) :
 - TYPE DE SÉANCE IMPOSÉ : {decision.type_seance_recommande}
 - OBJECTIF PRINCIPAL : {decision.objectif_principal or "aucun"}
@@ -603,3 +806,21 @@ VOICI LES DÉTAILS À GÉNÉRER à partir de cette décision :
 {contraintes_txt}
 - Ajustement charge/volume par rapport à la dernière séance de ce type : charge {decision.ajustements.get('charge_pct', 0.0):+.0f}%, volume {decision.ajustements.get('volume_pct', 0.0):+.0f}%
 - Raisons de cette décision : {raisons_txt}"""
+
+    # Étape 5 : bloc par exercice, additif -- si par_exercice est vide (aucun appelant existant
+    # ne le passe encore, ou Moteur d'Adaptation v2 indisponible pour cette requête, voir
+    # construire_decision), le texte ci-dessus reste strictement inchangé (fallback complet vers
+    # le comportement actuel, aucune ligne en moins ni en plus).
+    bloc_par_exercice = _formater_bloc_par_exercice(decision.par_exercice)
+    if not bloc_par_exercice:
+        return entete
+
+    return f"""{entete}
+
+CHARGES CIBLES PAR EXERCICE — CALCULÉES PAR LE MOTEUR DE DÉCISION, CONTRAINTES ELLES AUSSI :
+La charge cible fournie pour chaque exercice ci-dessous est calculée par le moteur de décision
+et constitue une contrainte. Ne pas la recalculer. Ne pas proposer une autre charge. Pour un
+exercice absent de cette liste (aucun historique exploitable), utilise la recommandation de
+charge de départ fournie par ailleurs dans ce prompt.
+
+{bloc_par_exercice}"""
