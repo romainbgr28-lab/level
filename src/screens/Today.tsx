@@ -777,63 +777,39 @@ export default function Today() {
       {view === 'seance' && seance && (
         <>
           {(() => {
-            const dureePrevue = ('duree_prevue' in seance ? seance.duree_prevue : seance.duree_min) ?? null;
-            const progressPct =
-              seanceProgress.total > 0 ? Math.round((seanceProgress.faites / seanceProgress.total) * 100) : 0;
+            const indexActif = Math.max(0, seance.exercices.findIndex((it) => it.exercice_id === currentExerciceId));
             return (
-              <div className="session-head">
-                {(planDuJour || dureePrevue !== null) && (
-                  <div className="session-head__eyebrow">
-                    {planDuJour && (
-                      <span>
-                        {typeSeanceMeta(planDuJour.typeGabarit).icon} {typeSeanceMeta(planDuJour.typeGabarit).label}
-                        {' · '}Semaine {planDuJour.semaine}/{programme?.duree_semaines}
-                      </span>
-                    )}
-                    {dureePrevue !== null && <span>{planDuJour ? ' · ' : ''}~{dureePrevue} min prévues</span>}
-                  </div>
-                )}
-                <h1 className="session-head__title">{'nom' in seance ? seance.nom : seance.nom_seance}</h1>
-                <div className="session-progress">
-                  <div className="session-progress__track">
-                    <div className="session-progress__fill" style={{ width: `${progressPct}%` }} />
-                  </div>
+              <div className="editorial-head">
+                <div className="editorial-head__eyebrow">
+                  {dateLabel.toUpperCase()}
+                  {planDuJour && <> · {typeSeanceMeta(planDuJour.typeGabarit).label.toUpperCase()}</>}
+                </div>
+                {planDuJour && <div className="editorial-head__semaine">Semaine {planDuJour.semaine}</div>}
+                <div className="editorial-position">
+                  {String(indexActif + 1).padStart(2, '0')} / {String(seance.exercices.length).padStart(2, '0')}
                 </div>
               </div>
             );
           })()}
 
-          <div className="session-metrics">
-            <div className="session-metrics__item">
-              <span className="session-metrics__value">{formatDuree(elapsedSec)}</span>
-              <span className="session-metrics__label">Durée</span>
-            </div>
-            <div className="session-metrics__item">
-              <span className="session-metrics__value">
-                {seanceProgress.faites}/{seanceProgress.total}
-              </span>
-              <span className="session-metrics__label">Séries</span>
-            </div>
-            <div className="session-metrics__item">
-              <span className="session-metrics__value">{Math.round(totaux.volume)}</span>
-              <span className="session-metrics__label">Volume (kg)</span>
-            </div>
-          </div>
-
-          {restSecondsLeft !== null && (
-            <div className="rest-timer">
-              <span>Temps de repos</span>
-              <span>{formatDuree(restSecondsLeft)}</span>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRestSecondsLeft((s) => (s ?? 0) + 30)}>
-                +30s
-              </button>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRestSecondsLeft(null)}>
-                Passer
-              </button>
-            </div>
-          )}
-
-          {seance.exercices.map((item) => {
+          {(() => {
+            const items = seance.exercices;
+            const actif = items.find((it) => it.exercice_id === openExerciceId) ?? null;
+            const aVenir = items.filter((it) => it !== actif && !estExerciceComplet(it));
+            const termines = items.filter((it) => it !== actif && estExerciceComplet(it));
+            const ordonnes = actif ? [actif, ...aVenir, ...termines] : [...aVenir, ...termines];
+            const debutAVenir = actif ? 1 : 0;
+            const debutTermines = debutAVenir + aVenir.length;
+            return ordonnes.map((item, ordreIndex) => (
+              <div key={item.exercice_id}>
+                {ordreIndex === debutAVenir && aVenir.length > 0 && (
+                  <div className="editorial-section-label">À suivre</div>
+                )}
+                {ordreIndex === debutTermines && termines.length > 0 && (
+                  <div className="editorial-section-label editorial-section-label--done">Terminé</div>
+                )}
+                {(() => {
+            const isOpen = item === actif;
             const ex = bibliotheque[item.exercice_id];
             const series = seriesParExercice[item.exercice_id] ?? [];
             const precedent = precedentParExercice[item.exercice_id];
@@ -850,56 +826,59 @@ export default function Today() {
             const seanceTerminee = 'statut' in seance && seance.statut === 'terminee';
             const complet = estExerciceComplet(item);
             const nbValideesExercice = seriesValideesPourExercice(item).length;
-            const isOpen = openExerciceId === item.exercice_id;
             const objectifLabel = `${item.series}x${item.repetitions}${
               item.charge_indicative ? ` · ${item.charge_indicative}` : ''
             }${item.rpe_cible ? ` · RPE ${item.rpe_cible}` : ''}`;
 
-            return (
-              <div
-                className={`exercise-block ${isOpen ? 'exercise-block--active' : 'exercise-block--collapsed'} ${
-                  complet ? 'exercise-block--done' : ''
-                }`}
-                key={item.exercice_id}
-              >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className="exercise-block__head"
-                  onClick={() => setManualOpenId(isOpen ? -1 : item.exercice_id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') setManualOpenId(isOpen ? -1 : item.exercice_id);
-                  }}
+            if (!isOpen) {
+              return (
+                <button
+                  type="button"
+                  className={`editorial-line ${complet ? 'editorial-line--done' : ''}`}
+                  onClick={() => setDetailExerciceId(item.exercice_id)}
                 >
-                  <span className="exercise-block__title-wrap">
-                    <span
-                      className="exercise-block__name"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDetailExerciceId(item.exercice_id);
-                      }}
-                    >
-                      {ex?.nom ?? `Exercice #${item.exercice_id}`}
-                    </span>
-                    <span className="exercise-block__group">{ex?.groupe_musculaire}</span>
+                  {ex?.nom ?? `Exercice #${item.exercice_id}`}
+                </button>
+              );
+            }
+
+            return (
+              <div className="editorial-active" key={item.exercice_id}>
+                <div className="editorial-active__head">
+                  <span
+                    className="editorial-active__name"
+                    onClick={() => setDetailExerciceId(item.exercice_id)}
+                  >
+                    {ex?.nom ?? `Exercice #${item.exercice_id}`}
                   </span>
                   {!seanceTerminee && !complet && (
                     <button
                       type="button"
                       className="icon-btn"
                       aria-label="Remplacer cet exercice"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        ouvrirRemplacement(item.exercice_id);
-                      }}
+                      onClick={() => ouvrirRemplacement(item.exercice_id)}
                     >
                       ⇄
                     </button>
                   )}
-                  <span className={`exercise-block__status ${complet ? 'exercise-block__status--done' : ''}`}>
-                    {complet ? '✓' : `${nbValideesExercice}/${cible}`}
-                  </span>
                 </div>
+                <div className="editorial-active__target">
+                  {objectifLabel}
+                  {!complet && ` · ${nbValideesExercice}/${cible}`}
+                </div>
+
+                {restSecondsLeft !== null && (
+                  <div className="rest-timer">
+                    <span>Temps de repos</span>
+                    <span>{formatDuree(restSecondsLeft)}</span>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRestSecondsLeft((s) => (s ?? 0) + 30)}>
+                      +30s
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRestSecondsLeft(null)}>
+                      Passer
+                    </button>
+                  </div>
+                )}
 
                 {isOpen && (
                   <>
@@ -1146,26 +1125,46 @@ export default function Today() {
                 )}
               </div>
             );
-          })}
+                })()}
+              </div>
+            ));
+          })()}
 
           {'explication' in seance && seance.explication && (
-            <p className="subtle" style={{ marginTop: 4, marginBottom: 14, lineHeight: 1.55 }}>
-              {seance.explication}
-            </p>
+            <details className="editorial-why">
+              <summary>Pourquoi cette séance ?</summary>
+              <p>{seance.explication}</p>
+            </details>
           )}
 
-          <div className="session-actions">
-            <button className="btn btn--primary" onClick={() => setView('fin-seance')}>
-              Terminer la séance
-            </button>
-            <button
-              className="session-actions__reset link-discreet"
-              disabled={submitting}
-              onClick={handleReset}
-            >
-              Réinitialiser (générer une nouvelle séance)
-            </button>
-          </div>
+          {(() => {
+            const toutTermine = seanceProgress.total > 0 && seanceProgress.faites >= seanceProgress.total;
+            const activeItem = seance.exercices.find((it) => it.exercice_id === currentExerciceId) ?? null;
+            return (
+              <div className="editorial-cta">
+                {toutTermine ? (
+                  <button className="btn btn--primary" onClick={() => setView('fin-seance')}>
+                    Terminer la séance →
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn--primary"
+                    disabled={!activeItem}
+                    onClick={() => activeItem && handleValiderRapide(activeItem, 'comme_prevu')}
+                  >
+                    Valider la série →
+                  </button>
+                )}
+                <button
+                  className="session-actions__reset link-discreet"
+                  disabled={submitting}
+                  onClick={handleReset}
+                >
+                  Réinitialiser (générer une nouvelle séance)
+                </button>
+              </div>
+            );
+          })()}
           {error && (
             <p className="subtle" style={{ color: 'var(--danger)', marginTop: 10 }}>
               {error}

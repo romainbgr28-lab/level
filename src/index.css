@@ -745,6 +745,132 @@ p {
   background: none;
 }
 
+/* Composition éditoriale de l'écran Today (contexte -> exercice actif -> à suivre/terminé ->
+   action) : une seule colonne, séparateurs fins, pas de cards, très peu de composants. */
+.editorial-head {
+  margin: 4px 0 28px;
+}
+
+.editorial-head__eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.editorial-head__semaine {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.editorial-position {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  margin-top: 10px;
+}
+
+.editorial-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin: 22px 0 8px;
+}
+
+.editorial-line {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 7px 0;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.editorial-line--done {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-accent);
+}
+
+.editorial-active {
+  padding: 20px 0 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+}
+
+.editorial-active__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editorial-active__name {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.editorial-active__target {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+.editorial-why {
+  margin: 26px 0 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.editorial-why summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  list-style: none;
+}
+
+.editorial-why summary::-webkit-details-marker {
+  display: none;
+}
+
+.editorial-why summary::after {
+  content: ' ⌄';
+}
+
+.editorial-why[open] summary::after {
+  content: ' ⌃';
+}
+
+.editorial-why p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  margin-top: 10px;
+}
+
+.editorial-cta {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
 .exercise-block__head {
   display: flex;
   align-items: baseline;
