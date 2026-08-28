@@ -1,30 +1,30 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* LEVEL — charcoal + lime identity */
-  --bg: #0a0a0b;
-  --surface: #17181a;
-  --surface-2: #1f2022;
-  --surface-coach: #1a1c1a;
-  --border: #2a2b2e;
-  --border-accent: #3a3d33;
+  /* LEVEL — sport éditorial : crème chaud + charbon + lime en ponctuation */
+  --bg: #f3ede1;
+  --surface: #f3ede1;
+  --surface-2: #e8e0d0;
+  --surface-coach: #ece4d4;
+  --border: #d9d0bd;
+  --border-accent: #c9bfa6;
 
-  --accent: #c6ff3d;
-  --accent-2: #a3e62e;
-  --accent-soft: rgba(198, 255, 61, 0.14);
-  --accent-ink: #10140a;
+  --accent: #b9e630;
+  --accent-2: #8fb824;
+  --accent-soft: rgba(143, 184, 36, 0.16);
+  --accent-ink: #12140a;
 
-  --text: #f4f5f2;
-  --text-dim: #9b9d9a;
-  --text-faint: #616461;
+  --text: #1b1a16;
+  --text-dim: #5c584c;
+  --text-faint: #928c78;
 
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
+  --success: #4d7c3f;
+  --warning: #9c6b1f;
+  --danger: #a5352b;
 
-  --radius: 14px;
-  --radius-sm: 8px;
-  --radius-lg: 20px;
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-lg: 2px;
   --radius-pill: 999px;
 
   --space-xs: 4px;
@@ -34,9 +34,9 @@
   --space-xl: 24px;
   --space-2xl: 32px;
 
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-accent: 0 8px 24px rgba(198, 255, 61, 0.22);
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-accent: none;
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --transition-fast: 0.12s var(--ease-standard);
@@ -156,18 +156,21 @@ p {
 .stat-pill--flame { color: #ff9f5c; }
 .stat-pill--xp { color: var(--accent-2); }
 
-/* Cards */
+/* Cards — traitement éditorial : pas de fond distinct, séparateurs fins */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px;
-  margin-bottom: 16px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px 0;
+  margin-bottom: 0;
 }
 
 .card--coach {
-  background: linear-gradient(155deg, var(--surface-coach), var(--surface));
-  border: 1px solid var(--border-accent);
+  background: var(--surface-coach);
+  border: none;
+  border-left: 3px solid var(--accent);
+  padding: 18px;
   position: relative;
 }
 
@@ -253,7 +256,7 @@ p {
   max-width: 480px;
   display: flex;
   justify-content: space-around;
-  background: rgba(23, 24, 26, 0.92);
+  background: rgba(243, 237, 225, 0.94);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border);
   padding: 10px 8px calc(10px + var(--safe-bottom));
@@ -1201,87 +1204,111 @@ p {
   line-height: 1.5;
 }
 
-.programme-weeks {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 6px;
-  margin-bottom: 12px;
+/* Bandeau semaine — hero éditorial, chiffre dominant plutôt que grille de cartes */
+.programme-hero {
+  padding: 8px 0 28px;
 }
 
-.programme-week {
-  aspect-ratio: 1;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.programme-hero__eyebrow {
   font-size: 12px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin-bottom: 6px;
 }
 
-.programme-week--passee {
-  background: var(--surface-2);
+.programme-hero__figure {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.programme-hero__num {
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+}
+
+.programme-hero__total {
+  font-family: var(--font-display);
+  font-size: 22px;
   color: var(--text-faint);
 }
 
-.programme-week--actuelle {
-  background: var(--accent);
-  color: var(--accent-ink);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.programme-week--a-venir {
-  background: transparent;
-  border: 1px dashed var(--border-accent);
+.programme-hero__dates {
+  margin-top: 8px;
+  font-size: 13px;
   color: var(--text-dim);
+  text-transform: capitalize;
 }
 
-.programme-weeks-legend {
+/* Frise de progression — ligne fine, le lime marque uniquement la semaine actuelle */
+.programme-weeks {
   display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--text-dim);
+  align-items: flex-end;
+  gap: 4px;
+  margin: 20px 0 4px;
 }
 
-.programme-weeks-legend span {
-  display: inline-flex;
+.programme-week {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
-.programme-weeks-legend__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  display: inline-block;
+.programme-week__bar {
+  width: 100%;
+  height: 3px;
+  background: var(--border);
 }
 
-.programme-weeks-legend__dot--passee {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+.programme-week--passee .programme-week__bar {
+  background: var(--text-faint);
 }
 
-.programme-weeks-legend__dot--actuelle {
-  background: var(--accent);
+.programme-week--actuelle .programme-week__bar {
+  background: var(--accent-2);
+  height: 4px;
 }
 
-.programme-weeks-legend__dot--a-venir {
-  background: transparent;
-  border: 1px dashed var(--border-accent);
+.programme-week__num {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.programme-week--actuelle .programme-week__num {
+  color: var(--accent-2);
+  font-weight: 700;
 }
 
 .programme-phase {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
 }
 
-.programme-phase:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+.programme-phase:first-child {
+  border-top: none;
+  padding-top: 0;
 }
 
 .programme-phase--active .programme-phase__nom {
-  color: var(--accent-2);
+  color: var(--text);
+}
+
+.programme-phase--active .programme-phase__nom::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--accent-2);
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 .programme-phase__head {
@@ -1292,15 +1319,38 @@ p {
 }
 
 .programme-phase__nom {
+  font-family: var(--font-display);
   font-weight: 600;
+  font-size: 17px;
   text-transform: capitalize;
+  color: var(--text-dim);
+}
+
+/* Gabarit hebdomadaire — liste tabulaire, plus de pills */
+.programme-jour {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+
+.programme-jour:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.programme-jour__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
 }
 
 .programme-jour__type {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
   font-weight: 600;
 }
 

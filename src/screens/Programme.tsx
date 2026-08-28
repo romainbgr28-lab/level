@@ -73,45 +73,63 @@ export default function Programme() {
 
   const semaine = semaineActuelle(programme);
   const jours = Object.entries(programme.gabarit_hebdomadaire);
+  const phaseActive = programme.phases.find(
+    (phase) => semaine >= phase.semaine_debut && semaine <= phase.semaine_fin
+  );
+  const debut = new Date(programme.date_debut);
+  const fin = new Date(debut.getTime() + programme.duree_semaines * 7 * 24 * 60 * 60 * 1000);
+  const formatDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
 
   return (
     <div className="screen">
       <Header title="Mon programme" />
-      <h1 className="page-title">Mon programme</h1>
 
-      <section className="card">
-        <div className="card__eyebrow">Frise des 8 semaines</div>
+      <section className="programme-hero">
+        <div className="programme-hero__eyebrow">Programme en cours</div>
+        <div className="programme-hero__figure">
+          <span className="programme-hero__num">{semaine}</span>
+          <span className="programme-hero__total">/ {programme.duree_semaines}</span>
+        </div>
+        <div className="programme-hero__dates">
+          {formatDate(debut)} — {formatDate(fin)}
+        </div>
+
         <div className="programme-weeks">
           {Array.from({ length: programme.duree_semaines }).map((_, i) => {
             const num = i + 1;
             const statut = statutSemaine(num, semaine);
             return (
               <div key={num} className={`programme-week programme-week--${statut}`} title={`Semaine ${num}`}>
-                {num}
+                <span className="programme-week__bar" />
+                <span className="programme-week__num">{num}</span>
               </div>
             );
           })}
         </div>
-        <div className="programme-weeks-legend">
-          <span><i className="programme-weeks-legend__dot programme-weeks-legend__dot--passee" />Passée</span>
-          <span><i className="programme-weeks-legend__dot programme-weeks-legend__dot--actuelle" />Actuelle</span>
-          <span><i className="programme-weeks-legend__dot programme-weeks-legend__dot--a-venir" />À venir</span>
-        </div>
       </section>
 
+      {phaseActive && (
+        <section className="card">
+          <div className="card__eyebrow">Phase actuelle</div>
+          <div className="programme-phase__nom" style={{ color: 'var(--text)', fontSize: 20 }}>
+            {phaseActive.nom}
+          </div>
+          <p className="subtle" style={{ marginTop: 6 }}>{phaseActive.description}</p>
+        </section>
+      )}
+
       <section className="card">
-        <div className="card__eyebrow">Phases du programme</div>
+        <div className="card__eyebrow">Toutes les phases</div>
         {programme.phases.map((phase) => {
-          const active = semaine >= phase.semaine_debut && semaine <= phase.semaine_fin;
+          const active = phase === phaseActive;
           return (
             <div key={phase.nom} className={`programme-phase ${active ? 'programme-phase--active' : ''}`}>
               <div className="programme-phase__head">
                 <span className="programme-phase__nom">{phase.nom}</span>
                 <span className="subtle">
-                  Semaines {phase.semaine_debut}–{phase.semaine_fin}
+                  S{phase.semaine_debut}–{phase.semaine_fin}
                 </span>
               </div>
-              <p className="subtle" style={{ margin: '4px 0 0' }}>{phase.description}</p>
             </div>
           );
         })}
@@ -119,19 +137,17 @@ export default function Programme() {
 
       <section className="card">
         <div className="card__eyebrow">Gabarit hebdomadaire</div>
-        <div className="choice-list">
-          {jours.map(([jour, type]) => {
-            const meta = typeSeanceMeta(type);
-            return (
-              <div key={jour} className="choice-item programme-jour" style={{ justifyContent: 'space-between' }}>
-                <span>{jour}</span>
-                <span className="programme-jour__type" style={{ color: meta.color }}>
-                  <span aria-hidden="true">{meta.icon}</span> {meta.label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {jours.map(([jour, type]) => {
+          const meta = typeSeanceMeta(type);
+          return (
+            <div key={jour} className="programme-jour">
+              <span className="programme-jour__label">{jour}</span>
+              <span className="programme-jour__type" style={{ color: meta.color }}>
+                {meta.label}
+              </span>
+            </div>
+          );
+        })}
       </section>
     </div>
   );
