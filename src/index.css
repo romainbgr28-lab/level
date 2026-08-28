@@ -1,28 +1,46 @@
 :root {
   color-scheme: dark;
 
-  /* Nocturne palette */
-  --bg: #08080b;
-  --surface: #15151d;
-  --surface-2: #1c1c27;
-  --surface-coach: #1a1730;
-  --border: #26262f;
-  --border-accent: #3d3560;
+  /* LEVEL — charcoal + lime identity */
+  --bg: #0a0a0b;
+  --surface: #17181a;
+  --surface-2: #1f2022;
+  --surface-coach: #1a1c1a;
+  --border: #2a2b2e;
+  --border-accent: #3a3d33;
 
-  --accent: #7c5cff;
-  --accent-2: #9b8cff;
-  --accent-soft: rgba(124, 92, 255, 0.16);
+  --accent: #c6ff3d;
+  --accent-2: #a3e62e;
+  --accent-soft: rgba(198, 255, 61, 0.14);
+  --accent-ink: #10140a;
 
-  --text: #f2f2f6;
-  --text-dim: #9a9aac;
-  --text-faint: #64647a;
+  --text: #f4f5f2;
+  --text-dim: #9b9d9a;
+  --text-faint: #616461;
 
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
 
-  --radius: 16px;
-  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-accent: 0 8px 24px rgba(198, 255, 61, 0.22);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --transition-fast: 0.12s var(--ease-standard);
+  --transition-base: 0.2s var(--ease-standard);
 
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -200,7 +218,7 @@ p {
   font-size: 15px;
   padding: 13px 20px;
   border-radius: var(--radius-sm);
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
 }
 
 .btn:active {
@@ -209,7 +227,7 @@ p {
 
 .btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   width: 100%;
 }
 
@@ -235,7 +253,7 @@ p {
   max-width: 480px;
   display: flex;
   justify-content: space-around;
-  background: rgba(21, 21, 29, 0.92);
+  background: rgba(23, 24, 26, 0.92);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border);
   padding: 10px 8px calc(10px + var(--safe-bottom));
@@ -412,13 +430,14 @@ p {
 .checkbox.checked {
   background: var(--accent);
   border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .rest-timer {
   position: sticky;
   bottom: calc(96px + var(--safe-bottom));
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border-radius: var(--radius);
   padding: 14px 18px;
   display: flex;
@@ -428,12 +447,12 @@ p {
   font-family: var(--font-display);
   font-weight: 600;
   margin-bottom: 16px;
-  box-shadow: 0 8px 24px rgba(124, 92, 255, 0.35);
+  box-shadow: var(--shadow-accent);
 }
 
 .rest-timer .btn--ghost {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.5);
+  color: var(--accent-ink);
+  border-color: rgba(16, 20, 10, 0.4);
 }
 
 .set-row--cible {
@@ -760,7 +779,7 @@ p {
 .rpe-btn.selected {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 /* Accordion (Actu) */
@@ -966,7 +985,7 @@ p {
 
 .tag--active {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 .option-list {
@@ -1115,7 +1134,7 @@ p {
 
 .programme-week--actuelle {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
