@@ -275,6 +275,24 @@ export default function Today() {
     return { volume, nbValidees };
   }, [seriesParExercice]);
 
+  // Progression globale de la séance (bandeau visuel) : même calcul de cible par exercice que
+  // le badge par bloc (series prévues moins l'historique d'un éventuel remplacement), sans
+  // jamais dépasser la cible même si l'utilisateur a loggé des séries bonus.
+  const seanceProgress = useMemo(() => {
+    if (!seance) return { total: 0, faites: 0 };
+    let total = 0;
+    let faites = 0;
+    for (const item of seance.exercices) {
+      const series = seriesParExercice[item.exercice_id] ?? [];
+      const cible = Math.max(0, (item.series ?? series.length) - validesHistoriquePourExercice(item));
+      const validees = series.filter((s) => s.coche).length;
+      total += cible;
+      faites += Math.min(validees, cible);
+    }
+    return { total, faites };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seance, seriesParExercice]);
+
   function seriesValideesPourExercice(item: ApiSeanceExercice): ApiSerieLoggee[] {
     const series = seriesParExercice[item.exercice_id] ?? [];
     return series.filter((s) => s.coche);
@@ -745,7 +763,7 @@ export default function Today() {
           </div>
 
           {error && (
-            <p className="subtle" style={{ color: '#e5484d', margin: '4px 0 12px' }}>
+            <p className="subtle" style={{ color: 'var(--danger)', margin: '4px 0 12px' }}>
               {error}
             </p>
           )}
@@ -758,18 +776,47 @@ export default function Today() {
 
       {view === 'seance' && seance && (
         <>
-          <div className="workout-totals">
-            <div className="stat-tile">
-              <div className="stat-tile__value">{formatDuree(elapsedSec)}</div>
-              <div className="stat-tile__label">Durée</div>
+          {(() => {
+            const dureePrevue = ('duree_prevue' in seance ? seance.duree_prevue : seance.duree_min) ?? null;
+            const progressPct =
+              seanceProgress.total > 0 ? Math.round((seanceProgress.faites / seanceProgress.total) * 100) : 0;
+            return (
+              <div className="session-head">
+                {(planDuJour || dureePrevue !== null) && (
+                  <div className="session-head__eyebrow">
+                    {planDuJour && (
+                      <span>
+                        {typeSeanceMeta(planDuJour.typeGabarit).icon} {typeSeanceMeta(planDuJour.typeGabarit).label}
+                        {' · '}Semaine {planDuJour.semaine}/{programme?.duree_semaines}
+                      </span>
+                    )}
+                    {dureePrevue !== null && <span>{planDuJour ? ' · ' : ''}~{dureePrevue} min prévues</span>}
+                  </div>
+                )}
+                <h1 className="session-head__title">{'nom' in seance ? seance.nom : seance.nom_seance}</h1>
+                <div className="session-progress">
+                  <div className="session-progress__track">
+                    <div className="session-progress__fill" style={{ width: `${progressPct}%` }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="session-metrics">
+            <div className="session-metrics__item">
+              <span className="session-metrics__value">{formatDuree(elapsedSec)}</span>
+              <span className="session-metrics__label">Durée</span>
             </div>
-            <div className="stat-tile">
-              <div className="stat-tile__value">{Math.round(totaux.volume)}</div>
-              <div className="stat-tile__label">Volume (kg)</div>
+            <div className="session-metrics__item">
+              <span className="session-metrics__value">
+                {seanceProgress.faites}/{seanceProgress.total}
+              </span>
+              <span className="session-metrics__label">Séries</span>
             </div>
-            <div className="stat-tile">
-              <div className="stat-tile__value">{totaux.nbValidees}</div>
-              <div className="stat-tile__label">Séries validées</div>
+            <div className="session-metrics__item">
+              <span className="session-metrics__value">{Math.round(totaux.volume)}</span>
+              <span className="session-metrics__label">Volume (kg)</span>
             </div>
           </div>
 
@@ -785,16 +832,6 @@ export default function Today() {
               </button>
             </div>
           )}
-
-          {(('duree_prevue' in seance ? seance.duree_prevue : seance.duree_min) ?? null) !== null && (
-            <p className="subtle" style={{ margin: '0 0 12px' }}>
-              Durée prévue : environ {'duree_prevue' in seance ? seance.duree_prevue : seance.duree_min} min
-            </p>
-          )}
-
-          <h2 className="card__title" style={{ marginBottom: 12 }}>
-            {'nom' in seance ? seance.nom : seance.nom_seance}
-          </h2>
 
           {seance.exercices.map((item) => {
             const ex = bibliotheque[item.exercice_id];
@@ -1117,14 +1154,20 @@ export default function Today() {
             </p>
           )}
 
-          <button className="btn btn--primary" onClick={() => setView('fin-seance')}>
-            Terminer la séance
-          </button>
-          <button className="btn btn--ghost" style={{ marginTop: 10 }} disabled={submitting} onClick={handleReset}>
-            Réinitialiser (générer une nouvelle séance)
-          </button>
+          <div className="session-actions">
+            <button className="btn btn--primary" onClick={() => setView('fin-seance')}>
+              Terminer la séance
+            </button>
+            <button
+              className="session-actions__reset link-discreet"
+              disabled={submitting}
+              onClick={handleReset}
+            >
+              Réinitialiser (générer une nouvelle séance)
+            </button>
+          </div>
           {error && (
-            <p className="subtle" style={{ color: '#e5484d', marginTop: 10 }}>
+            <p className="subtle" style={{ color: 'var(--danger)', marginTop: 10 }}>
               {error}
             </p>
           )}
@@ -1172,7 +1215,7 @@ export default function Today() {
             ))}
           </div>
           {error && (
-            <p className="subtle" style={{ color: '#e5484d', margin: '4px 0 12px' }}>
+            <p className="subtle" style={{ color: 'var(--danger)', margin: '4px 0 12px' }}>
               {error}
             </p>
           )}
@@ -1246,7 +1289,7 @@ export default function Today() {
               <p className="subtle">Aucune alternative disponible avec ton matériel actuel.</p>
             )}
             {replaceError && (
-              <p className="subtle" style={{ color: '#e5484d' }}>
+              <p className="subtle" style={{ color: 'var(--danger)' }}>
                 {replaceError}
               </p>
             )}

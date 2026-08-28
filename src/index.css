@@ -472,12 +472,24 @@ p {
 }
 
 .exercise-block--active {
-  border-color: var(--border-accent);
-  box-shadow: 0 0 0 1px var(--border-accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  position: relative;
+}
+
+.exercise-block--active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: var(--accent);
 }
 
 .exercise-block--done.exercise-block--collapsed {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .exercise-block__head {
@@ -502,14 +514,15 @@ p {
 
 .exercise-block__status {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-display);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
 .exercise-block__status--done {
   color: var(--success);
-  font-weight: 600;
 }
 
 .exercise-block--active .exercise-block__previous {
@@ -531,7 +544,9 @@ p {
 
 .set-line--done .set-line__text {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .set-line--upcoming {
@@ -545,7 +560,8 @@ p {
 }
 
 .set-line--upcoming .set-line__text {
-  font-size: 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .set-line__text {
@@ -576,29 +592,32 @@ p {
 /* Active set card (série en cours) */
 .set-card {
   background: var(--surface-2);
-  border: 1px solid var(--border-accent);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
-  padding: 12px;
-  margin: 4px 0;
+  padding: 14px;
+  margin: 6px 0;
 }
 
 .set-card__head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .set-card__num {
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 15px;
   font-family: var(--font-display);
+  color: var(--accent);
 }
 
 .set-card__target {
   flex: 1;
-  color: var(--text-dim);
-  font-size: 13px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
 }
 
@@ -635,20 +654,92 @@ p {
   color: var(--warning);
 }
 
-/* Workout live totals bar */
-.workout-totals {
+/* Session header (écran Today, séance en cours) */
+.session-head {
+  margin-bottom: 18px;
+}
+
+.session-head__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.session-head__title {
+  font-size: 24px;
+  margin-bottom: 14px;
+}
+
+.session-progress__track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.session-progress__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transition: width var(--transition-base);
+}
+
+/* Bandeau de métriques live (durée / volume / séries) : chiffres dominants, pas de cartes */
+.session-metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  margin-bottom: 18px;
 }
 
-.workout-totals .stat-tile {
-  padding: 12px;
+.session-metrics__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
 }
 
-.workout-totals .stat-tile__value {
-  font-size: 19px;
+.session-metrics__item + .session-metrics__item {
+  border-left: 1px solid var(--border);
+}
+
+.session-metrics__value {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.session-metrics__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.session-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.session-actions__reset {
+  align-self: center;
+  margin-top: 6px;
+  background: none;
 }
 
 .exercise-block__head {
