@@ -42,15 +42,15 @@ export default function LineChart({ data, unite = 'kg', width = 320, height = 14
             plus des valeurs violettes codées en dur héritées de l'ancien thème sombre, qui
             rendaient notamment le libellé de valeur illisible sur fond crème. */}
         <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+          <stop offset="0%" style={{ stopColor: 'var(--accent)', stopOpacity: 0.35 }} />
+          <stop offset="100%" style={{ stopColor: 'var(--accent)', stopOpacity: 0 }} />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#chartFill)" />
       <path
         d={path}
         fill="none"
-        stroke="var(--accent-2)"
+        style={{ stroke: 'var(--accent-2)' }}
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -61,15 +61,17 @@ export default function LineChart({ data, unite = 'kg', width = 320, height = 14
           cx={p.x}
           cy={p.y}
           r={i === points.length - 1 ? 4 : 2.5}
-          fill={i === points.length - 1 ? 'var(--accent)' : 'var(--surface)'}
-          stroke="var(--accent-2)"
+          style={{
+            fill: i === points.length - 1 ? 'var(--accent)' : 'var(--surface)',
+            stroke: 'var(--accent-2)',
+          }}
           strokeWidth="1.5"
         />
       ))}
-      <text x={points[0].x} y={height - 4} fontSize="10" fill="var(--text-faint)">
+      <text x={points[0].x} y={height - 4} fontSize="10" style={{ fill: 'var(--text-faint)' }}>
         {formatJour(data[0].date)}
       </text>
-      <text x={dernier.x} y={height - 4} fontSize="10" fill="var(--text-faint)" textAnchor="end">
+      <text x={dernier.x} y={height - 4} fontSize="10" style={{ fill: 'var(--text-faint)' }} textAnchor="end">
         {formatJour(data[data.length - 1].date)}
       </text>
       <text
@@ -77,7 +79,7 @@ export default function LineChart({ data, unite = 'kg', width = 320, height = 14
         y={dernier.y - 10}
         fontSize="12"
         fontWeight="700"
-        fill="var(--text)"
+        style={{ fill: 'var(--text)' }}
         textAnchor="end"
       >
         {formatValeur(data[data.length - 1].loadKg)} {unite}
