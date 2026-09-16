@@ -113,6 +113,10 @@ export default function Today() {
   // pas réussi à savoir s'il y en avait une (cf. audit P0.6 — la génération auto ne doit pas se
   // désactiver silencieusement sur un simple accroc réseau).
   const [chargementErreur, setChargementErreur] = useState(false);
+  // Raison d'un échec de la génération automatique de la séance du jour (Mistral indisponible,
+  // bibliothèque vide...). Distincte de `error` (flux manuel) : elle explique pourquoi l'écran
+  // propose un bouton plutôt qu'une séance déjà prête.
+  const [autoGenerationErreur, setAutoGenerationErreur] = useState<string | null>(null);
 
   const [sommeil, setSommeil] = useState('');
   const [motivation, setMotivation] = useState('');
@@ -169,6 +173,7 @@ export default function Today() {
 
   async function chargerToday() {
     setChargementErreur(false);
+    setAutoGenerationErreur(null);
     let prog: ApiProgramme | null;
     let existante: ApiSeance | ApiSeanceGeneree | null;
     try {
@@ -205,8 +210,11 @@ export default function Today() {
         setSeance(generee);
         setView('seance');
         return;
-      } catch {
-        // Si la génération automatique échoue, on retombe sur le flux manuel (bouton fallback).
+      } catch (e) {
+        // Si la génération automatique échoue, on retombe sur le flux manuel (bouton fallback),
+        // mais on garde la raison : sans elle, l'écran affichait un simple bouton "Générer"
+        // qui rejouait le même échec sans que l'utilisateur sache pourquoi.
+        setAutoGenerationErreur(e instanceof Error ? e.message : 'Génération automatique impossible.');
       }
     }
 
@@ -630,6 +638,11 @@ export default function Today() {
             {programme?.duree_semaines}
             {planDuJour.phase ? ` — phase ${planDuJour.phase.nom}` : ''}.
           </p>
+          {autoGenerationErreur && (
+            <p className="subtle" style={{ margin: '0 0 14px' }}>
+              La génération automatique n'a pas abouti : {autoGenerationErreur}
+            </p>
+          )}
           <button className="btn btn--primary" onClick={() => setView('form')}>
             Générer ma séance du jour
           </button>
