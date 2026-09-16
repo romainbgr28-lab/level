@@ -520,6 +520,13 @@ class BilanOut(BaseModel):
     prochaine_adaptation: Optional[str] = None
 
 
+class VolumeSemaineOut(BaseModel):
+    """Volume soulevé sur une semaine glissante ; `date` est le premier jour de la fenêtre."""
+
+    date: date
+    volume_kg: float
+
+
 class ExerciceSuiviOut(BaseModel):
     """Exercice pour lequel il existe assez de séries loguées pour tracer une courbe."""
 

@@ -2,11 +2,23 @@ import type { ChargeDataPoint } from '../types';
 
 interface LineChartProps {
   data: ChargeDataPoint[];
+  /** Unité affichée à côté de la dernière valeur ("kg" par défaut). */
+  unite?: string;
   width?: number;
   height?: number;
 }
 
-export default function LineChart({ data, width = 320, height = 140 }: LineChartProps) {
+function formatJour(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso; // libellé déjà formaté côté appelant
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function formatValeur(valeur: number): string {
+  return valeur >= 1000 ? valeur.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) : `${valeur}`;
+}
+
+export default function LineChart({ data, unite = 'kg', width = 320, height = 140 }: LineChartProps) {
   const padding = 24;
   const loads = data.map((d) => d.loadKg);
   const min = Math.min(...loads);
@@ -20,44 +32,55 @@ export default function LineChart({ data, width = 320, height = 140 }: LineChart
   });
 
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const areaPath = `${path} L${points[points.length - 1].x.toFixed(1)},${height - padding} L${points[0].x.toFixed(1)},${height - padding} Z`;
+  const dernier = points[points.length - 1];
+  const areaPath = `${path} L${dernier.x.toFixed(1)},${height - padding} L${points[0].x.toFixed(1)},${height - padding} Z`;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Évolution de la charge">
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Évolution">
       <defs>
+        {/* Palette LEVEL (crème / charbon / lime) — les couleurs viennent des tokens CSS,
+            plus des valeurs violettes codées en dur héritées de l'ancien thème sombre, qui
+            rendaient notamment le libellé de valeur illisible sur fond crème. */}
         <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7c5cff" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#7c5cff" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#chartFill)" />
-      <path d={path} fill="none" stroke="#9b8cff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={path}
+        fill="none"
+        stroke="var(--accent-2)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       {points.map((p, i) => (
         <circle
-          key={i}
+          key={p.date}
           cx={p.x}
           cy={p.y}
-          r={i === points.length - 1 ? 4 : 3}
-          fill={i === points.length - 1 ? '#7c5cff' : '#0a0a0f'}
-          stroke="#9b8cff"
+          r={i === points.length - 1 ? 4 : 2.5}
+          fill={i === points.length - 1 ? 'var(--accent)' : 'var(--surface)'}
+          stroke="var(--accent-2)"
           strokeWidth="1.5"
         />
       ))}
-      <text x={points[0].x} y={height - 4} fontSize="10" fill="#64647a">
-        {data[0].date}
+      <text x={points[0].x} y={height - 4} fontSize="10" fill="var(--text-faint)">
+        {formatJour(data[0].date)}
       </text>
-      <text x={points[points.length - 1].x} y={height - 4} fontSize="10" fill="#64647a" textAnchor="end">
-        {data[data.length - 1].date}
+      <text x={dernier.x} y={height - 4} fontSize="10" fill="var(--text-faint)" textAnchor="end">
+        {formatJour(data[data.length - 1].date)}
       </text>
       <text
-        x={points[points.length - 1].x}
-        y={points[points.length - 1].y - 10}
+        x={dernier.x}
+        y={dernier.y - 10}
         fontSize="12"
         fontWeight="700"
-        fill="#f2f2f6"
+        fill="var(--text)"
         textAnchor="end"
       >
-        {data[data.length - 1].loadKg} kg
+        {formatValeur(data[data.length - 1].loadKg)} {unite}
       </text>
     </svg>
   );

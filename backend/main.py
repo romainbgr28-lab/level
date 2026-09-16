@@ -2077,7 +2077,16 @@ def get_stats(db: Session = Depends(get_db), today: date = Depends(get_current_d
             running = 1
         record_streak = max(record_streak, running)
 
-    xp_total = total_seances * 40 + total_modules * 20
+    # XP réellement attribuée séance par séance par _calculer_xp() et persistée dans
+    # HistoriqueSeance.xp_gagne — et non un forfait recalculé après coup. L'ancien calcul
+    # (40 XP par séance) contredisait le « +N XP » annoncé en fin de séance, qui vaut en
+    # réalité 10 à 30 selon complétion et streak : le total affiché ne correspondait à rien.
+    xp_seances = db.query(func.sum(models.HistoriqueSeance.xp_gagne)).scalar() or 0
+    seances_avec_xp = db.query(models.HistoriqueSeance).filter(models.HistoriqueSeance.xp_gagne.isnot(None)).count()
+    # Séances terminées avant l'enregistrement de l'XP (colonne ajoutée après coup) : on garde
+    # le forfait historique de 40 pour ne pas faire chuter rétroactivement le total du joueur.
+    seances_sans_xp = max(0, total_seances - seances_avec_xp)
+    xp_total = int(xp_seances) + seances_sans_xp * 40 + total_modules * 20
 
     return schemas.StatsOut(
         streak=current_streak,
@@ -2206,6 +2215,20 @@ def get_bilan_hebdomadaire(
     donnees = bilan.construire_bilan(seances, _series_pour_bilan(db), today, jours=jours)
     donnees["prochaine_adaptation"] = _prochaine_adaptation(db)
     return schemas.BilanOut(**donnees)
+
+
+@app.get("/api/progress/volume", response_model=list[schemas.VolumeSemaineOut])
+def get_volume_progress(
+    semaines: int = 8, db: Session = Depends(get_db), today: date = Depends(get_current_date)
+):
+    """Volume réellement soulevé par semaine, sur les `semaines` dernières semaines glissantes.
+
+    Sert la lecture « est-ce que je progresse sur plusieurs semaines ? » côté Progression, à
+    partir des seules séries loguées et cochées."""
+    return [
+        schemas.VolumeSemaineOut(**point)
+        for point in bilan.volume_par_semaine(_series_pour_bilan(db), today, semaines=semaines)
+    ]
 
 
 @app.get("/api/progress/themes")

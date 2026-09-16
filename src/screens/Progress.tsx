@@ -9,6 +9,7 @@ import {
   getProgrammeActif,
   getStats,
   getStreaks,
+  getVolumeProgress,
 } from '../api/client';
 import type {
   ApiChargePoint,
@@ -16,6 +17,7 @@ import type {
   ApiProgramme,
   ApiStats,
   ApiStreakDay,
+  ApiVolumeSemaine,
 } from '../api/client';
 import { phaseCourante, semaineActuelle } from '../utils/programme';
 
@@ -54,17 +56,19 @@ export default function Progress() {
   // fait, au lieu d'un exercice choisi en dur qui reste vide pour la plupart des profils.
   const [exercicesSuivis, setExercicesSuivis] = useState<ApiExerciceSuivi[]>([]);
   const [exerciceCourant, setExerciceCourant] = useState<string | null>(null);
+  const [volume, setVolume] = useState<ApiVolumeSemaine[]>([]);
   const [streaks, setStreaks] = useState<ApiStreakDay[]>([]);
   const [programme, setProgramme] = useState<ApiProgramme | null>(null);
   const [programmeLoading, setProgrammeLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getStats(), getExercicesSuivis(), getStreaks(), getProgrammeActif()])
-      .then(([s, suivis, streakDays, prog]) => {
+    Promise.all([getStats(), getExercicesSuivis(), getStreaks(), getProgrammeActif(), getVolumeProgress()])
+      .then(([s, suivis, streakDays, prog, volumeSemaines]) => {
         setStats(s);
         setExercicesSuivis(suivis);
         setStreaks(streakDays);
+        setVolume(volumeSemaines);
         if (suivis.length > 0) {
           setExerciceCourant(suivis[0].nom);
         }
@@ -186,6 +190,21 @@ export default function Progress() {
             </div>
           </>
         )}
+      </section>
+
+      <section className="card">
+        <div className="card__eyebrow">Volume soulevé — par semaine</div>
+        <div className="chart-wrap">
+          {volume.length >= 2 ? (
+            <LineChart
+              data={volume.map((v) => ({ date: v.date, loadKg: Math.round(v.volume_kg) }))}
+            />
+          ) : (
+            <p className="subtle">
+              Il faut au moins deux semaines de séries loguées pour tracer cette évolution.
+            </p>
+          )}
+        </div>
       </section>
 
       <section className="card">

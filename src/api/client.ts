@@ -252,6 +252,12 @@ export interface ApiExerciceSuivi {
   seances: number;
 }
 
+/** Volume soulevé sur une semaine glissante ; `date` est le premier jour de la fenêtre. */
+export interface ApiVolumeSemaine {
+  date: string;
+  volume_kg: number;
+}
+
 export interface ApiBilanProgression {
   exercice: string;
   charge_precedente_kg: number;
@@ -497,4 +503,5 @@ export const getChargeProgress = (nomExercice = 'Développé couché') =>
   request<ApiChargePoint[]>(`/api/progress/charge?nom_exercice=${encodeURIComponent(nomExercice)}`);
 export const getThemeScores = () => request<ApiThemeScore[]>('/api/progress/themes');
 export const getExercicesSuivis = () => request<ApiExerciceSuivi[]>('/api/progress/exercices');
+export const getVolumeProgress = () => request<ApiVolumeSemaine[]>('/api/progress/volume');
 export const getBilanHebdomadaire = () => request<ApiBilan>('/api/bilan/hebdomadaire');

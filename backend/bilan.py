@@ -164,6 +164,32 @@ def construire_bilan(
     }
 
 
+def volume_par_semaine(series: list[dict], aujourdhui: date, semaines: int = 8) -> list[dict[str, Any]]:
+    """Volume réellement soulevé (kg) par semaine glissante, de la plus ancienne à la plus récente.
+
+    Chaque point est daté du premier jour de sa fenêtre, pour être affichable tel quel sur une
+    courbe. Les semaines sans aucune série loguée valent 0 : c'est une information réelle
+    (aucun entraînement enregistré), pas un trou qu'on masquerait.
+
+    Les semaines antérieures à la toute première série loguée sont écartées : elles diraient
+    "0 kg" pour une période où l'utilisateur n'utilisait simplement pas encore l'application.
+    """
+    cochees = [s for s in series if s.get("coche") and s.get("date")]
+    if not cochees:
+        return []
+
+    premiere = min(s["date"] for s in cochees)
+    points: list[dict[str, Any]] = []
+    for index in reversed(range(semaines)):
+        fin = aujourdhui - timedelta(days=7 * index)
+        debut = fin - timedelta(days=6)
+        if fin < premiere:
+            continue
+        volume = sum(_volume_serie(s) for s in cochees if _fenetre(debut, fin, s["date"]))
+        points.append({"date": debut.isoformat(), "volume_kg": round(volume, 1)})
+    return points
+
+
 def _formuler_points(
     n_seances: int,
     n_seances_prec: int,

@@ -166,5 +166,36 @@ class TestPoints(unittest.TestCase):
         self.assertTrue(any("non validées" in p for p in b["points"]))
 
 
+
+class TestVolumeParSemaine(unittest.TestCase):
+    def test_aucune_serie_retourne_liste_vide(self):
+        self.assertEqual(bilan.volume_par_semaine([], AUJOURDHUI), [])
+
+    def test_semaines_anterieures_a_la_premiere_serie_ecartees(self):
+        points = bilan.volume_par_semaine([_serie(1, "Bench", 50.0, 10)], AUJOURDHUI, semaines=8)
+        self.assertEqual(len(points), 1)
+        self.assertEqual(points[0]["volume_kg"], 500.0)
+
+    def test_points_ordonnes_du_plus_ancien_au_plus_recent(self):
+        series = [_serie(1, "Bench", 60.0, 10), _serie(15, "Bench", 50.0, 10)]
+        points = bilan.volume_par_semaine(series, AUJOURDHUI, semaines=4)
+        dates = [p["date"] for p in points]
+        self.assertEqual(dates, sorted(dates))
+        self.assertEqual(points[-1]["volume_kg"], 600.0)
+
+    def test_semaine_creuse_vaut_zero_et_nest_pas_masquee(self):
+        series = [_serie(1, "Bench", 60.0, 10), _serie(15, "Bench", 50.0, 10)]
+        points = bilan.volume_par_semaine(series, AUJOURDHUI, semaines=4)
+        self.assertIn(0.0, [p["volume_kg"] for p in points])
+
+    def test_serie_non_cochee_ignoree(self):
+        points = bilan.volume_par_semaine([_serie(1, "Bench", 60.0, 10, coche=False)], AUJOURDHUI)
+        self.assertEqual(points, [])
+
+    def test_chaque_point_est_date_du_debut_de_sa_fenetre(self):
+        points = bilan.volume_par_semaine([_serie(0, "Bench", 60.0, 10)], AUJOURDHUI, semaines=1)
+        self.assertEqual(points[0]["date"], "2026-03-09")
+
+
 if __name__ == "__main__":
     unittest.main()
