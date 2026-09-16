@@ -178,7 +178,7 @@ export default function Historique() {
           titre="Historique indisponible"
           message={`${error} Tes séances terminées ne sont pas perdues.`}
           action={{ label: 'Réessayer', onClick: charger }}
-          actionSecondaire={{ label: 'Voir ma journée', onClick: () => navigate('/') }}
+          actionSecondaire={{ label: 'Voir ma journée', onClick: () => navigate('/aujourdhui') }}
         />
       )}
 
@@ -188,7 +188,7 @@ export default function Historique() {
         <EtatVide
           titre="Rien à afficher pour l’instant"
           message="Tes séances terminées apparaîtront ici : ce que tu avais prévu, ce que tu as réellement fait, et pourquoi LEVEL avait adapté la séance."
-          action={{ label: 'Voir ma séance du jour', onClick: () => navigate('/') }}
+          action={{ label: 'Voir ma séance du jour', onClick: () => navigate('/aujourdhui') }}
         />
       )}
 

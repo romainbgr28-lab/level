@@ -57,7 +57,7 @@ export default function Module() {
       return;
     }
     donneesModifiees('stats');
-    navigate('/');
+    navigate('/aujourdhui');
   }
 
   if (loading) {
@@ -77,7 +77,7 @@ export default function Module() {
           titre="Module indisponible"
           message={chargementErreur}
           action={{ label: 'Réessayer', onClick: charger }}
-          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/') }}
+          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/aujourdhui') }}
         />
       </div>
     );
@@ -90,7 +90,7 @@ export default function Module() {
         <EtatVide
           titre="Pas de module aujourd’hui"
           message="Aucun module d’apprentissage n’est prévu pour le moment. Ta progression physique, elle, continue."
-          action={{ label: 'Voir ma journée', onClick: () => navigate('/') }}
+          action={{ label: 'Voir ma journée', onClick: () => navigate('/aujourdhui') }}
         />
       </div>
     );
@@ -99,7 +99,7 @@ export default function Module() {
   return (
     <div className="screen">
       <Header title="Module" />
-      <button className="back-btn" onClick={() => navigate('/')}>
+      <button className="back-btn" onClick={() => navigate('/aujourdhui')}>
         ← Retour
       </button>
       <span className="tag">{learningModule.categorie}</span>

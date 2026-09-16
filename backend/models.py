@@ -187,6 +187,57 @@ class Programme(Base):
     date_creation = Column(DateTime, server_default=func.now())
 
 
+class MessageConversation(Base):
+    """Un message de la conversation avec le coach (V0 : interface chat).
+
+    Mémoire d'expérience utilisateur uniquement : la conversation permet de relire ce qui a
+    été dit, elle n'est JAMAIS la source de vérité métier. Tout fait important extrait d'un
+    message (performance, douleur, changement de match, adaptation) est persisté dans les
+    structures existantes (SerieLoggee, HistoriqueSeance, Profil.calendrier_matchs,
+    ContexteSignale...) par la couche d'actions (coach_actions.py). Purger cette table ne
+    doit donc rien faire perdre au moteur — c'est exactement ce que vérifie
+    test_coach_actions.py::TestMemoireStructuree.
+    """
+
+    __tablename__ = "messages_conversation"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(String, nullable=False)  # utilisateur | coach
+    contenu = Column(String, nullable=False)
+    # Trace des actions métier réellement exécutées pour produire ce message (liste de
+    # {nom, arguments, resultat}) : sert à expliquer a posteriori ce que LEVEL a fait, et aux
+    # tests à vérifier qu'une demande a bien déclenché une action plutôt qu'une simple phrase.
+    actions = Column(JSON, nullable=True)
+    date = Column(Date, nullable=False)
+    horodatage = Column(DateTime, server_default=func.now())
+
+
+class ContexteSignale(Base):
+    """Élément de contexte déclaré par l'utilisateur hors séance : fatigue, douleur,
+    contrainte de matériel ou de planning.
+
+    Comble un vrai manque : jusqu'ici la fatigue et les zones sensibles n'existaient qu'au
+    moment d'une séance (Seance.etat_declare_avant, HistoriqueSeance.zone_sensible_signalee).
+    Une douleur annoncée dans la conversation un jour de repos n'avait nulle part où vivre.
+
+    Chaque entrée est bornée dans le temps (`date_debut` / `date_fin`) plutôt que supprimée :
+    l'historique de ce que l'utilisateur a signalé n'est jamais réécrit. `date_fin` nulle =
+    encore actif. Voir coach_actions.signaler_douleur / signaler_fatigue.
+    """
+
+    __tablename__ = "contextes_signales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String, nullable=False)  # douleur | fatigue | contrainte_materiel | contrainte_planning
+    # Pour une douleur : une zone de ZONES_SENSIBLES_VALIDES (main.py), pour que le garde-fou
+    # existant (regles_seance.appliquer_garde_fous) la reconnaisse sans traitement spécifique.
+    valeur = Column(String, nullable=True)
+    details = Column(String, nullable=True)  # texte tel que déclaré, jamais reformulé en diagnostic
+    date_debut = Column(Date, nullable=False)
+    date_fin = Column(Date, nullable=True)  # null = toujours actif
+    horodatage = Column(DateTime, server_default=func.now())
+
+
 class NiveauHistorique(Base):
     """Journal des changements de niveau déclaré/estimé par qualité physique."""
 

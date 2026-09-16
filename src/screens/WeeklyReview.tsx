@@ -72,7 +72,7 @@ export default function WeeklyReview() {
             <EtatVide
               titre="Pas encore de bilan"
               message={`Aucune séance terminée sur les ${bilan.jours_fenetre} derniers jours. Ton bilan compare volume, charges et RPE d'une semaine à l'autre : il s'alimente dès ta première séance validée.`}
-              action={{ label: 'Voir ma séance du jour', onClick: () => navigate('/') }}
+              action={{ label: 'Voir ma séance du jour', onClick: () => navigate('/aujourdhui') }}
             />
           ) : (
             <>

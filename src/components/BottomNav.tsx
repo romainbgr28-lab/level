@@ -1,7 +1,10 @@
 import { NavLink } from 'react-router-dom';
 
 const items = [
-  { to: '/', label: 'Aujourd’hui', icon: TodayIcon },
+  // V0 : le coach est l'écran d'entrée. Les écrans existants restent accessibles d'un geste —
+  // rien n'est retiré, seul l'ordre change pour refléter ce qu'on cherche à valider.
+  { to: '/', label: 'Coach', icon: CoachIcon },
+  { to: '/aujourdhui', label: 'Aujourd’hui', icon: TodayIcon },
   // Le programme est la réponse à « où j'en suis » : il doit être atteignable en un geste,
   // pas seulement via un lien enfoui dans l'écran Progression.
   { to: '/programme', label: 'Programme', icon: ProgrammeIcon },
@@ -24,6 +27,14 @@ export default function BottomNav() {
         </NavLink>
       ))}
     </nav>
+  );
+}
+
+function CoachIcon() {
+  return (
+    <svg className="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M4.5 5.5h15v11h-9l-4 3.5v-3.5h-2z" strokeLinejoin="round" />
+    </svg>
   );
 }
 

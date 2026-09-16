@@ -660,3 +660,71 @@ export const getThemeScores = () => request<ApiThemeScore[]>('/api/progress/them
 export const getExercicesSuivis = () => request<ApiExerciceSuivi[]>('/api/progress/exercices');
 export const getVolumeProgress = () => request<ApiVolumeSemaine[]>('/api/progress/volume');
 export const getBilanHebdomadaire = () => request<ApiBilan>('/api/bilan/hebdomadaire');
+
+// ---------- Coach conversationnel (V0) ----------
+//
+// Le chat est l'interface de la V0 ; le moteur reste le cerveau. `actions` expose les actions
+// métier réellement exécutées côté backend pour produire la réponse : l'écran peut donc
+// distinguer « LEVEL a fait quelque chose » de « LEVEL a seulement parlé », et rafraîchir
+// ce qu'il faut (voir Coach.tsx).
+
+export interface ApiCoachAction {
+  nom: string;
+  arguments: Record<string, unknown>;
+  resultat: Record<string, unknown>;
+}
+
+export interface ApiCoachMessage {
+  reponse: string;
+  actions: ApiCoachAction[];
+  contexte: ApiCoachContexte;
+}
+
+export interface ApiCoachMessageHistorique {
+  id: number;
+  role: 'utilisateur' | 'coach';
+  contenu: string;
+  actions: { nom: string }[] | null;
+  date: string;
+  horodatage: string | null;
+}
+
+/** Miroir souple de backend/coach_contexte.construire_contexte : seuls les champs réellement
+ *  affichés sont typés ici, le reste est ignoré (le backend peut en ajouter sans casser l'app). */
+export interface ApiCoachContexte {
+  date: string;
+  jour_label: string | null;
+  profil: Record<string, unknown> | null;
+  jour: {
+    statut: ApiStatutJour;
+    statut_label: string;
+    type_seance_prevu: string | null;
+  };
+  seance_du_jour: {
+    id: number;
+    nom: string;
+    statut: string;
+    duree_prevue_min: number | null;
+    exercices: string[];
+  } | null;
+}
+
+export const envoyerMessageCoach = (message: string) =>
+  request<ApiCoachMessage>('/api/coach/message', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+
+export const getConversationCoach = () =>
+  request<ApiCoachMessageHistorique[]>('/api/coach/conversation');
+
+export const getCoachContexte = () => request<ApiCoachContexte>('/api/coach/contexte');
+
+/** Invoque directement une action métier, sans passer par le LLM (raccourcis de l'interface).
+ *  Même registre et mêmes garde-fous que ceux exposés au modèle : un raccourci ne peut pas
+ *  contourner une règle que le chat respecte. */
+export const executerActionCoach = (nom: string, args: Record<string, unknown> = {}) =>
+  request<{ nom: string; resultat: Record<string, unknown> }>('/api/coach/action', {
+    method: 'POST',
+    body: JSON.stringify({ nom, arguments: args }),
+  });

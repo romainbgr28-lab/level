@@ -138,7 +138,7 @@ export default function Progress() {
         <EtatErreur
           message={chargementErreur}
           action={{ label: 'Réessayer', onClick: charger }}
-          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/') }}
+          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/aujourdhui') }}
         />
       </div>
     );

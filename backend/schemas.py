@@ -26,6 +26,12 @@ class EntrainementsClub(BaseModel):
 class CalendrierMatchs(BaseModel):
     jour_habituel: Optional[str] = None
     exceptions: list[CalendrierException] = []
+    # Dates où le match habituel n'a PAS lieu. Sans cette liste, « mon match est finalement
+    # vendredi au lieu de samedi » ne pouvait qu'ajouter le vendredi : le samedi habituel
+    # restait un jour de match pour le moteur, et l'utilisateur se retrouvait avec deux matchs
+    # dans la semaine (voir regles_seance._dates_matchs_proches, qui unit jour_habituel et
+    # exceptions). Vide par défaut : un profil existant se comporte exactement comme avant.
+    annulations: list[date] = []
     entrainements_club: Optional[EntrainementsClub] = None
 
 
@@ -630,3 +636,54 @@ class ContexteJourOut(BaseModel):
     seance_nom: Optional[str] = None
     prochaine_seance: Optional[ProchaineSeanceOut] = None
     semaine: list[JourSemaineOut] = []
+
+
+# ---------- Coach conversationnel (V0) ----------
+
+
+class CoachMessagePayload(BaseModel):
+    message: str
+
+
+class CoachActionEffectuee(BaseModel):
+    """Une action métier réellement exécutée pour produire la réponse.
+
+    Exposée au frontend (et pas seulement loguée) pour que le chat reste vérifiable : on peut
+    voir que « c'est enregistré » correspond bien à un appel qui a écrit en base, pas à une
+    phrase produite par le modèle."""
+
+    nom: str
+    arguments: dict[str, Any] = {}
+    resultat: dict[str, Any] = {}
+
+
+class CoachMessageOut(BaseModel):
+    reponse: str
+    actions: list[CoachActionEffectuee] = []
+    contexte: dict[str, Any] = {}
+
+
+class CoachMessageHistoriqueOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    role: str  # utilisateur | coach
+    contenu: str
+    actions: Optional[list[dict[str, Any]]] = None
+    date: date
+    horodatage: Optional[datetime] = None
+
+
+class CoachActionPayload(BaseModel):
+    """Invocation directe d'une action métier, sans passer par le LLM.
+
+    Sert les raccourcis de l'interface (« Ma séance aujourd'hui », « Voir ma progression ») et
+    rend toute la couche d'actions testable et utilisable sans clé API — le chat n'est donc
+    jamais un passage obligé pour agir."""
+
+    nom: str
+    arguments: dict[str, Any] = {}
+
+
+class CoachActionOut(BaseModel):
+    nom: str
+    resultat: dict[str, Any]

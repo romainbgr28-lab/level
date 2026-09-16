@@ -410,6 +410,13 @@ def _dates_matchs_proches(calendrier: Optional[dict[str, Any]], aujourdhui: date
             if d.weekday() == cible:
                 dates.add(d)
 
+    # Matchs annulés/déplacés : retirés du calendrier effectif (voir schemas.CalendrierMatchs).
+    # Filtrage APRÈS la construction de l'ensemble, pour annuler aussi bien une occurrence du
+    # jour habituel qu'une exception ajoutée puis retirée.
+    for annulation in calendrier.get("annulations") or []:
+        if annulation:
+            dates.discard(annulation if isinstance(annulation, date) else date.fromisoformat(annulation))
+
     prochains = sorted(d for d in dates if d >= aujourdhui)
     passes = sorted((d for d in dates if d < aujourdhui), reverse=True)
 

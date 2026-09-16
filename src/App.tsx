@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
 import ToastHost from './components/Toast';
 import { EtatChargement, EtatErreur } from './components/EtatEcran';
+import Coach from './screens/Coach';
 import Today from './screens/Today';
 import Module from './screens/Module';
 import Progress from './screens/Progress';
@@ -88,7 +89,11 @@ export default function App() {
   return (
     <div className="app-shell">
       <Routes>
-        <Route path="/" element={<Today />} />
+        {/* V0 : le coach conversationnel est l'écran d'entrée (spécification section 26,
+            onboarding -> programme -> coach). Les écrans existants ne sont pas supprimés —
+            ils restent accessibles, Aujourd'hui passant simplement de « / » à « /aujourdhui ». */}
+        <Route path="/" element={<Coach />} />
+        <Route path="/aujourdhui" element={<Today />} />
         <Route path="/module" element={<Module />} />
         <Route path="/progression" element={<Progress />} />
         <Route path="/historique" element={<Historique />} />

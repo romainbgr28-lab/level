@@ -1935,3 +1935,198 @@ p {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+
+/* ==========================================================================
+   Coach conversationnel (V0)
+
+   Écran volontairement minimal (spécification V0 sections 6 et 25) : une
+   conversation lisible, un champ de saisie, quelques suggestions. Pas de cards
+   partout, pas de petits textes, pas de dashboard. Le fil défile seul ; l'entête
+   et la zone de saisie restent fixes pour que l'écriture soit toujours à portée
+   de pouce, au-dessus de la navigation existante.
+   ========================================================================== */
+
+.coach {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* sans ça, le fil déborde au lieu de défiler */
+  padding: 0 20px calc(88px + var(--safe-bottom));
+  padding-top: calc(12px + var(--safe-top));
+}
+
+.coach__entete {
+  padding: 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.coach__titre {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.coach__statut {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+
+.coach__fil {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 22px 0;
+}
+
+.coach__accueil {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.coach__accueil-invite {
+  color: var(--text-dim);
+  margin-bottom: 0;
+}
+
+.coach-message {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 88%;
+}
+
+.coach-message--utilisateur {
+  align-self: flex-end;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.coach-message__auteur {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.coach-message__texte {
+  margin: 0;
+  /* 17px : on lit ses séances sur un téléphone, à bout de bras, parfois entre deux
+     exercices. Jamais de petit texte ici (section 25). */
+  font-size: 17px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.coach-message--utilisateur .coach-message__texte {
+  color: var(--text-dim);
+}
+
+.coach-message__texte--attente {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.coach-message__actions {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.coach__erreur {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--danger);
+  background: rgba(165, 53, 43, 0.08);
+  border: 1px solid rgba(165, 53, 43, 0.25);
+  border-radius: var(--radius);
+}
+
+.coach__pied {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  background: var(--bg);
+}
+
+.coach__suggestions {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scrollbar-width: none;
+}
+
+.coach__suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.coach__suggestion {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.coach__suggestion:hover {
+  border-color: var(--border-accent);
+  color: var(--text);
+}
+
+.coach__saisie {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.coach__champ {
+  flex: 1;
+  resize: none;
+  max-height: 140px;
+  padding: 12px 14px;
+  font-family: var(--font-body);
+  font-size: 16px; /* < 16px déclenche un zoom automatique sur iOS à la mise au point */
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.coach__champ:focus {
+  outline: none;
+  border-color: var(--border-accent);
+}
+
+.coach__envoyer {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.coach__envoyer:disabled {
+  color: var(--text-faint);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: default;
+}

@@ -10,6 +10,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import bilan
+import coach
+import coach_actions
 import connaissances
 import duree_seance
 import mistral_client
@@ -2482,3 +2484,68 @@ def get_theme_scores(db: Session = Depends(get_db)):
         .all()
     )
     return [{"theme": categorie, "percent": round(float(avg_score), 0)} for categorie, avg_score in rows]
+
+
+# ---------- Coach conversationnel (V0) ----------
+#
+# Le chat est l'interface de la V0, pas le cerveau : ces trois endpoints n'ajoutent aucune
+# règle métier. `/message` fait tourner la boucle interprétation -> action -> réponse
+# (coach.py), `/action` invoque directement une action métier sans LLM (raccourcis de
+# l'interface, tests), `/conversation` relit le fil. Toute décision reste dans le moteur.
+
+
+@app.post("/api/coach/message", response_model=schemas.CoachMessageOut)
+def coach_message(
+    payload: schemas.CoachMessagePayload,
+    db: Session = Depends(get_db),
+    today: date = Depends(get_current_date),
+):
+    message = (payload.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message vide.")
+
+    try:
+        return coach.repondre(db, today, message)
+    except mistral_client.MistralError as exc:
+        # Même politique que /api/seance/generer : une panne du modèle est dite clairement,
+        # jamais maquillée en réponse de coach (l'utilisateur doit pouvoir faire la différence
+        # entre « LEVEL a décidé ça » et « LEVEL n'a pas pu répondre »).
+        logger.error("Coach indisponible : %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="LEVEL n'arrive pas à répondre pour le moment. Réessaie dans un instant.",
+        ) from exc
+
+
+@app.get("/api/coach/conversation", response_model=list[schemas.CoachMessageHistoriqueOut])
+def coach_conversation(limite: int = 50, db: Session = Depends(get_db)):
+    limite = max(1, min(limite, 200))
+    messages = (
+        db.query(models.MessageConversation)
+        .order_by(models.MessageConversation.id.desc())
+        .limit(limite)
+        .all()
+    )
+    return list(reversed(messages))
+
+
+@app.post("/api/coach/action", response_model=schemas.CoachActionOut)
+def coach_action(
+    payload: schemas.CoachActionPayload,
+    db: Session = Depends(get_db),
+    today: date = Depends(get_current_date),
+):
+    """Exécute une action métier du coach sans passer par le LLM.
+
+    Même registre, mêmes garde-fous que ceux exposés au modèle (coach_actions.ACTIONS) : un
+    raccourci d'interface ne peut donc pas contourner une règle que le chat respecte."""
+    return schemas.CoachActionOut(
+        nom=payload.nom, resultat=coach_actions.executer(payload.nom, payload.arguments, db, today)
+    )
+
+
+@app.get("/api/coach/contexte")
+def coach_contexte_endpoint(db: Session = Depends(get_db), today: date = Depends(get_current_date)):
+    """Ce que LEVEL sait de l'utilisateur maintenant — en lecture seule, sans rien générer.
+    Sert l'en-tête du chat (« tu as une séance aujourd'hui ») et les suggestions."""
+    return coach.construire_contexte(db, today)

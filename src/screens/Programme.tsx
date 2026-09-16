@@ -96,7 +96,7 @@ export default function Programme() {
           titre="Programme indisponible"
           message={chargementErreur}
           action={{ label: 'Réessayer', onClick: charger }}
-          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/') }}
+          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/aujourdhui') }}
         />
       </div>
     );
@@ -236,7 +236,7 @@ export default function Programme() {
       {/* Action principale : retourner à ce qu'il y a à faire aujourd'hui. La régénération est
           une option avancée, pas le geste mis en avant. */}
       <div className="editorial-cta">
-        <button className="btn btn--primary" onClick={() => navigate('/')}>
+        <button className="btn btn--primary" onClick={() => navigate('/aujourdhui')}>
           Voir ma journée →
         </button>
         <button className="link-discreet" onClick={() => setConfirmationRegeneration(true)}>

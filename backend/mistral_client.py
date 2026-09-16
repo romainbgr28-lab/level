@@ -65,3 +65,51 @@ def appeler_mistral_json(prompt: str, system_prompt: str | None = None, timeout:
     except json.JSONDecodeError as exc:
         logger.error("Mistral n'a pas renvoyé un JSON valide : %s", content[:1000])
         raise MistralError(f"Mistral n'a pas renvoyé un JSON valide : {exc}") from exc
+
+
+def appeler_mistral_outils(
+    messages: list[dict],
+    tools: list[dict] | None = None,
+    temperature: float = 0.3,
+    timeout: float = 60.0,
+) -> dict:
+    """Appelle Mistral en mode « function calling » et renvoie le message brut de l'assistant.
+
+    Distinct d'``appeler_mistral_json`` (conservée telle quelle pour la génération de séance
+    et de programme, qui attendent un JSON unique) : ici le modèle peut répondre du texte OU
+    demander l'exécution d'une ou plusieurs fonctions. C'est ce qui permet au coach
+    d'orchestrer les actions métier au lieu d'improviser une réponse (voir coach.py).
+
+    Renvoie le dict ``{"role", "content", "tool_calls"}` tel que Mistral le retourne — il doit
+    être réinjecté tel quel dans l'historique au tour suivant, sans quoi le modèle perd la
+    trace de ses propres appels. Lève ``MistralError`` (jamais silencieuse) dans les mêmes
+    conditions que la fonction ci-dessus.
+    """
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    if not api_key:
+        raise MistralError("MISTRAL_API_KEY n'est pas configurée côté serveur.")
+
+    payload: dict = {"model": MISTRAL_MODEL, "messages": messages, "temperature": temperature}
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    try:
+        response = httpx.post(MISTRAL_API_URL, json=payload, headers=headers, timeout=timeout)
+    except httpx.HTTPError as exc:
+        logger.exception("Appel réseau à Mistral (outils) échoué")
+        raise MistralError(f"Appel réseau à Mistral échoué : {exc}") from exc
+
+    if response.status_code != 200:
+        logger.error("Mistral (outils) a répondu %s : %s", response.status_code, response.text[:1000])
+        raise MistralError(f"Mistral a répondu {response.status_code} : {response.text[:500]}")
+
+    try:
+        message = response.json()["choices"][0]["message"]
+    except (KeyError, IndexError, ValueError) as exc:
+        logger.error("Réponse Mistral (outils) inattendue : %s", response.text[:1000])
+        raise MistralError(f"Réponse Mistral inattendue : {exc}") from exc
+
+    return message
