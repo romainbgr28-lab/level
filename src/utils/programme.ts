@@ -1,11 +1,15 @@
 import type { ApiProgramme, ApiProgrammePhase } from '../api/client';
 import { getNow } from './devDate';
 
-// gabarit_hebdomadaire est keyé par jour ABRÉGÉ ("Lun", "Mer", ...), pas le nom complet —
-// mêmes abréviations que src/screens/Onboarding.tsx (JOURS) et backend/regles_seance.py
-// (JOURS_SEMAINE_ABBREV). Ne pas confondre avec le nom complet utilisé pour
-// calendrier_matchs.jour_habituel (JOURS_SEMAINE dans Onboarding.tsx).
-export const JOURS_SEMAINE_ABBREV = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+// Ce module ne contient plus que la position dans le programme (semaine/phase), utilisée par
+// les écrans Programme et Progression.
+//
+// Le choix du jour — type de séance prévu aujourd'hui, jour de repos, jour de match, jour
+// indisponible, prochaine séance — appartient désormais au moteur déterministe côté backend
+// (backend/contexte_jour.py, exposé par GET /api/jour/contexte). Les helpers qui le
+// redérivaient ici à partir du seul gabarit hebdomadaire ont été retirés : ils ignoraient le
+// calendrier de matchs et les disponibilités, et faisaient exister deux vérités concurrentes
+// sur « qu'est-ce que je fais aujourd'hui ».
 
 /** Semaine en cours du programme (1-indexée, plafonnée à duree_semaines) — même formule
  * que _semaine_courante_programme() côté backend (backend/main.py), à garder synchronisée. */
@@ -18,32 +22,4 @@ export function semaineActuelle(programme: ApiProgramme): number {
 
 export function phaseCourante(programme: ApiProgramme, semaine: number): ApiProgrammePhase | undefined {
   return programme.phases.find((p) => semaine >= p.semaine_debut && semaine <= p.semaine_fin);
-}
-
-export function jourAbbrevAujourdhui(): string {
-  // getDay() : 0 = dimanche ... 6 = samedi -> décalage vers JOURS_SEMAINE_ABBREV (0 = lundi).
-  const index = (getNow().getDay() + 6) % 7;
-  return JOURS_SEMAINE_ABBREV[index];
-}
-
-/** Type de séance prévu par le gabarit hebdomadaire pour aujourd'hui, ou undefined si le
- * jour courant n'est pas couvert par le gabarit (jour non disponible déclaré à l'onboarding). */
-export function typeSeanceGabaritAujourdhui(programme: ApiProgramme): string | undefined {
-  return programme.gabarit_hebdomadaire[jourAbbrevAujourdhui()];
-}
-
-/** Prochain jour (après aujourd'hui) où le gabarit hebdomadaire prévoit une séance
- * (type différent de "repos"), en cherchant sur les 7 prochains jours. */
-export function prochaineSeanceGabarit(
-  programme: ApiProgramme,
-): { jourAbbrev: string; typeGabarit: string } | undefined {
-  const indexAujourdhui = JOURS_SEMAINE_ABBREV.indexOf(jourAbbrevAujourdhui());
-  for (let offset = 1; offset <= 7; offset++) {
-    const jourAbbrev = JOURS_SEMAINE_ABBREV[(indexAujourdhui + offset) % 7];
-    const typeGabarit = programme.gabarit_hebdomadaire[jourAbbrev];
-    if (typeGabarit && typeGabarit !== 'repos') {
-      return { jourAbbrev, typeGabarit };
-    }
-  }
-  return undefined;
 }

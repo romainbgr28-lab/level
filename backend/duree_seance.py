@@ -39,6 +39,10 @@ SERIES_MIN = 2
 # RPE cible indicatif selon l'intensité maximale calculée par le moteur de règles
 # (regles_seance.PHASES_INTENSITE) : sert à pré-remplir series_loggees.rpe_cible.
 RPE_CIBLE_PAR_INTENSITE: dict[str, int] = {
+    # Jour de match : aucune séance LEVEL n'est prévue (generer_seance refuse en 409). Si le
+    # joueur force malgré tout une séance légère, elle reste sous le seuil de la récupération
+    # pour ne jamais compromettre le match du jour.
+    "repos_match": 3,
     "récupération": 4,
     "activation_légère": 5,
     "modérée_technique": 6,

@@ -165,6 +165,20 @@ class ProfilCreate(ProfilBase):
     pass
 
 
+class ProfilPatch(BaseModel):
+    """Mise à jour partielle du profil (PATCH /api/profil) : seuls les champs fournis sont
+    modifiés. Restreint volontairement aux réglages qu'un utilisateur change en cours de route
+    et qui pilotent réellement le programme (disponibilités, calendrier de matchs, hiérarchie
+    d'objectifs, matériel) — le reste passe par l'onboarding. Le résultat fusionné est
+    revalidé via ProfilCreate côté route, pour hériter exactement des mêmes normalisations
+    et dérivations qu'une écriture complète, jamais d'un chemin parallèle."""
+
+    disponibilites: Optional[dict[str, Optional[int]]] = None
+    calendrier_matchs: Optional[CalendrierMatchs] = None
+    objectifs_v2: Optional[list[ObjectifV2]] = None
+    materiel: Optional[str] = None
+
+
 class ProfilOut(ProfilBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -547,3 +561,49 @@ class NiveauHistoriqueBase(BaseModel):
 class NiveauHistoriqueOut(NiveauHistoriqueBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+# ---------- Contexte du jour (décision déterministe, voir contexte_jour.py) ----------
+
+
+class JourSemaineOut(BaseModel):
+    """Un jour de la semaine en cours, tel que décidé par le moteur (jamais recalculé côté client)."""
+
+    date: date
+    jour_abbrev: str
+    jour_label: str
+    statut: str
+    type_seance_prevu: Optional[str] = None
+    est_aujourdhui: bool
+    est_passe: bool
+
+
+class ProchaineSeanceOut(BaseModel):
+    date: date
+    jour_abbrev: str
+    jour_label: str
+    type_seance_prevu: str
+
+
+class ContexteJourOut(BaseModel):
+    """Réponse de GET /api/jour/contexte : « où j'en suis, quoi faire aujourd'hui, pourquoi ».
+
+    `statut` appartient à contexte_jour.STATUTS_JOUR — l'écran Aujourd'hui traite chaque valeur
+    explicitement, donc ne jamais en introduire une nouvelle sans mettre le frontend à jour.
+    """
+
+    date: date
+    jour_abbrev: str
+    jour_label: str
+    statut: str
+    type_seance_prevu: Optional[str] = None
+    phase_calendaire: str
+    semaine_programme: Optional[int] = None
+    duree_semaines: Optional[int] = None
+    phase_nom: Optional[str] = None
+    phase_description: Optional[str] = None
+    seance_id: Optional[int] = None
+    seance_statut: Optional[str] = None
+    seance_nom: Optional[str] = None
+    prochaine_seance: Optional[ProchaineSeanceOut] = None
+    semaine: list[JourSemaineOut] = []

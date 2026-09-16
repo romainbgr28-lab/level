@@ -55,7 +55,7 @@ export const JOURS_DISPONIBILITES: { key: string; label: string }[] = [
   { key: 'samedi', label: 'Samedi' },
   { key: 'dimanche', label: 'Dimanche' },
 ];
-const OPTIONS_MINUTES = [15, 30, 45, 60, 90];
+export const OPTIONS_MINUTES = [15, 30, 45, 60, 90];
 const MATERIELS = ['Aucun', 'Poids du corps', 'Haltères', 'Salle complète'];
 const TAGS_ESTHETIQUES = ['Bras', 'Épaules', 'Abdos', 'Dos', 'Jambes', 'Silhouette générale'];
 

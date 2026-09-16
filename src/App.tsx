@@ -7,7 +7,6 @@ import Progress from './screens/Progress';
 import Historique from './screens/Historique';
 import Programme from './screens/Programme';
 import WeeklyReview from './screens/WeeklyReview';
-import News from './screens/News';
 import Profile from './screens/Profile';
 import Onboarding from './screens/Onboarding';
 import Welcome from './screens/Welcome';
@@ -57,7 +56,6 @@ export default function App() {
         <Route path="/historique" element={<Historique />} />
         <Route path="/programme" element={<Programme />} />
         <Route path="/bilan" element={<WeeklyReview />} />
-        <Route path="/actu" element={<News />} />
         <Route path="/profil" element={<Profile />} />
       </Routes>
       <BottomNav />

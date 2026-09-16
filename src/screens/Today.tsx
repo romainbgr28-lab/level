@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { calculerProgressionExercice } from '../utils/progressionExercice';
 import {
@@ -7,9 +8,9 @@ import {
   deleteTodaySeance,
   genererSeance,
   getAlternativesExercice,
+  getContexteJour,
   getDernierePerformance,
   getExercicesBibliotheque,
-  getProgrammeActif,
   getSeriesLoggees,
   getTodaySeance,
   remplacerExercice,
@@ -18,23 +19,18 @@ import {
 } from '../api/client';
 import type {
   ApiAlternativeExercice,
+  ApiContexteJour,
   ApiDernierePerformance,
   ApiDifficulte,
   ApiEtatDuJour,
   ApiExerciceBibliotheque,
-  ApiProgramme,
   ApiSeance,
   ApiSeanceExercice,
   ApiSeanceGeneree,
   ApiSerieLoggee,
   ApiTerminerSeanceResult,
 } from '../api/client';
-import {
-  phaseCourante,
-  prochaineSeanceGabarit,
-  semaineActuelle,
-  typeSeanceGabaritAujourdhui,
-} from '../utils/programme';
+import SemaineStrip from '../components/SemaineStrip';
 import { typeSeanceMeta } from '../data/programmeTypes';
 import { getNow } from '../utils/devDate';
 
@@ -83,6 +79,22 @@ const DIFFICULTE_OPTIONS: { value: ApiDifficulte; label: string }[] = [
 
 type View = 'loading' | 'no-seance' | 'form' | 'seance' | 'fin-seance' | 'terminee';
 
+// RPE proposé à partir des difficultés réellement loguées pendant la séance : l'écran de fin
+// annonce un RPE « calculé automatiquement », il doit donc l'être réellement plutôt que de
+// laisser le champ vide. facile -> 5, comme prévu -> 7, dur -> 9 ; moyenne arrondie, bornée
+// 1..10. Renvoie null si aucune série n'a été validée avec une difficulté (rien à déduire).
+const RPE_PAR_DIFFICULTE: Record<ApiDifficulte, number> = { facile: 5, comme_prevu: 7, dur: 9 };
+
+export function rpeSuggere(series: ApiSerieLoggee[]): number | null {
+  const notes = series
+    .filter((s) => s.coche && s.difficulte)
+    .map((s) => RPE_PAR_DIFFICULTE[s.difficulte as ApiDifficulte])
+    .filter((n): n is number => typeof n === 'number');
+  if (notes.length === 0) return null;
+  const moyenne = notes.reduce((a, b) => a + b, 0) / notes.length;
+  return Math.min(10, Math.max(1, Math.round(moyenne)));
+}
+
 function formatDuree(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
@@ -102,12 +114,148 @@ function chargeCible(chargeIndicative?: string | null): number | null {
   return m ? Number(m[0].replace(',', '.')) : null;
 }
 
+// Ce que LEVEL a décidé pour aujourd'hui quand aucune séance n'est en cours. Chaque statut
+// renvoyé par le moteur (backend/contexte_jour.py) est traité explicitement : l'utilisateur
+// doit toujours savoir ce qu'il fait aujourd'hui et pourquoi, y compris quand la réponse est
+// « rien ». Aucune donnée n'est inventée ici : tout vient du contexte, et l'absence de contexte
+// est affichée comme telle.
+function ProchaineSeanceLigne({ contexte }: { contexte: ApiContexteJour }) {
+  const prochaine = contexte.prochaine_seance;
+  if (!prochaine) return null;
+  return (
+    <p className="subtle" style={{ margin: '0 0 14px' }}>
+      Prochaine séance : {prochaine.jour_label} — {typeSeanceMeta(prochaine.type_seance_prevu).label}
+    </p>
+  );
+}
+
+function ContexteProgrammeLigne({ contexte }: { contexte: ApiContexteJour }) {
+  if (contexte.semaine_programme == null) return null;
+  return (
+    <p className="subtle" style={{ margin: '0 0 6px' }}>
+      Semaine {contexte.semaine_programme}/{contexte.duree_semaines}
+      {contexte.phase_nom ? ` — phase ${contexte.phase_nom}` : ''}.
+    </p>
+  );
+}
+
+function EtatDuJourSansSeance({
+  contexte,
+  autoGenerationErreur,
+  onGenerer,
+  onSeanceLegere,
+}: {
+  contexte: ApiContexteJour | null;
+  autoGenerationErreur: string | null;
+  onGenerer: () => void;
+  onSeanceLegere: () => void;
+}) {
+  if (!contexte || contexte.statut === 'aucun_profil') {
+    return (
+      <section className="card">
+        <div className="card__eyebrow">Séance du jour</div>
+        <p className="subtle" style={{ margin: '4px 0 14px' }}>
+          Aucun profil enregistré : termine ton profil pour que LEVEL puisse construire ton programme.
+        </p>
+      </section>
+    );
+  }
+
+  if (contexte.statut === 'aucun_programme') {
+    return (
+      <section className="card">
+        <div className="card__eyebrow">Séance du jour</div>
+        <p className="subtle" style={{ margin: '4px 0 14px' }}>
+          Aucun programme actif : LEVEL en construit un depuis l'écran Programme, ou tu peux générer
+          une séance isolée dès maintenant.
+        </p>
+        <button className="btn btn--primary" onClick={onGenerer}>
+          Générer ma séance du jour
+        </button>
+      </section>
+    );
+  }
+
+  if (contexte.statut === 'match') {
+    return (
+      <section className="card">
+        <div className="card__eyebrow">Aujourd’hui</div>
+        <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour de match</p>
+        <p className="subtle" style={{ margin: '0 0 6px' }}>
+          Aucune séance LEVEL aujourd’hui : rien ne doit compromettre ta performance du jour.
+        </p>
+        <ContexteProgrammeLigne contexte={contexte} />
+        <ProchaineSeanceLigne contexte={contexte} />
+        <button className="btn btn--ghost" onClick={onSeanceLegere}>
+          Faire quand même une activation très légère
+        </button>
+      </section>
+    );
+  }
+
+  if (contexte.statut === 'indisponible') {
+    return (
+      <section className="card">
+        <div className="card__eyebrow">Aujourd’hui</div>
+        <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour non disponible</p>
+        <p className="subtle" style={{ margin: '0 0 6px' }}>
+          Tu n’as pas déclaré de disponibilité le {contexte.jour_label.toLowerCase()} : LEVEL ne
+          place donc rien aujourd’hui. Ajuste tes disponibilités depuis ton profil si cela a changé.
+        </p>
+        <ProchaineSeanceLigne contexte={contexte} />
+        <button className="btn btn--ghost" onClick={onSeanceLegere}>
+          Je veux quand même faire une séance légère
+        </button>
+      </section>
+    );
+  }
+
+  if (contexte.statut === 'repos') {
+    return (
+      <section className="card">
+        <div className="card__eyebrow">Aujourd’hui</div>
+        <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Repos prévu</p>
+        <p className="subtle" style={{ margin: '0 0 6px' }}>
+          {contexte.phase_calendaire === 'lendemain_match'
+            ? 'Lendemain de match : récupération prioritaire.'
+            : 'Aucune séance programmée aujourd’hui.'}
+        </p>
+        <ContexteProgrammeLigne contexte={contexte} />
+        <ProchaineSeanceLigne contexte={contexte} />
+        <button className="btn btn--ghost" onClick={onSeanceLegere}>
+          Je veux quand même faire une séance légère
+        </button>
+      </section>
+    );
+  }
+
+  // statut === 'seance' : une séance est prévue mais n'a pas (encore) été générée.
+  return (
+    <section className="card">
+      <div className="card__eyebrow">Séance du jour</div>
+      <p style={{ margin: '4px 0 10px', fontWeight: 600 }}>
+        {contexte.type_seance_prevu ? typeSeanceMeta(contexte.type_seance_prevu).label : 'Séance'}
+      </p>
+      <ContexteProgrammeLigne contexte={contexte} />
+      {autoGenerationErreur && (
+        <p className="subtle" style={{ margin: '0 0 14px' }}>
+          La génération automatique n'a pas abouti : {autoGenerationErreur}
+        </p>
+      )}
+      <button className="btn btn--primary" onClick={onGenerer}>
+        Générer ma séance du jour
+      </button>
+    </section>
+  );
+}
+
 export default function Today() {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>('loading');
 
   const [seance, setSeance] = useState<ApiSeance | ApiSeanceGeneree | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [programme, setProgramme] = useState<ApiProgramme | null>(null);
+  const [contexte, setContexte] = useState<ApiContexteJour | null>(null);
   // Erreur de chargement initial (réseau, backend indisponible...) distincte d'une absence
   // légitime de programme/séance : évite d'afficher "Aucune séance" alors qu'on n'a en réalité
   // pas réussi à savoir s'il y en avait une (cf. audit P0.6 — la génération auto ne doit pas se
@@ -174,16 +322,16 @@ export default function Today() {
   async function chargerToday() {
     setChargementErreur(false);
     setAutoGenerationErreur(null);
-    let prog: ApiProgramme | null;
+    let ctx: ApiContexteJour | null;
     let existante: ApiSeance | ApiSeanceGeneree | null;
     try {
-      [prog, existante] = await Promise.all([fetchAvecReprise(getProgrammeActif), fetchAvecReprise(getTodaySeance)]);
+      [ctx, existante] = await Promise.all([fetchAvecReprise(getContexteJour), fetchAvecReprise(getTodaySeance)]);
     } catch {
       setChargementErreur(true);
       setView('no-seance');
       return;
     }
-    setProgramme(prog);
+    setContexte(ctx);
 
     if (existante) {
       setSeance(existante);
@@ -191,8 +339,10 @@ export default function Today() {
       return;
     }
 
-    const typeGabarit = prog ? typeSeanceGabaritAujourdhui(prog) : undefined;
-    if (prog && typeGabarit && typeGabarit !== 'repos') {
+    // Le statut du jour est décidé par le moteur (backend/contexte_jour.py) : jour de match,
+    // jour indisponible et jour de repos ne déclenchent jamais de génération automatique — le
+    // backend refuserait d'ailleurs en 409 (voir main.py::generer_seance).
+    if (ctx && ctx.statut === 'seance') {
       // Programme actif avec une séance prévue aujourd'hui : on la génère
       // automatiquement, sans attendre un clic sur "Générer ma séance".
       // generer_seance() est idempotent côté backend (renvoie la séance existante si une
@@ -221,18 +371,15 @@ export default function Today() {
     setView('no-seance');
   }
 
-  const planDuJour = useMemo(() => {
-    if (!programme) return null;
-    const typeGabarit = typeSeanceGabaritAujourdhui(programme);
-    if (!typeGabarit) return null; // jour non couvert par le gabarit (ex : jour indisponible déclaré)
-    const semaine = semaineActuelle(programme);
-    const phase = phaseCourante(programme, semaine);
-    return { typeGabarit, semaine, phase };
-  }, [programme]);
+  // Type de séance prévu aujourd'hui, tel que décidé par le moteur : sert uniquement à
+  // l'affichage (bandeau éditorial, explication du repos), jamais à décider quoi que ce soit.
+  const typeSeancePrevu = contexte?.type_seance_prevu ?? null;
 
   // Charge la bibliothèque + les séries déjà loguées quand on entre dans la séance.
   useEffect(() => {
-    if (view !== 'seance' || !seance) return;
+    // Également chargé en vue "terminee" : le récapitulatif de fin affiche les séries réellement
+    // enregistrées, y compris après un rechargement de la page (où `resultat` est perdu).
+    if ((view !== 'seance' && view !== 'terminee') || !seance) return;
     getExercicesBibliotheque().then((list) => {
       const map: Record<number, ApiExerciceBibliotheque> = {};
       for (const ex of list) map[ex.id] = ex;
@@ -245,6 +392,7 @@ export default function Today() {
       }
       setSeriesParExercice(grouped);
     });
+    if (view !== 'seance') return;
     for (const item of seance.exercices) {
       getDernierePerformance(item.exercice_id, seance.id).then((perf) => {
         setPrecedentParExercice((prev) => ({ ...prev, [item.exercice_id]: perf }));
@@ -545,6 +693,15 @@ export default function Today() {
     }
   }
 
+  // Pré-remplit le RPE à partir des difficultés réellement loguées avant d'ouvrir l'écran de
+  // fin : l'utilisateur n'a plus qu'à confirmer ou ajuster. Sans difficulté loguée, le champ
+  // reste vide plutôt que d'afficher une valeur inventée.
+  function ouvrirFinDeSeance() {
+    const toutesSeries = Object.values(seriesParExercice).flat();
+    setRpe((actuel) => actuel ?? rpeSuggere(toutesSeries));
+    setView('fin-seance');
+  }
+
   async function handleTerminer() {
     if (!seance) return;
     setSubmitting(true);
@@ -600,80 +757,42 @@ export default function Today() {
         {dateLabel}
       </h1>
 
-      {view === 'no-seance' && planDuJour?.typeGabarit === 'repos' && (
-        <section className="card">
-          <div className="card__eyebrow">Séance du jour</div>
-          <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Repos prévu</p>
-          <p className="subtle" style={{ margin: '0 0 6px' }}>
-            Pourquoi ? Aucune séance programmée aujourd’hui — semaine {planDuJour.semaine}/
-            {programme?.duree_semaines}
-            {planDuJour.phase ? `, phase ${planDuJour.phase.nom}` : ''}.
-          </p>
-          {programme &&
-            (() => {
-              const prochaine = prochaineSeanceGabarit(programme);
-              return prochaine ? (
-                <p className="subtle" style={{ margin: '0 0 14px' }}>
-                  Prochaine séance : {prochaine.jourAbbrev} — {typeSeanceMeta(prochaine.typeGabarit).label}
-                </p>
-              ) : null;
-            })()}
-          <button
-            className="btn btn--ghost"
-            onClick={() => {
-              setForcerSeanceLegere(true);
-              setView('form');
-            }}
-          >
-            Je veux quand même faire une séance légère
-          </button>
-        </section>
+      {/* Repère de semaine : utile pour se situer avant/après la séance, retiré pendant
+          l'effort où seule l'action en cours compte. */}
+      {contexte && contexte.semaine.length > 0 && view !== 'seance' && view !== 'fin-seance' && (
+        <SemaineStrip jours={contexte.semaine} />
       )}
 
-      {view === 'no-seance' && planDuJour && planDuJour.typeGabarit !== 'repos' && (
-        <section className="card">
-          <div className="card__eyebrow">Séance du jour</div>
-          <p className="subtle" style={{ margin: '4px 0 14px' }}>
-            Aujourd’hui : séance {typeSeanceMeta(planDuJour.typeGabarit).label}, semaine {planDuJour.semaine}/
-            {programme?.duree_semaines}
-            {planDuJour.phase ? ` — phase ${planDuJour.phase.nom}` : ''}.
-          </p>
-          {autoGenerationErreur && (
-            <p className="subtle" style={{ margin: '0 0 14px' }}>
-              La génération automatique n'a pas abouti : {autoGenerationErreur}
-            </p>
+      {view === 'no-seance' && (
+        <>
+          {/* Réseau indisponible : on ne sait pas ce que prévoit le programme, donc on ne
+              prétend pas qu'il n'y a rien de prévu — on propose de réessayer. */}
+          {chargementErreur ? (
+            <section className="card">
+              <div className="card__eyebrow">Séance du jour</div>
+              <p className="subtle" style={{ margin: '4px 0 14px' }}>
+                Impossible de charger ton programme (problème réseau). Réessaie, ou génère ta séance
+                manuellement.
+              </p>
+              <button className="btn btn--primary" onClick={() => void chargerToday()} style={{ marginBottom: 8 }}>
+                Réessayer
+              </button>
+              <button className="btn btn--secondary" onClick={() => setView('form')}>
+                Générer ma séance du jour
+              </button>
+            </section>
+          ) : (
+            <EtatDuJourSansSeance
+              contexte={contexte}
+              autoGenerationErreur={autoGenerationErreur}
+              onGenerer={() => setView('form')}
+              onSeanceLegere={() => {
+                setForcerSeanceLegere(true);
+                setView('form');
+              }}
+            />
           )}
-          <button className="btn btn--primary" onClick={() => setView('form')}>
-            Générer ma séance du jour
-          </button>
-        </section>
-      )}
-
-      {view === 'no-seance' && !planDuJour && chargementErreur && (
-        <section className="card">
-          <div className="card__eyebrow">Séance du jour</div>
-          <p className="subtle" style={{ margin: '4px 0 14px' }}>
-            Impossible de charger ton programme (problème réseau). Réessaie, ou génère ta séance manuellement.
-          </p>
-          <button className="btn btn--primary" onClick={() => void chargerToday()} style={{ marginBottom: 8 }}>
-            Réessayer
-          </button>
-          <button className="btn btn--secondary" onClick={() => setView('form')}>
-            Générer ma séance du jour
-          </button>
-        </section>
-      )}
-
-      {view === 'no-seance' && !planDuJour && !chargementErreur && (
-        <section className="card">
-          <div className="card__eyebrow">Séance du jour</div>
-          <p className="subtle" style={{ margin: '4px 0 14px' }}>
-            Aucune séance générée pour aujourd’hui.
-          </p>
-          <button className="btn btn--primary" onClick={() => setView('form')}>
-            Générer ma séance du jour
-          </button>
-        </section>
+        </>
       )}
 
       {view === 'form' && (
@@ -681,7 +800,9 @@ export default function Today() {
           <div className="card__eyebrow">État du jour</div>
           {forcerSeanceLegere && (
             <p className="subtle" style={{ margin: '4px 0 14px' }}>
-              Jour de repos prévu par ton programme — séance légère malgré tout.
+              {contexte?.statut === 'match'
+                ? 'Jour de match — activation très légère uniquement.'
+                : 'Aucune séance prévue aujourd’hui — séance légère malgré tout.'}
             </p>
           )}
 
@@ -795,9 +916,13 @@ export default function Today() {
               <div className="editorial-head">
                 <div className="editorial-head__eyebrow">
                   {dateLabel.toUpperCase()}
-                  {planDuJour && <> · {typeSeanceMeta(planDuJour.typeGabarit).label.toUpperCase()}</>}
+                  {typeSeancePrevu && <> · {typeSeanceMeta(typeSeancePrevu).label.toUpperCase()}</>}
                 </div>
-                {planDuJour && <div className="editorial-head__semaine">Semaine {planDuJour.semaine}</div>}
+                {contexte?.semaine_programme != null && (
+                  <div className="editorial-head__semaine">
+                    Semaine {contexte.semaine_programme}/{contexte.duree_semaines}
+                  </div>
+                )}
                 <div className="editorial-position">
                   {String(indexActif + 1).padStart(2, '0')} / {String(seance.exercices.length).padStart(2, '0')}
                 </div>
@@ -1156,7 +1281,7 @@ export default function Today() {
             return (
               <div className="editorial-cta">
                 {toutTermine ? (
-                  <button className="btn btn--primary" onClick={() => setView('fin-seance')}>
+                  <button className="btn btn--primary" onClick={ouvrirFinDeSeance}>
                     Terminer la séance →
                   </button>
                 ) : (
@@ -1193,7 +1318,11 @@ export default function Today() {
             {totaux.nbValidees} séries validées · {Math.round(totaux.volume)} kg de volume total ·{' '}
             {formatDuree(elapsedSec)} écoulées
           </p>
-          <div className="section-title">RPE (calculé automatiquement depuis tes validations rapides — ajuster si besoin)</div>
+          <div className="section-title">
+            {rpe === null
+              ? 'RPE ressenti sur la séance'
+              : 'RPE (déduit de tes validations rapides — ajuste si besoin)'}
+          </div>
           <div className="rpe-grid">
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
               <button
@@ -1243,23 +1372,67 @@ export default function Today() {
       )}
 
       {view === 'terminee' && seance && (
-        <section className="card">
-          <div className="card__eyebrow">Séance du jour</div>
-          <h2 className="card__title">{'nom' in seance ? seance.nom : seance.nom_seance}</h2>
-          <p className="subtle" style={{ marginTop: 14 }}>
-            Séance terminée{resultat ? ` · +${resultat.xp_gagne} XP` : ' pour aujourd’hui.'}
-          </p>
-          {resultat && (() => {
-            const prevue = resultat.resume.duree_prevue_min as number | null | undefined;
-            const reelle = resultat.resume.duree_reelle_min as number | null | undefined;
-            if (prevue == null || reelle == null) return null;
-            return (
-              <p className="subtle" style={{ marginTop: 6 }}>
-                Durée réelle : {reelle} min (prévue : {prevue} min)
+        <>
+          <div className="editorial-head">
+            <div className="editorial-head__eyebrow">
+              {dateLabel.toUpperCase()}
+              {typeSeancePrevu && <> · {typeSeanceMeta(typeSeancePrevu).label.toUpperCase()}</>}
+            </div>
+            <div className="editorial-head__semaine">Séance terminée</div>
+          </div>
+
+          <section className="card">
+            <h2 className="card__title">{'nom' in seance ? seance.nom : seance.nom_seance}</h2>
+            {/* Récapitulatif calculé sur les séries réellement enregistrées : rien n'est affiché
+                si rien n'a été logué, plutôt qu'un total fabriqué. */}
+            {totaux.nbValidees > 0 ? (
+              <p className="subtle" style={{ marginTop: 10 }}>
+                {totaux.nbValidees} série{totaux.nbValidees > 1 ? 's' : ''} validée
+                {totaux.nbValidees > 1 ? 's' : ''} · {Math.round(totaux.volume)} kg de volume total
               </p>
-            );
-          })()}
-        </section>
+            ) : (
+              <p className="subtle" style={{ marginTop: 10 }}>
+                Aucune série enregistrée sur cette séance.
+              </p>
+            )}
+            {resultat && (
+              <p className="subtle" style={{ marginTop: 6 }}>
+                +{resultat.xp_gagne} XP
+              </p>
+            )}
+            {resultat &&
+              (() => {
+                const prevue = resultat.resume.duree_prevue_min as number | null | undefined;
+                const reelle = resultat.resume.duree_reelle_min as number | null | undefined;
+                if (prevue == null || reelle == null) return null;
+                return (
+                  <p className="subtle" style={{ marginTop: 6 }}>
+                    Durée réelle : {reelle} min (prévue : {prevue} min)
+                  </p>
+                );
+              })()}
+          </section>
+
+          {/* « Et ensuite ? » : la séance terminée n'est pas un cul-de-sac. */}
+          {contexte?.prochaine_seance && (
+            <section className="card">
+              <div className="card__eyebrow">Ensuite</div>
+              <p style={{ margin: '4px 0 0', fontWeight: 600 }}>
+                {contexte.prochaine_seance.jour_label} —{' '}
+                {typeSeanceMeta(contexte.prochaine_seance.type_seance_prevu).label}
+              </p>
+              <p className="subtle" style={{ marginTop: 6 }}>
+                Cette séance sera adaptée à partir de ce que tu viens de réaliser.
+              </p>
+            </section>
+          )}
+
+          <div className="editorial-cta">
+            <button className="btn btn--ghost" onClick={() => navigate('/historique')}>
+              Voir l’historique →
+            </button>
+          </div>
+        </>
       )}
 
       {detailExercice && (

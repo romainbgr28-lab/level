@@ -15,6 +15,7 @@ import duree_seance
 import mistral_client
 import models
 import moteur_decision
+import contexte_jour as contexte_jour_module
 import regles_seance
 import schemas
 import substitution
@@ -74,6 +75,49 @@ def upsert_profil(payload: schemas.ProfilCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(profil)
     return profil
+
+
+@app.patch("/api/profil", response_model=schemas.ProfilOut)
+def patch_profil(
+    payload: schemas.ProfilPatch,
+    db: Session = Depends(get_db),
+    today: date = Depends(get_current_date),
+):
+    """Met à jour partiellement le profil, puis régénère le programme actif.
+
+    Disponibilités, calendrier de matchs et hiérarchie d'objectifs sont exactement les entrées
+    de moteur_decision.construire_structure_hebdomadaire : les modifier sans reconstruire le
+    programme laisserait un gabarit qui ne correspond plus à ce que l'utilisateur a déclaré
+    (séance planifiée un jour devenu indisponible, séance la veille d'un match déplacé...).
+    La régénération est donc faite ici, et non laissée à la charge de l'écran appelant.
+    """
+    existing = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Aucun profil enregistré : termine l'onboarding d'abord.")
+
+    fusionne = schemas.ProfilOut.model_validate(existing).model_dump(mode="json")
+    for champ, valeur in payload.model_dump(mode="json", exclude_unset=True).items():
+        if valeur is not None:
+            fusionne[champ] = valeur
+
+    # Revalidation par ProfilCreate : même normalisation/dérivation V2 <-> legacy qu'un POST
+    # complet (voir schemas.ProfilBase), jamais une écriture directe des champs bruts.
+    valide = schemas.ProfilCreate.model_validate(fusionne).model_dump(mode="json")
+    for champ, valeur in valide.items():
+        setattr(existing, champ, valeur)
+    db.commit()
+    db.refresh(existing)
+
+    try:
+        generer_programme(schemas.ProgrammeGenererPayload(), db=db, today=today)
+    except Exception:
+        # La régénération ne doit pas faire échouer l'enregistrement du profil, déjà commité :
+        # l'ancien programme reste actif et l'utilisateur peut relancer la génération depuis
+        # l'écran Programme. On trace pour ne pas avaler l'erreur silencieusement.
+        logger.exception("Régénération du programme impossible après mise à jour du profil.")
+
+    db.refresh(existing)
+    return existing
 
 
 @app.delete("/api/profil", status_code=204)
@@ -1305,6 +1349,21 @@ def generer_seance(
         profil_dict, historique_ctx, etat_du_jour, type_seance_gabarit=type_seance_gabarit, aujourdhui=today
     )
 
+    # Jour de match : contrainte absolue du calendrier sportif, prioritaire sur le gabarit comme
+    # sur les objectifs. On refuse la génération plutôt que de produire une séance qui
+    # compromettrait le match (même traitement que le jour de repos programmé ci-dessus :
+    # forcer_seance_legere reste le seul moyen d'obtenir quand même une séance, alors plafonnée
+    # à l'intensité "repos_match" par duree_seance.rpe_cible_pour_intensite).
+    if recommandation.get("phase_calendaire") == "jour_match" and not etat_du_jour.get("forcer_seance_legere"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Match prévu aujourd'hui : aucune séance LEVEL n'est programmée pour ne pas "
+                "compromettre ta performance. Renvoie forcer_seance_legere=true pour générer "
+                "quand même une séance très légère."
+            ),
+        )
+
     if programme_ctx is not None:
         recommandation["programme"] = programme_ctx
         if type_seance_gabarit and recommandation["type_seance_suggere"] != type_seance_gabarit:
@@ -2023,6 +2082,45 @@ def get_programme_actif(db: Session = Depends(get_db)):
         .filter(models.Programme.statut == "actif")
         .order_by(models.Programme.id.desc())
         .first()
+    )
+
+
+@app.get("/api/jour/contexte", response_model=schemas.ContexteJourOut)
+def get_contexte_jour(db: Session = Depends(get_db), today: date = Depends(get_current_date)):
+    """Décision du jour, déterministe : statut (match / repos / séance / indisponible), type
+    de séance prévu, position dans le programme, vue de la semaine et prochaine séance.
+
+    Point d'entrée unique de l'écran Aujourd'hui : c'est ici que le moteur répond à « où j'en
+    suis » et « qu'est-ce que je fais aujourd'hui », pour que le frontend n'ait aucune de ces
+    décisions à redériver (calendrier de matchs, disponibilités, gabarit hebdomadaire).
+    """
+    profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
+    profil_dict = (
+        schemas.ProfilOut.model_validate(profil).model_dump(mode="json") if profil else None
+    )
+
+    programme = (
+        db.query(models.Programme)
+        .filter(models.Programme.statut == "actif")
+        .order_by(models.Programme.id.desc())
+        .first()
+    )
+    programme_dict = (
+        {
+            "gabarit_hebdomadaire": programme.gabarit_hebdomadaire or {},
+            "phases": programme.phases or [],
+            "duree_semaines": programme.duree_semaines,
+            "date_debut": programme.date_debut,
+        }
+        if programme
+        else None
+    )
+
+    seance = db.query(models.Seance).filter(models.Seance.date == today).order_by(models.Seance.id).first()
+    seance_dict = {"id": seance.id, "statut": seance.statut, "nom": seance.nom} if seance else None
+
+    return contexte_jour_module.construire_contexte_jour(
+        profil=profil_dict, programme=programme_dict, aujourdhui=today, seance_du_jour=seance_dict
     )
 
 

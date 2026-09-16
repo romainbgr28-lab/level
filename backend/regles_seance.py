@@ -21,6 +21,7 @@ JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "D
 JOURS_SEMAINE_ABBREV = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 PHASES_INTENSITE = {
+    "jour_match": "repos_match",
     "lendemain_match": "récupération",
     "veille_match": "activation_légère",
     "approche_match": "modérée_technique",
@@ -52,13 +53,22 @@ def calculer_phase_calendaire(
 ) -> tuple[str, str]:
     """Détermine la phase calendaire et l'intensité max associée.
 
-    Règles (telles que spécifiées) :
-    - lendemain_match : jours écoulés depuis le dernier match == 0
+    Règles :
+    - jour_match : le match a lieu aujourd'hui (aucune séance LEVEL ne doit le compromettre)
+    - lendemain_match : le dernier match a eu lieu hier
     - veille_match : jours avant le prochain match == 1
     - approche_match : jours avant le prochain match == 2
     - phase_normale : sinon
+
+    `date_prochain_match` inclut aujourd'hui (cf. _dates_matchs_proches, qui trie sur d >= aujourd'hui)
+    et `date_dernier_match` est strictement antérieur à aujourd'hui : la détection du jour de match se
+    fait donc sur le prochain match (écart 0), et celle du lendemain sur le dernier match (écart 1).
+    Les comparer dans l'autre sens rendait les deux branches inatteignables — un jour de match
+    produisait une séance normale, et « lendemain_match » n'était jamais déclenché.
     """
-    if date_dernier_match is not None and (date_aujourdhui - date_dernier_match).days == 0:
+    if date_prochain_match is not None and (date_prochain_match - date_aujourdhui).days == 0:
+        phase = "jour_match"
+    elif date_dernier_match is not None and (date_aujourdhui - date_dernier_match).days == 1:
         phase = "lendemain_match"
     elif date_prochain_match is not None and (date_prochain_match - date_aujourdhui).days == 1:
         phase = "veille_match"
@@ -417,7 +427,7 @@ def _suggerer_type_seance(
     """Choisit un type de séance parmi force / explosivité_vitesse / esthétique / endurance / décharge.
 
     Priorité (la plus haute d'abord) :
-    1. Phase calendaire contraignante (lendemain/veille/approche de match) — l'emporte
+    1. Phase calendaire contraignante (jour/lendemain/veille/approche de match) — l'emporte
        toujours, y compris sur ce que prévoit le gabarit hebdomadaire d'un programme actif ou
        sur les objectifs déclarés : la sécurité/récupération prime toujours sur l'objectif.
     2. type_seance_gabarit : ce que prévoit le gabarit hebdomadaire du programme actif pour
@@ -432,7 +442,7 @@ def _suggerer_type_seance(
     4. Repli legacy : objectif esthétique texte libre déclaré (profils sans objectifs_v2
        exploitable), sinon "force" par défaut — filet de sécurité final.
     """
-    if phase == "lendemain_match":
+    if phase in ("jour_match", "lendemain_match"):
         return "décharge"
     if phase in ("veille_match", "approche_match"):
         return "explosivité_vitesse"

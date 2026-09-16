@@ -301,6 +301,15 @@ export interface ApiStreakDay {
 export const getProfil = () => request<ApiProfil | null>('/api/profil');
 export const saveProfil = (payload: Omit<ApiProfil, 'id' | 'date_creation'>) =>
   request<ApiProfil>('/api/profil', { method: 'POST', body: JSON.stringify(payload) });
+// Mise à jour partielle (backend/main.py::patch_profil) : seuls les champs envoyés sont
+// modifiés, et le backend régénère le programme actif dans la foulée — les disponibilités et le
+// calendrier de matchs sont les entrées directes de la structure hebdomadaire.
+export const patchProfil = (payload: {
+  disponibilites?: ApiDisponibilites;
+  calendrier_matchs?: ApiCalendrierMatchs;
+  materiel?: string;
+}) => request<ApiProfil>('/api/profil', { method: 'PATCH', body: JSON.stringify(payload) });
+
 export const deleteProfil = () => request<void>('/api/profil', { method: 'DELETE' });
 
 // ---------- Séances ----------
@@ -495,6 +504,55 @@ export const genererProgramme = () =>
   request<ApiProgramme>('/api/programme/generer', { method: 'POST', body: JSON.stringify({}) });
 
 export const getProgrammeActif = () => request<ApiProgramme | null>('/api/programme/actif');
+
+// ---------- Contexte du jour (décision déterministe : backend/contexte_jour.py) ----------
+
+// Miroir de contexte_jour.STATUTS_JOUR : chaque valeur est traitée explicitement par
+// src/screens/Today.tsx, ne jamais en ajouter ici sans y ajouter la branche correspondante.
+export type ApiStatutJour =
+  | 'aucun_profil'
+  | 'aucun_programme'
+  | 'match'
+  | 'repos'
+  | 'indisponible'
+  | 'seance';
+
+export interface ApiJourSemaine {
+  date: string;
+  jour_abbrev: string;
+  jour_label: string;
+  statut: ApiStatutJour;
+  type_seance_prevu: string | null;
+  est_aujourdhui: boolean;
+  est_passe: boolean;
+}
+
+export interface ApiProchaineSeance {
+  date: string;
+  jour_abbrev: string;
+  jour_label: string;
+  type_seance_prevu: string;
+}
+
+export interface ApiContexteJour {
+  date: string;
+  jour_abbrev: string;
+  jour_label: string;
+  statut: ApiStatutJour;
+  type_seance_prevu: string | null;
+  phase_calendaire: string;
+  semaine_programme: number | null;
+  duree_semaines: number | null;
+  phase_nom: string | null;
+  phase_description: string | null;
+  seance_id: number | null;
+  seance_statut: string | null;
+  seance_nom: string | null;
+  prochaine_seance: ApiProchaineSeance | null;
+  semaine: ApiJourSemaine[];
+}
+
+export const getContexteJour = () => request<ApiContexteJour>('/api/jour/contexte');
 
 // ---------- Stats & progression ----------
 

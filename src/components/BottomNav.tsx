@@ -2,6 +2,9 @@ import { NavLink } from 'react-router-dom';
 
 const items = [
   { to: '/', label: 'Aujourd’hui', icon: TodayIcon },
+  // Le programme est la réponse à « où j'en suis » : il doit être atteignable en un geste,
+  // pas seulement via un lien enfoui dans l'écran Progression.
+  { to: '/programme', label: 'Programme', icon: ProgrammeIcon },
   { to: '/progression', label: 'Progression', icon: ProgressIcon },
   { to: '/profil', label: 'Profil', icon: ProfileIcon },
 ];
@@ -29,6 +32,14 @@ function TodayIcon() {
     <svg className="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
       <rect x="3.5" y="4.5" width="17" height="16" rx="3" />
       <path d="M3.5 9.5h17M8 3v3M16 3v3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ProgrammeIcon() {
+  return (
+    <svg className="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M4 6h16M4 12h10M4 18h13" strokeLinecap="round" />
     </svg>
   );
 }

@@ -72,14 +72,6 @@ export interface ThemeScore {
   percent: number;
 }
 
-export interface NewsItem {
-  id: string;
-  tag: string;
-  title: string;
-  summary: string;
-  content: string;
-}
-
 export interface UserProfile {
   goals: string[];
   levelPhysical: string;

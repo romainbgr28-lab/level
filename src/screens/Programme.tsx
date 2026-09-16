@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
-import { genererProgramme, getProgrammeActif } from '../api/client';
-import type { ApiProgramme } from '../api/client';
+import { genererProgramme, getContexteJour, getProgrammeActif } from '../api/client';
+import type { ApiContexteJour, ApiProgramme } from '../api/client';
 import { typeSeanceMeta } from '../data/programmeTypes';
+// Semaine courante partagée avec l'écran Aujourd'hui : s'appuie sur getNow() et respecte donc
+// la date simulée (src/utils/devDate.ts), là où un Date.now() local l'ignorait silencieusement.
+import { semaineActuelle } from '../utils/programme';
 
-function semaineActuelle(programme: ApiProgramme): number {
-  const debut = new Date(programme.date_debut);
-  const jours = Math.floor((Date.now() - debut.getTime()) / (1000 * 60 * 60 * 24));
-  const semaine = Math.floor(jours / 7) + 1;
-  return Math.min(Math.max(semaine, 1), programme.duree_semaines);
-}
+// Libellés des statuts de jour décidés par le moteur (backend/contexte_jour.py) : le frontend
+// se contente de les nommer, il n'en redérive aucun.
+const LIBELLE_STATUT_JOUR: Record<string, string> = {
+  match: 'Match',
+  repos: 'Repos',
+  indisponible: 'Indisponible',
+};
 
 function statutSemaine(num: number, semaineActuelleNum: number): 'passee' | 'actuelle' | 'a-venir' {
   if (num < semaineActuelleNum) return 'passee';
@@ -19,6 +23,7 @@ function statutSemaine(num: number, semaineActuelleNum: number): 'passee' | 'act
 
 export default function Programme() {
   const [programme, setProgramme] = useState<ApiProgramme | null>(null);
+  const [contexte, setContexte] = useState<ApiContexteJour | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +32,11 @@ export default function Programme() {
     getProgrammeActif()
       .then(setProgramme)
       .finally(() => setLoading(false));
+    // Le contexte porte la semaine réelle (match, indisponibilité, jour courant) : sans lui on
+    // ne saurait afficher que le gabarit brut, qui ne dit rien des contraintes du calendrier.
+    getContexteJour()
+      .then(setContexte)
+      .catch(() => setContexte(null));
   }, []);
 
   async function handleGenerer() {
@@ -35,6 +45,7 @@ export default function Programme() {
     try {
       const prog = await genererProgramme();
       setProgramme(prog);
+      setContexte(await getContexteJour().catch(() => null));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur lors de la génération du programme.');
     } finally {
@@ -136,18 +147,40 @@ export default function Programme() {
       </section>
 
       <section className="card">
-        <div className="card__eyebrow">Gabarit hebdomadaire</div>
-        {jours.map(([jour, type]) => {
-          const meta = typeSeanceMeta(type);
-          return (
-            <div key={jour} className="programme-jour">
-              <span className="programme-jour__label">{jour}</span>
-              <span className="programme-jour__type" style={{ color: meta.color }}>
-                {meta.label}
-              </span>
-            </div>
-          );
-        })}
+        <div className="card__eyebrow">Ma semaine</div>
+        {contexte && contexte.semaine.length > 0
+          ? contexte.semaine.map((jour) => {
+              const meta = jour.type_seance_prevu ? typeSeanceMeta(jour.type_seance_prevu) : null;
+              return (
+                <div
+                  key={jour.date}
+                  className={`programme-jour${jour.est_aujourdhui ? ' programme-jour--aujourdhui' : ''}${
+                    jour.est_passe ? ' programme-jour--passe' : ''
+                  }`}
+                >
+                  <span className="programme-jour__label">{jour.jour_label}</span>
+                  <span
+                    className="programme-jour__type"
+                    style={meta ? { color: meta.color } : undefined}
+                  >
+                    {meta ? meta.label : (LIBELLE_STATUT_JOUR[jour.statut] ?? '—')}
+                  </span>
+                </div>
+              );
+            })
+          : // Contexte indisponible (réseau) : on affiche le gabarit brut plutôt que rien, en
+            // précisant que les contraintes du calendrier n'y sont pas reflétées.
+            jours.map(([jour, type]) => {
+              const meta = typeSeanceMeta(type);
+              return (
+                <div key={jour} className="programme-jour">
+                  <span className="programme-jour__label">{jour}</span>
+                  <span className="programme-jour__type" style={{ color: meta.color }}>
+                    {meta.label}
+                  </span>
+                </div>
+              );
+            })}
       </section>
     </div>
   );
