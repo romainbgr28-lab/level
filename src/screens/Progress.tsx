@@ -2,8 +2,21 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LineChart from '../components/LineChart';
-import { genererProgramme, getChargeProgress, getProgrammeActif, getStats, getStreaks } from '../api/client';
-import type { ApiChargePoint, ApiProgramme, ApiStats, ApiStreakDay } from '../api/client';
+import {
+  genererProgramme,
+  getChargeProgress,
+  getExercicesSuivis,
+  getProgrammeActif,
+  getStats,
+  getStreaks,
+} from '../api/client';
+import type {
+  ApiChargePoint,
+  ApiExerciceSuivi,
+  ApiProgramme,
+  ApiStats,
+  ApiStreakDay,
+} from '../api/client';
 import { phaseCourante, semaineActuelle } from '../utils/programme';
 
 function tronquer(texte: string, max: number): string {
@@ -37,17 +50,24 @@ export default function Progress() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<ApiStats | null>(null);
   const [charge, setCharge] = useState<ApiChargePoint[]>([]);
+  // Exercices réellement entraînés (>= 2 séances loguées) : la courbe suit ce que le joueur
+  // fait, au lieu d'un exercice choisi en dur qui reste vide pour la plupart des profils.
+  const [exercicesSuivis, setExercicesSuivis] = useState<ApiExerciceSuivi[]>([]);
+  const [exerciceCourant, setExerciceCourant] = useState<string | null>(null);
   const [streaks, setStreaks] = useState<ApiStreakDay[]>([]);
   const [programme, setProgramme] = useState<ApiProgramme | null>(null);
   const [programmeLoading, setProgrammeLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getStats(), getChargeProgress(), getStreaks(), getProgrammeActif()])
-      .then(([s, c, streakDays, prog]) => {
+    Promise.all([getStats(), getExercicesSuivis(), getStreaks(), getProgrammeActif()])
+      .then(([s, suivis, streakDays, prog]) => {
         setStats(s);
-        setCharge(c);
+        setExercicesSuivis(suivis);
         setStreaks(streakDays);
+        if (suivis.length > 0) {
+          setExerciceCourant(suivis[0].nom);
+        }
         if (prog) {
           setProgramme(prog);
           return;
@@ -62,6 +82,24 @@ export default function Progress() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!exerciceCourant) {
+      setCharge([]);
+      return;
+    }
+    let annule = false;
+    getChargeProgress(exerciceCourant)
+      .then((points) => {
+        if (!annule) setCharge(points);
+      })
+      .catch(() => {
+        if (!annule) setCharge([]);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [exerciceCourant]);
 
   if (loading) {
     return (
@@ -119,14 +157,35 @@ export default function Progress() {
       <div className="section-divider" />
 
       <section className="card">
-        <div className="card__eyebrow">Développé couché — charge (dernières séances)</div>
-        <div className="chart-wrap">
-          {charge.length >= 2 ? (
-            <LineChart data={charge} />
-          ) : (
-            <p className="subtle">Pas encore assez de données pour ce graphique.</p>
-          )}
-        </div>
+        <div className="card__eyebrow">Charge par séance</div>
+        {exercicesSuivis.length === 0 ? (
+          <p className="subtle">
+            Aucune courbe disponible : logue tes charges sur au moins deux séances d'un même
+            exercice pour voir ta progression.
+          </p>
+        ) : (
+          <>
+            <div className="chip-row">
+              {exercicesSuivis.map((ex) => (
+                <button
+                  key={ex.exercice_id}
+                  type="button"
+                  className={`chip${ex.nom === exerciceCourant ? ' chip--active' : ''}`}
+                  onClick={() => setExerciceCourant(ex.nom)}
+                >
+                  {ex.nom}
+                </button>
+              ))}
+            </div>
+            <div className="chart-wrap">
+              {charge.length >= 2 ? (
+                <LineChart data={charge} />
+              ) : (
+                <p className="subtle">Pas encore assez de données pour ce graphique.</p>
+              )}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="card">

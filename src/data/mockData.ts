@@ -1,25 +1,10 @@
-import type { WeeklyReview, NewsItem } from '../types';
+import type { NewsItem } from '../types';
 
 /**
- * Le bilan hebdomadaire et l'actu ne correspondent à aucune table du backend :
- * ils restent mockés pour l'instant.
+ * L'actu ne correspond à aucune table du backend : elle reste mockée pour l'instant.
+ * Le bilan hebdomadaire, lui, est désormais construit à partir des données réelles
+ * (backend/bilan.py + /api/bilan/hebdomadaire) — voir src/screens/WeeklyReview.tsx.
  */
-
-export const weeklyReview: WeeklyReview = {
-  weekLabel: 'Semaine du 11 au 17 août',
-  strength: {
-    statement: 'Régularité sportive excellente',
-    evidence: '6 séances sur 7 réalisées cette semaine',
-  },
-  weakness: {
-    statement: 'Score du module « Finance personnelle » en retrait',
-    evidence: '45 % de bonnes réponses sur les 3 derniers quiz',
-  },
-  adjustment: {
-    statement: 'On augmente légèrement les charges du haut du corps la semaine prochaine',
-    evidence: 'RPE moyen de 6,8/10 sur les séances push : marge de progression disponible',
-  },
-};
 
 export const newsItems: NewsItem[] = [
   {

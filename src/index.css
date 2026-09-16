@@ -1605,3 +1605,56 @@ p {
 .historique-exercice__realise {
   margin-top: 2px;
 }
+
+/* ---------- Sélecteur d'exercice (Progression) & bilan hebdomadaire ---------- */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.chip {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.chip--active {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent-2);
+}
+
+.bilan-points {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.bilan-ligne {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+}
+
+.bilan-ligne:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}

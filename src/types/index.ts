@@ -72,13 +72,6 @@ export interface ThemeScore {
   percent: number;
 }
 
-export interface WeeklyReview {
-  weekLabel: string;
-  strength: { statement: string; evidence: string };
-  weakness: { statement: string; evidence: string };
-  adjustment: { statement: string; evidence: string };
-}
-
 export interface NewsItem {
   id: string;
   tag: string;

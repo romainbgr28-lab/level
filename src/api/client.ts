@@ -244,6 +244,46 @@ export interface ApiThemeScore {
   percent: number;
 }
 
+/** Exercice ayant assez de séries loguées pour tracer une courbe (voir backend
+ * /api/progress/exercices) — la liste suit ce que le joueur entraîne vraiment. */
+export interface ApiExerciceSuivi {
+  exercice_id: number;
+  nom: string;
+  seances: number;
+}
+
+export interface ApiBilanProgression {
+  exercice: string;
+  charge_precedente_kg: number;
+  charge_kg: number;
+  variation_pct: number;
+}
+
+export interface ApiBilanStagnation {
+  exercice: string;
+  charge_kg: number;
+}
+
+/** Miroir de backend/schemas.py::BilanOut — chaque champ provient de séances réellement
+ * terminées et de séries réellement loguées (null/[] quand la donnée n'existe pas). */
+export interface ApiBilan {
+  periode_debut: string;
+  periode_fin: string;
+  seances_realisees: number;
+  seances_realisees_precedent: number;
+  jours_actifs: number;
+  jours_fenetre: number;
+  volume_kg: number;
+  volume_kg_precedent: number;
+  volume_variation_pct: number | null;
+  rpe_moyen: number | null;
+  completion_moyenne: number | null;
+  progressions: ApiBilanProgression[];
+  stagnations: ApiBilanStagnation[];
+  points: string[];
+  prochaine_adaptation: string | null;
+}
+
 export interface ApiStreakDay {
   date: string;
   sport_fait: boolean;
@@ -456,3 +496,5 @@ export const getStats = () => request<ApiStats>('/api/stats');
 export const getChargeProgress = (nomExercice = 'Développé couché') =>
   request<ApiChargePoint[]>(`/api/progress/charge?nom_exercice=${encodeURIComponent(nomExercice)}`);
 export const getThemeScores = () => request<ApiThemeScore[]>('/api/progress/themes');
+export const getExercicesSuivis = () => request<ApiExerciceSuivi[]>('/api/progress/exercices');
+export const getBilanHebdomadaire = () => request<ApiBilan>('/api/bilan/hebdomadaire');

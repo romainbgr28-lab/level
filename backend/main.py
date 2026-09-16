@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import bilan
 import connaissances
 import duree_seance
 import mistral_client
@@ -2107,6 +2108,95 @@ def get_charge_progress(nom_exercice: str = "Développé couché", limit: int = 
 
     dates_retenues = sorted(charge_max_par_date.keys())[-limit:]
     return [{"date": d.isoformat(), "loadKg": charge_max_par_date[d]} for d in dates_retenues]
+
+
+@app.get("/api/progress/exercices", response_model=list[schemas.ExerciceSuiviOut])
+def list_exercices_suivis(min_seances: int = 2, db: Session = Depends(get_db)):
+    """Exercices pour lesquels le joueur a réellement logué des charges sur au moins
+    `min_seances` séances distinctes — c'est-à-dire ceux dont la courbe de progression a un sens.
+
+    Remplace le choix codé en dur d'un exercice unique côté Progression : la liste suit ce que le
+    joueur fait vraiment, et reste vide tant qu'aucun exercice n'a assez d'historique (plutôt que
+    d'afficher un graphique sans données)."""
+    rows = (
+        db.query(
+            models.ExerciceBibliotheque.id,
+            models.ExerciceBibliotheque.nom,
+            func.count(func.distinct(models.Seance.date)).label("n_seances"),
+        )
+        .join(models.SerieLoggee, models.SerieLoggee.exercice_id == models.ExerciceBibliotheque.id)
+        .join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
+        .filter(models.SerieLoggee.coche == 1, models.SerieLoggee.poids_kg.isnot(None))
+        .group_by(models.ExerciceBibliotheque.id, models.ExerciceBibliotheque.nom)
+        .all()
+    )
+    retenus = [
+        schemas.ExerciceSuiviOut(exercice_id=ex_id, nom=nom, seances=n)
+        for ex_id, nom, n in rows
+        if n >= min_seances
+    ]
+    retenus.sort(key=lambda e: (-e.seances, e.nom))
+    return retenus
+
+
+# ---------- Bilan hebdomadaire ----------
+
+def _series_pour_bilan(db: Session) -> list[dict]:
+    """Séries loguées aplaties pour bilan.construire_bilan (nom d'exercice + date de séance)."""
+    rows = (
+        db.query(
+            models.Seance.date,
+            models.ExerciceBibliotheque.nom,
+            models.SerieLoggee.poids_kg,
+            models.SerieLoggee.repetitions,
+            models.SerieLoggee.coche,
+        )
+        .join(models.Seance, models.Seance.id == models.SerieLoggee.seance_id)
+        .join(models.ExerciceBibliotheque, models.ExerciceBibliotheque.id == models.SerieLoggee.exercice_id)
+        .all()
+    )
+    return [
+        {
+            "date": seance_date,
+            "nom_exercice": nom,
+            "poids_kg": poids_kg,
+            "repetitions": repetitions,
+            "coche": bool(coche),
+        }
+        for seance_date, nom, poids_kg, repetitions, coche in rows
+    ]
+
+
+def _prochaine_adaptation(db: Session) -> Optional[str]:
+    """Première raison de la décision d'adaptation réellement appliquée à la dernière séance
+    terminée. Reprise telle quelle : le bilan expose la décision du moteur, il ne la reformule
+    pas et n'en invente pas une quand elle n'existe pas."""
+    dernier = (
+        db.query(models.HistoriqueSeance)
+        .order_by(models.HistoriqueSeance.date.desc(), models.HistoriqueSeance.id.desc())
+        .first()
+    )
+    decision = (dernier.decision_adaptation if dernier else None) or {}
+    raisons = decision.get("raisons") or []
+    return raisons[0] if raisons else None
+
+
+@app.get("/api/bilan/hebdomadaire", response_model=schemas.BilanOut)
+def get_bilan_hebdomadaire(
+    jours: int = 7, db: Session = Depends(get_db), today: date = Depends(get_current_date)
+):
+    seances = [
+        {
+            "date": h.date,
+            "rpe": h.rpe,
+            "pourcentage_complete": h.pourcentage_complete,
+            "type_seance": h.type_seance,
+        }
+        for h in db.query(models.HistoriqueSeance).all()
+    ]
+    donnees = bilan.construire_bilan(seances, _series_pour_bilan(db), today, jours=jours)
+    donnees["prochaine_adaptation"] = _prochaine_adaptation(db)
+    return schemas.BilanOut(**donnees)
 
 
 @app.get("/api/progress/themes")

@@ -484,6 +484,50 @@ class ProgrammeOut(ProgrammeBase):
     date_creation: Optional[datetime] = None
 
 
+# ---------- Bilan hebdomadaire (agrégats réels, voir bilan.py) ----------
+
+
+class BilanProgressionOut(BaseModel):
+    exercice: str
+    charge_precedente_kg: float
+    charge_kg: float
+    variation_pct: float
+
+
+class BilanStagnationOut(BaseModel):
+    exercice: str
+    charge_kg: float
+
+
+class BilanOut(BaseModel):
+    periode_debut: date
+    periode_fin: date
+    seances_realisees: int
+    seances_realisees_precedent: int
+    jours_actifs: int
+    jours_fenetre: int
+    volume_kg: float
+    volume_kg_precedent: float
+    volume_variation_pct: Optional[float] = None
+    rpe_moyen: Optional[float] = None
+    completion_moyenne: Optional[float] = None
+    progressions: list[BilanProgressionOut] = []
+    stagnations: list[BilanStagnationOut] = []
+    points: list[str] = []
+    # Ce que le moteur d'adaptation prévoit pour la suite, repris tel quel de la dernière
+    # décision réellement appliquée (jamais reformulé/inventé ici). None si aucune séance
+    # terminée ne porte de décision d'adaptation.
+    prochaine_adaptation: Optional[str] = None
+
+
+class ExerciceSuiviOut(BaseModel):
+    """Exercice pour lequel il existe assez de séries loguées pour tracer une courbe."""
+
+    exercice_id: int
+    nom: str
+    seances: int
+
+
 class NiveauHistoriqueBase(BaseModel):
     utilisateur_id: int
     qualite: str

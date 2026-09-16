@@ -1,9 +1,42 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { weeklyReview } from '../data/mockData';
+import { getBilanHebdomadaire } from '../api/client';
+import type { ApiBilan } from '../api/client';
+
+function formatJour(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function formatVolume(kg: number): string {
+  if (kg >= 1000) return `${(kg / 1000).toFixed(1).replace('.', ',')} t`;
+  return `${Math.round(kg)} kg`;
+}
+
+function Variation({ pct }: { pct: number | null }) {
+  if (pct === null) return null;
+  const signe = pct > 0 ? '+' : '';
+  return (
+    <span className="subtle">
+      {' '}
+      ({signe}
+      {Math.round(pct)} % vs semaine précédente)
+    </span>
+  );
+}
 
 export default function WeeklyReview() {
   const navigate = useNavigate();
+  const [bilan, setBilan] = useState<ApiBilan | null>(null);
+  const [erreur, setErreur] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getBilanHebdomadaire()
+      .then(setBilan)
+      .catch(() => setErreur(true))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="screen">
@@ -11,25 +44,107 @@ export default function WeeklyReview() {
       <button className="back-btn" onClick={() => navigate('/progression')}>
         ← Progression
       </button>
-      <h1 className="page-title">{weeklyReview.weekLabel}</h1>
 
-      <section className="card card--coach">
-        <div className="card__eyebrow">Force identifiée</div>
-        <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{weeklyReview.strength.statement}</p>
-        <p className="subtle">{weeklyReview.strength.evidence}</p>
-      </section>
+      {loading && <p className="subtle">Chargement du bilan…</p>}
 
-      <section className="card">
-        <div className="card__eyebrow">Point faible identifié</div>
-        <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{weeklyReview.weakness.statement}</p>
-        <p className="subtle">{weeklyReview.weakness.evidence}</p>
-      </section>
+      {!loading && erreur && (
+        <p className="subtle">
+          Bilan indisponible pour le moment — vérifie ta connexion puis réessaie.
+        </p>
+      )}
 
-      <section className="card">
-        <div className="card__eyebrow">Ajustement prévu</div>
-        <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{weeklyReview.adjustment.statement}</p>
-        <p className="subtle">{weeklyReview.adjustment.evidence}</p>
-      </section>
+      {!loading && !erreur && bilan && (
+        <>
+          <h1 className="page-title">
+            {formatJour(bilan.periode_debut)} — {formatJour(bilan.periode_fin)}
+          </h1>
+
+          {bilan.seances_realisees === 0 ? (
+            // Aucune séance terminée : on le dit franchement plutôt que d'habiller un écran vide.
+            <p className="subtle">
+              Aucune séance terminée sur les {bilan.jours_fenetre} derniers jours. Le bilan
+              s'alimentera dès ta prochaine séance validée.
+            </p>
+          ) : (
+            <>
+              <div className="stat-grid">
+                <div className="stat-tile">
+                  <div className="stat-tile__value">{bilan.seances_realisees}</div>
+                  <div className="stat-tile__label">Séances réalisées</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="stat-tile__value">{formatVolume(bilan.volume_kg)}</div>
+                  <div className="stat-tile__label">Volume soulevé</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="stat-tile__value">
+                    {bilan.jours_actifs}/{bilan.jours_fenetre}
+                  </div>
+                  <div className="stat-tile__label">Jours actifs</div>
+                </div>
+                {bilan.rpe_moyen !== null && (
+                  <div className="stat-tile">
+                    <div className="stat-tile__value">{bilan.rpe_moyen}</div>
+                    <div className="stat-tile__label">RPE moyen</div>
+                  </div>
+                )}
+              </div>
+
+              <section className="card card--coach">
+                <div className="card__eyebrow">Ce que montre la semaine</div>
+                <ul className="bilan-points">
+                  {bilan.points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </section>
+
+              {bilan.progressions.length > 0 && (
+                <section className="card">
+                  <div className="card__eyebrow">Charges en progression</div>
+                  {bilan.progressions.map((p) => (
+                    <p key={p.exercice} className="bilan-ligne">
+                      <strong>{p.exercice}</strong>
+                      <span className="subtle">
+                        {Math.round(p.charge_precedente_kg)} → {Math.round(p.charge_kg)} kg (+
+                        {Math.round(p.variation_pct)} %)
+                      </span>
+                    </p>
+                  ))}
+                </section>
+              )}
+
+              {bilan.stagnations.length > 0 && (
+                <section className="card">
+                  <div className="card__eyebrow">À débloquer</div>
+                  {bilan.stagnations.map((s) => (
+                    <p key={s.exercice} className="bilan-ligne">
+                      <strong>{s.exercice}</strong>
+                      <span className="subtle">
+                        charge inchangée à {Math.round(s.charge_kg)} kg
+                      </span>
+                    </p>
+                  ))}
+                </section>
+              )}
+
+              {bilan.volume_kg_precedent > 0 && (
+                <p className="subtle" style={{ marginBottom: 12 }}>
+                  Volume : {formatVolume(bilan.volume_kg)}
+                  <Variation pct={bilan.volume_variation_pct} />
+                </p>
+              )}
+
+              {bilan.prochaine_adaptation && (
+                <section className="card">
+                  <div className="card__eyebrow">Ce que LEVEL adapte ensuite</div>
+                  <p style={{ fontSize: 15 }}>{bilan.prochaine_adaptation}</p>
+                </section>
+              )}
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
