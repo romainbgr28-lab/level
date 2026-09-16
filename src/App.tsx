@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
+import ToastHost from './components/Toast';
+import { EtatChargement, EtatErreur } from './components/EtatEcran';
 import Today from './screens/Today';
 import Module from './screens/Module';
 import Progress from './screens/Progress';
@@ -10,31 +12,66 @@ import WeeklyReview from './screens/WeeklyReview';
 import Profile from './screens/Profile';
 import Onboarding from './screens/Onboarding';
 import Welcome from './screens/Welcome';
-import { getProfil } from './api/client';
+import { getProfil, messageErreur } from './api/client';
 
-type AppStatus = 'checking' | 'welcome' | 'onboarding' | 'ready';
+type AppStatus = 'checking' | 'erreur' | 'welcome' | 'onboarding' | 'ready';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus>('checking');
-  const [profilFetchError, setProfilFetchError] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
 
-  useEffect(() => {
+  const verifierProfil = useCallback(() => {
+    setStatus('checking');
+    setErreur(null);
     getProfil()
       .then((profil) => setStatus(profil === null ? 'welcome' : 'ready'))
-      .catch(() => {
-        setProfilFetchError(true);
-        setStatus('welcome');
+      .catch((e) => {
+        // On ne sait pas si un profil existe : proposer « Créer mon profil » ferait
+        // recommencer l'onboarding à quelqu'un qui en a déjà un. On dit ce qui se passe et on
+        // propose de réessayer, sans rien décider à sa place.
+        setErreur(messageErreur(e, 'Impossible de contacter le serveur.'));
+        setStatus('erreur');
       });
   }, []);
 
+  useEffect(verifierProfil, [verifierProfil]);
+
   if (status === 'checking') {
-    return <div className="app-shell" />;
+    return (
+      <div className="app-shell">
+        <div className="screen">
+          <EtatChargement message="Ouverture de LEVEL…" />
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'erreur') {
+    return (
+      <div className="app-shell">
+        <div className="screen">
+          <h1 className="page-title" style={{ fontSize: 30 }}>
+            LEVEL
+          </h1>
+          <EtatErreur
+            titre="LEVEL n’arrive pas à démarrer"
+            message={`${erreur ?? 'Erreur inconnue.'} Tes données ne sont pas perdues : elles sont enregistrées côté serveur.`}
+            action={{ label: 'Réessayer', onClick: verifierProfil }}
+            actionSecondaire={{
+              label: 'Commencer sans attendre',
+              onClick: () => setStatus('onboarding'),
+            }}
+          />
+        </div>
+      </div>
+    );
   }
 
   if (status === 'welcome') {
     return (
       <div className="app-shell">
-        <Welcome error={profilFetchError} onStart={() => setStatus('onboarding')} />
+        <Welcome onStart={() => setStatus('onboarding')} />
+        <ToastHost />
       </div>
     );
   }
@@ -43,6 +80,7 @@ export default function App() {
     return (
       <div className="app-shell">
         <Onboarding onDone={() => setStatus('ready')} />
+        <ToastHost />
       </div>
     );
   }
@@ -59,6 +97,7 @@ export default function App() {
         <Route path="/profil" element={<Profile />} />
       </Routes>
       <BottomNav />
+      <ToastHost />
     </div>
   );
 }

@@ -4,7 +4,7 @@ PWA de coaching personnel (force physique + développement intellectuel), instal
 
 ## Stack
 
-React + Vite + TypeScript, `react-router-dom` pour la navigation, `vite-plugin-pwa` pour le manifest et le service worker. Backend FastAPI + SQLite (`backend/`) pour le profil, les séances, l'historique d'exercices, l'historique de séances (prévu/réalisé + contexte + phase calendaire), les modules d'apprentissage et les streaks. Le bilan hebdomadaire et l'actu n'ont pas de table dédiée et restent mockés (`src/data/mockData.ts`).
+React + Vite + TypeScript, `react-router-dom` pour la navigation, `vite-plugin-pwa` pour le manifest et le service worker. Backend FastAPI + SQLite (`backend/`) pour le profil, les séances, l'historique d'exercices, l'historique de séances (prévu/réalisé + contexte + phase calendaire), les modules d'apprentissage et les streaks. Le bilan hebdomadaire est calculé à la volée depuis les séances réellement terminées et les séries loguées (`backend/bilan.py`, `GET /api/bilan/hebdomadaire`) : aucune donnée n'est mockée.
 
 ⚠️ SQLite ne migre pas automatiquement un changement de schéma : après avoir tiré une modification des modèles (`backend/models.py`), supprime `backend/level.db` avant de relancer `uvicorn`, sinon les anciennes colonnes/tables restent en place et l'API renverra des erreurs de validation.
 
@@ -66,10 +66,36 @@ backend/
                  /api/seance/generer et /api/seance/terminer
   seed.py       données initiales (module, séance du jour — le profil reste vide pour déclencher l'onboarding)
 src/
-  api/          client.ts — appels fetch vers le backend
+  api/          client.ts — appels fetch vers le backend, ApiError (message lisible par
+                 l'utilisateur pour toute erreur réseau/HTTP)
   types/        types partagés (contrat de données)
-  data/         mockData.ts — bilan hebdomadaire + actu (pas de table backend)
-  components/   Header, BottomNav, LineChart (SVG, pas de lib externe)
-  screens/      un fichier par écran (Today, Workout, Module, Progress, WeeklyReview, News, Profile)
+  data/         programmeTypes.ts — libellés et couleurs des types de séance
+  components/   Header, BottomNav, LineChart (SVG, pas de lib externe), EtatEcran
+                 (chargement / erreur / vide), Toast (retour discret après action)
+  utils/        donneesFraiches.ts — invalidation des données après une mutation
+  screens/      un fichier par écran (Today, Module, Programme, Progress, WeeklyReview, Historique, Profile)
   App.tsx       routes
 ```
+
+## Robustesse du parcours (états, reprise, idempotence)
+
+Règle appliquée dans toute l'app : chaque écran dit ce qui se passe, pourquoi, et propose au
+moins une action pour continuer — jamais un vide muet, jamais une erreur technique brute.
+
+- **Erreurs** : `ApiError` (src/api/client.ts) transforme toute panne réseau ou réponse HTTP en
+  une phrase lisible ; les refus métier du backend (jour de match, jour de repos, profil
+  manquant) remontent tels quels dans `detail` et sont affichés avec l'alternative adaptée.
+- **Reprise de séance** : le début de séance est persisté (`localStorage`), et une séance déjà
+  commencée retrouvée au chargement propose « Reprendre / Terminer maintenant / Plus tard »
+  plutôt que de replonger l'utilisateur dedans ou de repartir de zéro.
+- **Idempotence** : `POST /api/seance/terminer` renvoie l'historique existant si la séance a
+  déjà été terminée (jamais deux journaux, jamais deux fois l'XP) ;
+  `POST /api/programme/generer` renvoie le programme actif sauf `regenerer: true` ;
+  `POST /api/seance/generer` renvoie déjà la séance du jour existante. Côté frontend, chaque
+  action critique est protégée par une garde synchrone anti double-clic.
+- **Modification de profil** : `PATCH /api/profil` reconstruit le programme et renvoie
+  `ProfilPatchOut` (`programme_recalcule`, `programme_erreur`, `seance_du_jour_supprimee`) —
+  l'écran n'annonce un recalcul que s'il a eu lieu. L'historique n'est jamais touché ; seule
+  une séance du jour **non commencée** devenue incohérente avec le nouveau planning est
+  retirée.
+

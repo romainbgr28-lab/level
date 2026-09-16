@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { saveProfil, genererProgramme } from '../api/client';
+import { saveProfil, genererProgramme, messageErreur } from '../api/client';
+import { LigneErreur } from '../components/EtatEcran';
 import type {
   ApiCalendrierException,
   ApiProfil,
@@ -15,7 +16,7 @@ interface OnboardingProps {
 // ---------- User Model V2 : objectifs hiérarchisés ----------
 // Thèmes techniques envoyés au backend (voir backend/user_model_v2.THEMES_OBJECTIFS_V2) — le
 // frontend affiche LABELS_THEMES_OBJECTIFS, jamais ces identifiants bruts.
-const THEMES_OBJECTIFS: ThemeObjectifV2[] = [
+export const THEMES_OBJECTIFS: ThemeObjectifV2[] = [
   'force',
   'esthetique_hypertrophie',
   'perte_de_gras',
@@ -33,7 +34,7 @@ export const LABELS_THEMES_OBJECTIFS: Record<ThemeObjectifV2, string> = {
   discipline_mentale: 'Discipline mentale',
 };
 
-const MAX_OBJECTIFS = 3;
+export const MAX_OBJECTIFS = 3;
 
 const POSTES = ['Gardien', 'Défenseur', 'Milieu', 'Attaquant'];
 const QUALITES: { key: keyof ApiQualitesPhysiques; label: string }[] = [
@@ -273,8 +274,11 @@ export default function Onboarding({ onDone }: OnboardingProps) {
 
       onDone(profil);
     } catch (e) {
-      const detail = e instanceof Error ? e.message : '';
-      setError(`Impossible d'enregistrer le profil. ${detail}`);
+      // Message lisible (voir ApiError) : rien n'a été enregistré, l'utilisateur garde toutes
+      // ses réponses à l'écran et peut simplement réessayer.
+      setError(
+        `${messageErreur(e, "Ton profil n'a pas pu être enregistré.")} Tes réponses sont conservées : réessaie.`
+      );
     } finally {
       setSaving(false);
     }
@@ -297,6 +301,10 @@ export default function Onboarding({ onDone }: OnboardingProps) {
           <div key={i} className={`onboarding-progress__dot ${i <= step ? 'active' : ''}`} />
         ))}
       </div>
+      {/* Savoir où l'on en est : les points seuls ne se comptent pas d'un coup d'œil. */}
+      <p className="subtle" style={{ margin: '0 0 6px', fontSize: 12 }}>
+        Étape {step + 1} sur {TOTAL_STEPS}
+      </p>
 
       {currentKey === 'contexte_sportif' && (
         <section>
@@ -607,7 +615,7 @@ export default function Onboarding({ onDone }: OnboardingProps) {
         </section>
       )}
 
-      {error && <p className="subtle" style={{ color: 'var(--danger)' }}>{error}</p>}
+      <LigneErreur message={error} />
 
       <div className="onboarding-actions">
         {step > 0 && (

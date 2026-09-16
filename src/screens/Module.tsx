@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { addSessionApprentissage, getTodayModule } from '../api/client';
+import { addSessionApprentissage, getTodayModule, messageErreur } from '../api/client';
+import { EtatChargement, EtatErreur, EtatVide, LigneErreur } from '../components/EtatEcran';
+import { donneesModifiees } from '../utils/donneesFraiches';
 import type { ApiModule } from '../api/client';
 
 export default function Module() {
@@ -12,12 +14,19 @@ export default function Module() {
   const [openSubmitted, setOpenSubmitted] = useState(false);
   const [qcmAnswers, setQcmAnswers] = useState<Record<string, number>>({});
   const [saved, setSaved] = useState(false);
+  const [chargementErreur, setChargementErreur] = useState<string | null>(null);
+  const [actionErreur, setActionErreur] = useState<string | null>(null);
 
-  useEffect(() => {
+  const charger = useCallback(() => {
+    setLoading(true);
+    setChargementErreur(null);
     getTodayModule()
       .then(setLearningModule)
+      .catch((e) => setChargementErreur(messageErreur(e, "Le module du jour n'a pas pu être chargé.")))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(charger, [charger]);
 
   function selectQcm(questionId: string, index: number) {
     if (qcmAnswers[questionId] !== undefined) return;
@@ -28,16 +37,26 @@ export default function Module() {
   const allAnswered = openSubmitted && qcmQuestions.every((q) => qcmAnswers[q.id] !== undefined);
 
   async function finishModule() {
-    if (!learningModule) return;
+    if (!learningModule || saved) return; // `saved` sert aussi de garde anti double-clic
     const correctCount = qcmQuestions.filter((q) => qcmAnswers[q.id] === q.correctIndex).length;
     const score = qcmQuestions.length > 0 ? (correctCount / qcmQuestions.length) * 100 : 100;
-    await addSessionApprentissage({
-      module_id: learningModule.id,
-      date: new Date().toISOString().slice(0, 10),
-      reponses: { open: openAnswer, qcm: qcmAnswers },
-      score,
-    });
+    setActionErreur(null);
     setSaved(true);
+    try {
+      await addSessionApprentissage({
+        module_id: learningModule.id,
+        date: new Date().toISOString().slice(0, 10),
+        reponses: { open: openAnswer, qcm: qcmAnswers },
+        score,
+      });
+    } catch (e) {
+      // Enregistrement raté : on ne quitte pas l'écran (les réponses seraient perdues sans
+      // avoir été sauvegardées) et on rouvre le bouton pour réessayer.
+      setSaved(false);
+      setActionErreur(messageErreur(e, "Tes réponses n'ont pas pu être enregistrées."));
+      return;
+    }
+    donneesModifiees('stats');
     navigate('/');
   }
 
@@ -45,7 +64,21 @@ export default function Module() {
     return (
       <div className="screen">
         <Header title="Module" />
-        <p className="subtle">Chargement…</p>
+        <EtatChargement message="Chargement du module du jour…" />
+      </div>
+    );
+  }
+
+  if (chargementErreur) {
+    return (
+      <div className="screen">
+        <Header title="Module" />
+        <EtatErreur
+          titre="Module indisponible"
+          message={chargementErreur}
+          action={{ label: 'Réessayer', onClick: charger }}
+          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/') }}
+        />
       </div>
     );
   }
@@ -54,7 +87,11 @@ export default function Module() {
     return (
       <div className="screen">
         <Header title="Module" />
-        <p className="subtle">Aucun module disponible.</p>
+        <EtatVide
+          titre="Pas de module aujourd’hui"
+          message="Aucun module d’apprentissage n’est prévu pour le moment. Ta progression physique, elle, continue."
+          action={{ label: 'Voir ma journée', onClick: () => navigate('/') }}
+        />
       </div>
     );
   }
@@ -141,14 +178,22 @@ export default function Module() {
         );
       })}
 
+      <LigneErreur message={actionErreur} />
+
       <button
         className="btn btn--primary"
         disabled={!allAnswered || saved}
         style={{ opacity: allAnswered && !saved ? 1 : 0.5 }}
         onClick={finishModule}
       >
-        Terminer le module
+        {saved ? 'Enregistrement…' : 'Terminer le module'}
       </button>
+      {/* Bouton inactif : on dit ce qu'il reste à faire plutôt que de laisser deviner. */}
+      {!allAnswered && !saved && (
+        <p className="subtle" style={{ marginTop: 8 }}>
+          Réponds à la question ouverte et à toutes les questions à choix pour terminer.
+        </p>
+      )}
     </div>
   );
 }

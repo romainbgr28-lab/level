@@ -463,7 +463,9 @@ p {
 }
 
 .link-discreet {
-  font-size: 12px;
+  /* Action secondaire assumée : lisible et tappable, sans concurrencer l'action principale. */
+  font-size: 13px;
+  padding: 8px 0;
   color: var(--text-faint);
   text-decoration: underline;
   flex-shrink: 0;
@@ -579,8 +581,11 @@ p {
 }
 
 .icon-btn {
-  width: 26px;
-  height: 26px;
+  /* Cible tactile : le carré visible reste discret, mais la zone touchable est étendue à 44px
+     via ::after — sur mobile, une icône de 26px se rate une fois sur trois. */
+  position: relative;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -590,6 +595,22 @@ p {
   align-items: center;
   justify-content: center;
   font-size: 13px;
+}
+
+/* Extension verticale uniquement : deux icônes voisines (modifier / supprimer) ne doivent
+   jamais se voler leur zone tactile, ce qu'une extension horizontale provoquerait. */
+.icon-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
 }
 
 /* Active set card (série en cours) */
@@ -1727,4 +1748,91 @@ p {
 
 .programme-jour--passe {
   opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------------------
+   États transverses d'écran (voir src/components/EtatEcran.tsx) : chargement,
+   erreur, vide. Mêmes repères visuels partout pour que l'utilisateur reconnaisse
+   immédiatement « il se passe quelque chose » / « ça a échoué » / « c'est vide,
+   et voilà pourquoi ».
+   --------------------------------------------------------------------------- */
+.etat-bloc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.etat-bloc .btn {
+  width: 100%;
+}
+
+.etat-bloc--erreur {
+  border-left: 3px solid var(--danger);
+}
+
+.etat-bloc__spinner {
+  width: 18px;
+  height: 18px;
+  margin-bottom: 10px;
+  border: 2px solid var(--border-accent);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: etat-spin 0.9s linear infinite;
+}
+
+@keyframes etat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mouvement réduit demandé par le système : le point d'attente reste visible, sans animation. */
+@media (prefers-reduced-motion: reduce) {
+  .etat-bloc__spinner {
+    animation: none;
+    border-top-color: var(--border-accent);
+  }
+}
+
+/* Erreur d'action (sous le bouton concerné), par opposition à une erreur de chargement. */
+.ligne-erreur {
+  margin: 10px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--danger);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Retour discret après une action réussie (voir src/components/Toast.tsx). Positionné
+   au-dessus de la barre de navigation pour ne jamais masquer l'action principale. */
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(76px + var(--safe-bottom));
+  z-index: 60;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 10px 16px;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(4, 4, 8, 0.24);
+}
+
+/* Boutons empilés dans une fiche modale : cible tactile confortable sur petit écran. */
+.modal-sheet .btn {
+  width: 100%;
+  min-height: 46px;
+}
+
+.modal-sheet .link-discreet {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 0;
+  text-align: center;
+  font-size: 13px;
 }

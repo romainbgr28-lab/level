@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LineChart from '../components/LineChart';
 import {
   genererProgramme,
+  messageErreur,
   getChargeProgress,
   getExercicesSuivis,
   getProgrammeActif,
@@ -20,6 +21,7 @@ import type {
   ApiVolumeSemaine,
 } from '../api/client';
 import { phaseCourante, semaineActuelle } from '../utils/programme';
+import { EtatChargement, EtatErreur, EtatVide } from '../components/EtatEcran';
 
 function tronquer(texte: string, max: number): string {
   return texte.length > max ? `${texte.slice(0, max).trimEnd()}…` : texte;
@@ -60,9 +62,14 @@ export default function Progress() {
   const [streaks, setStreaks] = useState<ApiStreakDay[]>([]);
   const [programme, setProgramme] = useState<ApiProgramme | null>(null);
   const [programmeLoading, setProgrammeLoading] = useState(false);
+  const [programmeErreur, setProgrammeErreur] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chargementErreur, setChargementErreur] = useState<string | null>(null);
 
-  useEffect(() => {
+  const charger = useCallback(() => {
+    setLoading(true);
+    setChargementErreur(null);
+    setProgrammeErreur(null);
     Promise.all([getStats(), getExercicesSuivis(), getStreaks(), getProgrammeActif(), getVolumeProgress()])
       .then(([s, suivis, streakDays, prog, volumeSemaines]) => {
         setStats(s);
@@ -77,15 +84,23 @@ export default function Progress() {
           return;
         }
         // Aucun programme actif (ex : profil créé avant l'ajout de cette fonctionnalité,
-        // ou génération à l'onboarding qui a échoué) : on en génère un à la volée.
+        // ou génération à l'onboarding qui a échoué) : on en construit un à la volée. L'appel
+        // est idempotent côté backend, un second montage de l'écran ne crée pas un doublon.
         setProgrammeLoading(true);
         genererProgramme()
           .then(setProgramme)
-          .catch(() => {})
+          .catch((e) =>
+            // Échec silencieux auparavant : l'écran affichait alors un blanc permanent, sans
+            // dire pourquoi ni quoi faire.
+            setProgrammeErreur(messageErreur(e, "Ton programme n'a pas pu être construit."))
+          )
           .finally(() => setProgrammeLoading(false));
       })
+      .catch((e) => setChargementErreur(messageErreur(e, 'Ta progression n’a pas pu être chargée.')))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(charger, [charger]);
 
   useEffect(() => {
     if (!exerciceCourant) {
@@ -109,7 +124,22 @@ export default function Progress() {
     return (
       <div className="screen">
         <Header title="Progression" />
-        <p className="subtle">Chargement…</p>
+        <h1 className="page-title">Progression</h1>
+        <EtatChargement message="Chargement de ta progression…" />
+      </div>
+    );
+  }
+
+  if (chargementErreur) {
+    return (
+      <div className="screen">
+        <Header title="Progression" />
+        <h1 className="page-title">Progression</h1>
+        <EtatErreur
+          message={chargementErreur}
+          action={{ label: 'Réessayer', onClick: charger }}
+          actionSecondaire={{ label: 'Retour à aujourd’hui', onClick: () => navigate('/') }}
+        />
       </div>
     );
   }
@@ -149,13 +179,18 @@ export default function Progress() {
 
       {programme ? (
         <ProgrammeSummary programme={programme} />
+      ) : programmeLoading ? (
+        <EtatChargement message="Construction de ton programme personnalisé…" />
       ) : (
-        programmeLoading && (
-          <section className="card card--coach">
-            <div className="card__eyebrow">Mon programme</div>
-            <p className="subtle">Construction de ton programme personnalisé…</p>
-          </section>
-        )
+        <EtatVide
+          titre="Mon programme"
+          message={
+            programmeErreur
+              ? `${programmeErreur} Tu peux relancer la construction depuis l’écran Programme.`
+              : 'Aucun programme actif pour le moment : sans lui, LEVEL ne peut pas répartir tes séances dans la semaine.'
+          }
+          action={{ label: 'Construire mon programme', onClick: () => navigate('/programme') }}
+        />
       )}
 
       <div className="section-divider" />
@@ -164,8 +199,8 @@ export default function Progress() {
         <div className="card__eyebrow">Charge par séance</div>
         {exercicesSuivis.length === 0 ? (
           <p className="subtle">
-            Aucune courbe disponible : logue tes charges sur au moins deux séances d'un même
-            exercice pour voir ta progression.
+            Tes courbes de charge apparaîtront ici dès que tu auras logué un même exercice sur
+            deux séances. LEVEL suit alors ce que tu entraînes vraiment, exercice par exercice.
           </p>
         ) : (
           <>
@@ -209,14 +244,21 @@ export default function Progress() {
 
       <section className="card">
         <div className="card__eyebrow">Streak — 35 derniers jours</div>
-        <div className="streak-grid">
-          {streaks.map((day) => (
-            <div
-              key={day.date}
-              className={`streak-cell${day.sport_fait || day.apprentissage_fait ? ' active' : ''}`}
-            />
-          ))}
-        </div>
+        {streaks.some((d) => d.sport_fait || d.apprentissage_fait) ? (
+          <div className="streak-grid">
+            {streaks.map((day) => (
+              <div
+                key={day.date}
+                className={`streak-cell${day.sport_fait || day.apprentissage_fait ? ' active' : ''}`}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="subtle">
+            Chaque jour où tu termines une séance s’allume ici. Ta première séance validée
+            démarre la série.
+          </p>
+        )}
       </section>
     </div>
   );

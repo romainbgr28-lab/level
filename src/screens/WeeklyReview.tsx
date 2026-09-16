@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { getBilanHebdomadaire } from '../api/client';
+import { getBilanHebdomadaire, messageErreur } from '../api/client';
+import { EtatChargement, EtatErreur, EtatVide } from '../components/EtatEcran';
 import type { ApiBilan } from '../api/client';
 
 function formatJour(iso: string): string {
@@ -28,15 +29,19 @@ function Variation({ pct }: { pct: number | null }) {
 export default function WeeklyReview() {
   const navigate = useNavigate();
   const [bilan, setBilan] = useState<ApiBilan | null>(null);
-  const [erreur, setErreur] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const charger = useCallback(() => {
+    setLoading(true);
+    setErreur(null);
     getBilanHebdomadaire()
       .then(setBilan)
-      .catch(() => setErreur(true))
+      .catch((e) => setErreur(messageErreur(e, "Ton bilan n'a pas pu être calculé.")))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(charger, [charger]);
 
   return (
     <div className="screen">
@@ -45,12 +50,15 @@ export default function WeeklyReview() {
         ← Progression
       </button>
 
-      {loading && <p className="subtle">Chargement du bilan…</p>}
+      {loading && <EtatChargement message="Calcul de ton bilan…" />}
 
       {!loading && erreur && (
-        <p className="subtle">
-          Bilan indisponible pour le moment — vérifie ta connexion puis réessaie.
-        </p>
+        <EtatErreur
+          titre="Bilan indisponible"
+          message={erreur}
+          action={{ label: 'Réessayer', onClick: charger }}
+          actionSecondaire={{ label: 'Retour à la progression', onClick: () => navigate('/progression') }}
+        />
       )}
 
       {!loading && !erreur && bilan && (
@@ -60,11 +68,12 @@ export default function WeeklyReview() {
           </h1>
 
           {bilan.seances_realisees === 0 ? (
-            // Aucune séance terminée : on le dit franchement plutôt que d'habiller un écran vide.
-            <p className="subtle">
-              Aucune séance terminée sur les {bilan.jours_fenetre} derniers jours. Le bilan
-              s'alimentera dès ta prochaine séance validée.
-            </p>
+            // Aucune séance terminée : on le dit franchement, et on donne la sortie.
+            <EtatVide
+              titre="Pas encore de bilan"
+              message={`Aucune séance terminée sur les ${bilan.jours_fenetre} derniers jours. Ton bilan compare volume, charges et RPE d'une semaine à l'autre : il s'alimente dès ta première séance validée.`}
+              action={{ label: 'Voir ma séance du jour', onClick: () => navigate('/') }}
+            />
           ) : (
             <>
               <div className="stat-grid">

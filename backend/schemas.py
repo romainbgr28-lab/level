@@ -186,6 +186,23 @@ class ProfilOut(ProfilBase):
     niveau_observe: Optional[dict[str, Any]] = None
 
 
+class ProfilPatchOut(BaseModel):
+    """Résultat d'un PATCH /api/profil : le profil à jour, et ce que la modification a
+    réellement entraîné côté programme. L'écran appelant doit pouvoir dire la vérité à
+    l'utilisateur (« ton programme a été recalculé » / « il n'a pas pu l'être, réessaie »)
+    plutôt que d'annoncer un recalcul supposé."""
+
+    profil: ProfilOut
+    programme_recalcule: bool
+    # Renseigné uniquement si le recalcul a échoué : l'ancien programme reste actif et
+    # l'utilisateur peut relancer la génération depuis l'écran Programme.
+    programme_erreur: Optional[str] = None
+    # La séance du jour, générée mais pas encore commencée, a été retirée parce que le nouveau
+    # planning ne prévoit plus de séance aujourd'hui. Une séance déjà commencée n'est jamais
+    # supprimée (voir main.py::_invalider_seance_du_jour_si_obsolete).
+    seance_du_jour_supprimee: bool = False
+
+
 class SeanceExerciceItem(BaseModel):
     """Item de la liste `exercices` d'une séance : référence un exercice de la
     bibliothèque par id (Mistral doit choisir parmi l'existant, pas inventer)."""
@@ -480,6 +497,12 @@ class TerminerSeanceOut(BaseModel):
 
 class ProgrammeGenererPayload(BaseModel):
     utilisateur_id: Optional[int] = None
+    # Idempotence : par défaut, si un programme actif existe déjà, il est renvoyé tel quel
+    # plutôt que reconstruit (double clic sur « Générer », double montage d'écran, retry
+    # réseau). `regenerer=True` est le seul moyen d'en construire un nouveau — c'est ce que
+    # fait une régénération explicite demandée par l'utilisateur, ou une modification de
+    # profil qui invalide le gabarit (voir main.py::patch_profil).
+    regenerer: bool = False
 
 
 class ProgrammeBase(BaseModel):

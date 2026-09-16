@@ -208,6 +208,11 @@ class HistoriqueSeance(Base):
     __tablename__ = "historique_seances"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Séance dont cet historique est le journal. Nullable : colonne ajoutée après coup (voir
+    # migrate.py), les entrées écrites avant restent valides sans ce lien. C'est la clé
+    # d'idempotence de /api/seance/terminer : une séance ne peut avoir qu'un seul historique,
+    # un double clic sur « Terminer » renvoie donc l'existant au lieu de dupliquer XP et journal.
+    seance_id = Column(Integer, ForeignKey("seances.id"), nullable=True, index=True)
     date = Column(Date, nullable=False)
     phase_calendaire = Column(String, nullable=False)  # calculée serveur (cf. calendrier.py)
     type_seance = Column(String, nullable=False)

@@ -2,23 +2,101 @@ import { getDevSimulatedDate } from '../utils/devDate';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
+/**
+ * Erreur d'API exploitable par l'interface.
+ *
+ * `message` est toujours une phrase lisible par l'utilisateur (jamais « API /path → 500 » ni
+ * « failed to fetch ») : le backend renvoie déjà ses refus métier en français dans `detail`
+ * (jour de match, jour de repos, profil manquant...), on les reprend tels quels ; tout le
+ * reste est traduit ici en une phrase qui dit ce qui s'est passé. `technique` garde le
+ * détail brut pour les logs, jamais affiché.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  /** true : la requête n'a jamais atteint le serveur (hors ligne, serveur éteint). */
+  readonly reseau: boolean;
+  readonly technique: string;
+
+  constructor(params: { message: string; status: number; reseau: boolean; technique: string }) {
+    super(params.message);
+    this.name = 'ApiError';
+    this.status = params.status;
+    this.reseau = params.reseau;
+    this.technique = params.technique;
+  }
+
+  /** Le serveur a refusé l'action pour une raison métier explicable (409) : ce n'est pas une
+   * panne, l'écran doit afficher l'explication et proposer une alternative, pas un « réessayer ». */
+  get estRefusMetier(): boolean {
+    return this.status === 409 || this.status === 400;
+  }
+}
+
+/** Phrase par défaut selon le code HTTP, quand le backend n'a pas fourni de `detail` lisible. */
+function messageParDefaut(status: number, reseau: boolean): string {
+  if (reseau) return "Connexion impossible. Vérifie ta connexion et réessaie.";
+  if (status === 404) return "Cette donnée n'existe plus.";
+  if (status === 422) return "Certaines informations envoyées n'ont pas été acceptées.";
+  if (status === 502 || status === 503 || status === 504)
+    return "Le service est momentanément indisponible. Réessaie dans un instant.";
+  if (status >= 500) return "Une erreur est survenue de notre côté. Réessaie dans un instant.";
+  return "L'action n'a pas pu aboutir.";
+}
+
+/** Extrait le `detail` FastAPI d'un corps d'erreur, s'il est lisible par un humain. */
+function detailLisible(corps: string): string | null {
+  if (!corps) return null;
+  try {
+    const parsed = JSON.parse(corps) as { detail?: unknown };
+    const detail = parsed.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail.trim();
+    // 422 Pydantic : liste d'erreurs de validation, illisible telle quelle pour l'utilisateur.
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const devDate = getDevSimulatedDate();
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(devDate ? { 'X-Dev-Date': devDate } : {}),
-    },
-    ...options,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(devDate ? { 'X-Dev-Date': devDate } : {}),
+      },
+      ...options,
+    });
+  } catch (e) {
+    throw new ApiError({
+      message: messageParDefaut(0, true),
+      status: 0,
+      reseau: true,
+      technique: `${path} : ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`API ${path} → ${res.status}${body ? ` : ${body}` : ''}`);
+    const corps = await res.text().catch(() => '');
+    throw new ApiError({
+      message: detailLisible(corps) ?? messageParDefaut(res.status, false),
+      status: res.status,
+      reseau: false,
+      technique: `API ${path} → ${res.status}${corps ? ` : ${corps}` : ''}`,
+    });
   }
   if (res.status === 204) {
     return undefined as T;
   }
   return res.json() as Promise<T>;
+}
+
+/** Message affichable pour n'importe quelle exception remontée d'un appel API. */
+export function messageErreur(e: unknown, secours = "L'action n'a pas pu aboutir."): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof Error && e.message) return e.message;
+  return secours;
 }
 
 // ---------- Types miroir du backend ----------
@@ -304,11 +382,21 @@ export const saveProfil = (payload: Omit<ApiProfil, 'id' | 'date_creation'>) =>
 // Mise à jour partielle (backend/main.py::patch_profil) : seuls les champs envoyés sont
 // modifiés, et le backend régénère le programme actif dans la foulée — les disponibilités et le
 // calendrier de matchs sont les entrées directes de la structure hebdomadaire.
+/** Miroir de backend/schemas.py::ProfilPatchOut : dit ce que la modification a réellement
+ * entraîné, pour que l'écran annonce un recalcul de programme seulement s'il a eu lieu. */
+export interface ApiProfilPatchResult {
+  profil: ApiProfil;
+  programme_recalcule: boolean;
+  programme_erreur: string | null;
+  seance_du_jour_supprimee: boolean;
+}
+
 export const patchProfil = (payload: {
   disponibilites?: ApiDisponibilites;
   calendrier_matchs?: ApiCalendrierMatchs;
+  objectifs_v2?: ApiObjectifV2[];
   materiel?: string;
-}) => request<ApiProfil>('/api/profil', { method: 'PATCH', body: JSON.stringify(payload) });
+}) => request<ApiProfilPatchResult>('/api/profil', { method: 'PATCH', body: JSON.stringify(payload) });
 
 export const deleteProfil = () => request<void>('/api/profil', { method: 'DELETE' });
 
@@ -500,8 +588,17 @@ export interface ApiProgramme {
   date_creation: string | null;
 }
 
-export const genererProgramme = () =>
-  request<ApiProgramme>('/api/programme/generer', { method: 'POST', body: JSON.stringify({}) });
+/**
+ * Construit le programme. Sans `regenerer`, l'appel est idempotent : si un programme actif
+ * existe déjà, le backend le renvoie tel quel (double clic, double montage d'écran, retry
+ * réseau ne repartent jamais de zéro). `regenerer: true` est réservé à une régénération
+ * explicitement demandée par l'utilisateur.
+ */
+export const genererProgramme = (regenerer = false) =>
+  request<ApiProgramme>('/api/programme/generer', {
+    method: 'POST',
+    body: JSON.stringify({ regenerer }),
+  });
 
 export const getProgrammeActif = () => request<ApiProgramme | null>('/api/programme/actif');
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { getHistoriqueSeances } from '../api/client';
+import { getHistoriqueSeances, messageErreur } from '../api/client';
+import { EtatChargement, EtatErreur, EtatVide } from '../components/EtatEcran';
 import type { ApiEtatDeclareAvant, ApiExerciceRealise, ApiHistoriqueSeance } from '../api/client';
 
 function formatDate(iso: string): string {
@@ -149,14 +150,18 @@ export default function Historique() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<ApiHistoriqueSeance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const charger = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getHistoriqueSeances()
       .then(setEntries)
-      .catch(() => setError(true))
+      .catch((e) => setError(messageErreur(e, "Ton historique n'a pas pu être chargé.")))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(charger, [charger]);
 
   return (
     <div className="screen">
@@ -166,14 +171,28 @@ export default function Historique() {
       </button>
       <h1 className="page-title">Historique des séances</h1>
 
-      {loading && <p className="subtle">Chargement…</p>}
-      {!loading && error && <p className="subtle">Impossible de charger l'historique pour le moment.</p>}
-      {!loading && !error && entries.length === 0 && (
-        <p className="subtle">Aucune séance terminée pour le moment.</p>
+      {loading && <EtatChargement message="Chargement de tes séances…" />}
+
+      {!loading && error && (
+        <EtatErreur
+          titre="Historique indisponible"
+          message={`${error} Tes séances terminées ne sont pas perdues.`}
+          action={{ label: 'Réessayer', onClick: charger }}
+          actionSecondaire={{ label: 'Voir ma journée', onClick: () => navigate('/') }}
+        />
       )}
-      {!loading &&
-        !error &&
-        entries.map((entry) => <SeanceCard key={entry.id} entry={entry} />)}
+
+      {!loading && !error && entries.length === 0 && (
+        // « Pourquoi est-ce vide ? » : parce qu'aucune séance n'a encore été terminée — et on
+        // dit comment y remédier plutôt que d'afficher « Aucun historique ».
+        <EtatVide
+          titre="Rien à afficher pour l’instant"
+          message="Tes séances terminées apparaîtront ici : ce que tu avais prévu, ce que tu as réellement fait, et pourquoi LEVEL avait adapté la séance."
+          action={{ label: 'Voir ma séance du jour', onClick: () => navigate('/') }}
+        />
+      )}
+
+      {!loading && !error && entries.map((entry) => <SeanceCard key={entry.id} entry={entry} />)}
     </div>
   );
 }

@@ -77,7 +77,36 @@ def upsert_profil(payload: schemas.ProfilCreate, db: Session = Depends(get_db)):
     return profil
 
 
-@app.patch("/api/profil", response_model=schemas.ProfilOut)
+def _invalider_seance_du_jour_si_obsolete(db: Session, today: date) -> bool:
+    """Retire la séance du jour quand le nouveau planning ne prévoit plus de séance aujourd'hui.
+
+    Appelé après une modification de profil qui reconstruit le programme : sans ça, une séance
+    générée le matin restait affichée un jour devenu indisponible ou jour de match, et
+    l'utilisateur n'avait aucun moyen de comprendre pourquoi.
+
+    Une séance déjà commencée (au moins une série loguée) ou déjà terminée n'est jamais
+    supprimée : on ne détruit pas du travail réel, l'écran Aujourd'hui l'affiche telle quelle.
+    """
+    seance = db.query(models.Seance).filter(models.Seance.date == today).order_by(models.Seance.id).first()
+    if seance is None or seance.statut == "terminee":
+        return False
+
+    a_des_series = (
+        db.query(models.SerieLoggee).filter(models.SerieLoggee.seance_id == seance.id).first() is not None
+    )
+    if a_des_series:
+        return False
+
+    contexte = get_contexte_jour(db=db, today=today)
+    if contexte.get("statut") == "seance":
+        return False
+
+    db.delete(seance)
+    db.commit()
+    return True
+
+
+@app.patch("/api/profil", response_model=schemas.ProfilPatchOut)
 def patch_profil(
     payload: schemas.ProfilPatch,
     db: Session = Depends(get_db),
@@ -90,6 +119,10 @@ def patch_profil(
     programme laisserait un gabarit qui ne correspond plus à ce que l'utilisateur a déclaré
     (séance planifiée un jour devenu indisponible, séance la veille d'un match déplacé...).
     La régénération est donc faite ici, et non laissée à la charge de l'écran appelant.
+
+    L'historique (séances terminées, séries loguées, journal) n'est jamais touché : modifier le
+    futur ne réécrit pas le passé. Seule une séance du jour non commencée, devenue incohérente
+    avec le nouveau planning, est retirée (voir _invalider_seance_du_jour_si_obsolete).
     """
     existing = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
     if not existing:
@@ -108,16 +141,36 @@ def patch_profil(
     db.commit()
     db.refresh(existing)
 
+    programme_recalcule = False
+    programme_erreur: Optional[str] = None
     try:
-        generer_programme(schemas.ProgrammeGenererPayload(), db=db, today=today)
+        generer_programme(schemas.ProgrammeGenererPayload(regenerer=True), db=db, today=today)
+        programme_recalcule = True
     except Exception:
         # La régénération ne doit pas faire échouer l'enregistrement du profil, déjà commité :
         # l'ancien programme reste actif et l'utilisateur peut relancer la génération depuis
-        # l'écran Programme. On trace pour ne pas avaler l'erreur silencieusement.
+        # l'écran Programme. On trace pour ne pas avaler l'erreur silencieusement, et on le dit
+        # à l'appelant plutôt que de laisser l'écran annoncer un recalcul qui n'a pas eu lieu.
         logger.exception("Régénération du programme impossible après mise à jour du profil.")
+        programme_erreur = (
+            "Tes réglages sont enregistrés, mais ton programme n'a pas pu être recalculé. "
+            "Relance la génération depuis l'écran Programme."
+        )
+
+    seance_supprimee = False
+    if programme_recalcule:
+        try:
+            seance_supprimee = _invalider_seance_du_jour_si_obsolete(db, today)
+        except Exception:
+            logger.exception("Invalidation de la séance du jour impossible après mise à jour du profil.")
 
     db.refresh(existing)
-    return existing
+    return schemas.ProfilPatchOut(
+        profil=schemas.ProfilOut.model_validate(existing),
+        programme_recalcule=programme_recalcule,
+        programme_erreur=programme_erreur,
+        seance_du_jour_supprimee=seance_supprimee,
+    )
 
 
 @app.delete("/api/profil", status_code=204)
@@ -1693,6 +1746,46 @@ def get_niveau_historique(db: Session = Depends(get_db)):
     return db.query(models.NiveauHistorique).order_by(models.NiveauHistorique.date.desc(), models.NiveauHistorique.id.desc()).all()
 
 
+def _historique_pour_seance(db: Session, seance: models.Seance) -> Optional[models.HistoriqueSeance]:
+    """Historique déjà écrit pour cette séance, s'il existe.
+
+    Recherche par seance_id (lien explicite depuis l'ajout de la colonne), avec un repli par
+    date pour les entrées écrites avant : une séance terminée deux fois de suite ne doit pas
+    créer deux journaux même sur une base non backfillée.
+    """
+    par_id = (
+        db.query(models.HistoriqueSeance)
+        .filter(models.HistoriqueSeance.seance_id == seance.id)
+        .order_by(models.HistoriqueSeance.id)
+        .first()
+    )
+    if par_id is not None:
+        return par_id
+    if seance.statut != "terminee":
+        return None
+    return (
+        db.query(models.HistoriqueSeance)
+        .filter(
+            models.HistoriqueSeance.seance_id.is_(None),
+            models.HistoriqueSeance.date == seance.date,
+        )
+        .order_by(models.HistoriqueSeance.id)
+        .first()
+    )
+
+
+def _volume_realise(exercices_realises: list) -> float:
+    """Volume (kg x reps) recalculé depuis un historique déjà écrit, sans relire les séries."""
+    total = 0.0
+    for exercice in exercices_realises:
+        if not isinstance(exercice, dict):
+            continue
+        for serie in exercice.get("series") or []:
+            if isinstance(serie, dict):
+                total += (serie.get("poids_kg") or 0) * (serie.get("repetitions") or 0)
+    return total
+
+
 @app.post("/api/seance/terminer", response_model=schemas.TerminerSeanceOut)
 def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depends(get_db)):
     """Calcule la fin de séance à partir des vraies données de series_loggees
@@ -1703,6 +1796,29 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
     seance = db.get(models.Seance, payload.seance_id)
     if not seance:
         raise HTTPException(status_code=404, detail="Séance introuvable")
+
+    # Idempotence : double tap sur « Terminer la séance », renvoi d'un formulaire, retry réseau…
+    # Une séance ne doit jamais produire deux historiques ni deux fois l'XP. Si un historique
+    # existe déjà pour cette séance, on le renvoie tel quel (mêmes valeurs qu'au premier appel).
+    historique_existant = _historique_pour_seance(db, seance)
+    if historique_existant is not None:
+        return schemas.TerminerSeanceOut(
+            resume={
+                "exercices_realises": historique_existant.exercices_realises or [],
+                "rpe": historique_existant.rpe,
+                "pourcentage_complete": historique_existant.pourcentage_complete,
+                "volume_total_kg": _volume_realise(historique_existant.exercices_realises or []),
+                "nb_series_validees": sum(
+                    len(ex.get("series") or []) for ex in (historique_existant.exercices_realises or [])
+                ),
+                "notes": historique_existant.notes,
+                "duree_prevue_min": seance.duree_prevue,
+                "duree_reelle_min": seance.duree_reelle,
+                "deja_terminee": True,
+            },
+            xp_gagne=historique_existant.xp_gagne or 0,
+            historique_id=historique_existant.id,
+        )
 
     series = db.query(models.SerieLoggee).filter(models.SerieLoggee.seance_id == seance.id).all()
     series_validees = [s for s in series if s.coche]
@@ -1843,6 +1959,7 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
     }
 
     historique = models.HistoriqueSeance(
+        seance_id=seance.id,
         date=seance.date,
         phase_calendaire=phase,
         type_seance=seance.type_seance or seance.nom,
@@ -1984,6 +2101,18 @@ def generer_programme(
         raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer un programme.")
 
     utilisateur_id = payload.utilisateur_id if payload.utilisateur_id is not None else profil.id
+
+    if not payload.regenerer:
+        # Idempotence (cf. ProgrammeGenererPayload.regenerer) : un programme actif existe déjà,
+        # on le renvoie au lieu d'en construire un second et de clôturer le premier.
+        actif = (
+            db.query(models.Programme)
+            .filter(models.Programme.utilisateur_id == utilisateur_id, models.Programme.statut == "actif")
+            .order_by(models.Programme.id.desc())
+            .first()
+        )
+        if actif is not None:
+            return actif
     profil_dict = schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
 
     # Phase 3 : lecture directe du dict structuré `disponibilites`, plus de parsing fragile

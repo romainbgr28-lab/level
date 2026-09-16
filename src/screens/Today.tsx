@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { calculerProgressionExercice } from '../utils/progressionExercice';
 import {
+  ApiError,
   createSerieLoggee,
   deleteSerieLoggee,
   deleteTodaySeance,
@@ -13,6 +14,7 @@ import {
   getExercicesBibliotheque,
   getSeriesLoggees,
   getTodaySeance,
+  messageErreur,
   remplacerExercice,
   terminerSeanceIA,
   updateSerieLoggee,
@@ -31,6 +33,9 @@ import type {
   ApiTerminerSeanceResult,
 } from '../api/client';
 import SemaineStrip from '../components/SemaineStrip';
+import { EtatChargement, EtatErreur, LigneErreur } from '../components/EtatEcran';
+import { feedback } from '../components/Toast';
+import { donneesModifiees } from '../utils/donneesFraiches';
 import { typeSeanceMeta } from '../data/programmeTypes';
 import { getNow } from '../utils/devDate';
 
@@ -77,7 +82,43 @@ const DIFFICULTE_OPTIONS: { value: ApiDifficulte; label: string }[] = [
   { value: 'dur', label: 'Dur' },
 ];
 
-type View = 'loading' | 'no-seance' | 'form' | 'seance' | 'fin-seance' | 'terminee';
+// Vues de l'écran Aujourd'hui. `reprise` : une séance déjà commencée a été retrouvée au
+// chargement (l'app a été fermée en cours de séance) — on demande à l'utilisateur ce qu'il veut
+// en faire plutôt que de le replonger dedans sans prévenir, ou pire, de repartir de zéro.
+type View = 'loading' | 'no-seance' | 'form' | 'reprise' | 'seance' | 'fin-seance' | 'terminee';
+
+// Début de séance persisté : sans ça, fermer puis rouvrir l'app remettait le chronomètre à
+// zéro et la durée réelle envoyée en fin de séance était fausse. Une seule séance à la fois,
+// donc une seule entrée ; elle est effacée dès que la séance est terminée ou supprimée.
+const CLE_DEBUT_SEANCE = 'level.seance.debut';
+
+function lireDebutSeance(seanceId: number): number | null {
+  try {
+    const brut = localStorage.getItem(CLE_DEBUT_SEANCE);
+    if (!brut) return null;
+    const parsed = JSON.parse(brut) as { id?: unknown; debut?: unknown };
+    return parsed.id === seanceId && typeof parsed.debut === 'number' ? parsed.debut : null;
+  } catch {
+    return null;
+  }
+}
+
+function ecrireDebutSeance(seanceId: number, debut: number): void {
+  try {
+    localStorage.setItem(CLE_DEBUT_SEANCE, JSON.stringify({ id: seanceId, debut }));
+  } catch {
+    /* stockage indisponible (navigation privée) : le chronomètre repart du chargement, sans
+       jamais empêcher la séance. */
+  }
+}
+
+function effacerDebutSeance(): void {
+  try {
+    localStorage.removeItem(CLE_DEBUT_SEANCE);
+  } catch {
+    /* idem */
+  }
+}
 
 // RPE proposé à partir des difficultés réellement loguées pendant la séance : l'écran de fin
 // annonce un RPE « calculé automatiquement », il doit donc l'être réellement plutôt que de
@@ -144,19 +185,30 @@ function EtatDuJourSansSeance({
   autoGenerationErreur,
   onGenerer,
   onSeanceLegere,
+  onVoirProgramme,
+  onVoirProfil,
+  onReessayer,
 }: {
   contexte: ApiContexteJour | null;
   autoGenerationErreur: string | null;
   onGenerer: () => void;
   onSeanceLegere: () => void;
+  onVoirProgramme: () => void;
+  onVoirProfil: () => void;
+  onReessayer: () => void;
 }) {
   if (!contexte || contexte.statut === 'aucun_profil') {
     return (
       <section className="card">
         <div className="card__eyebrow">Séance du jour</div>
-        <p className="subtle" style={{ margin: '4px 0 14px' }}>
-          Aucun profil enregistré : termine ton profil pour que LEVEL puisse construire ton programme.
+        <p style={{ margin: '4px 0 10px', fontWeight: 600 }}>Ton profil n’est pas encore complet</p>
+        <p className="subtle" style={{ margin: '0 0 14px' }}>
+          LEVEL a besoin de tes objectifs, de ton sport et de tes disponibilités pour construire
+          ton programme et décider ce que tu fais aujourd’hui.
         </p>
+        <button className="btn btn--primary" onClick={onVoirProfil}>
+          Compléter mon profil
+        </button>
       </section>
     );
   }
@@ -165,12 +217,17 @@ function EtatDuJourSansSeance({
     return (
       <section className="card">
         <div className="card__eyebrow">Séance du jour</div>
-        <p className="subtle" style={{ margin: '4px 0 14px' }}>
-          Aucun programme actif : LEVEL en construit un depuis l'écran Programme, ou tu peux générer
-          une séance isolée dès maintenant.
+        <p style={{ margin: '4px 0 10px', fontWeight: 600 }}>Aucun programme actif</p>
+        <p className="subtle" style={{ margin: '0 0 14px' }}>
+          Sans programme, LEVEL ne sait pas encore comment répartir tes séances dans la semaine.
+          Construis-le depuis l’écran Programme — ou génère une séance isolée pour t’entraîner
+          dès aujourd’hui.
         </p>
-        <button className="btn btn--primary" onClick={onGenerer}>
-          Générer ma séance du jour
+        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProgramme}>
+          Construire mon programme
+        </button>
+        <button className="btn btn--ghost" onClick={onGenerer}>
+          Générer seulement la séance du jour
         </button>
       </section>
     );
@@ -186,6 +243,9 @@ function EtatDuJourSansSeance({
         </p>
         <ContexteProgrammeLigne contexte={contexte} />
         <ProchaineSeanceLigne contexte={contexte} />
+        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProgramme}>
+          Voir mon programme
+        </button>
         <button className="btn btn--ghost" onClick={onSeanceLegere}>
           Faire quand même une activation très légère
         </button>
@@ -200,11 +260,17 @@ function EtatDuJourSansSeance({
         <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour non disponible</p>
         <p className="subtle" style={{ margin: '0 0 6px' }}>
           Tu n’as pas déclaré de disponibilité le {contexte.jour_label.toLowerCase()} : LEVEL ne
-          place donc rien aujourd’hui. Ajuste tes disponibilités depuis ton profil si cela a changé.
+          place donc rien aujourd’hui.
         </p>
         <ProchaineSeanceLigne contexte={contexte} />
-        <button className="btn btn--ghost" onClick={onSeanceLegere}>
+        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProfil}>
+          Modifier mes disponibilités
+        </button>
+        <button className="btn btn--ghost" style={{ marginBottom: 8 }} onClick={onSeanceLegere}>
           Je veux quand même faire une séance légère
+        </button>
+        <button className="btn btn--ghost" onClick={onVoirProgramme}>
+          Voir mon programme
         </button>
       </section>
     );
@@ -218,10 +284,13 @@ function EtatDuJourSansSeance({
         <p className="subtle" style={{ margin: '0 0 6px' }}>
           {contexte.phase_calendaire === 'lendemain_match'
             ? 'Lendemain de match : récupération prioritaire.'
-            : 'Aucune séance programmée aujourd’hui.'}
+            : 'Aucune séance programmée aujourd’hui : la récupération fait partie du programme.'}
         </p>
         <ContexteProgrammeLigne contexte={contexte} />
         <ProchaineSeanceLigne contexte={contexte} />
+        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProgramme}>
+          Voir mon programme
+        </button>
         <button className="btn btn--ghost" onClick={onSeanceLegere}>
           Je veux quand même faire une séance légère
         </button>
@@ -237,14 +306,28 @@ function EtatDuJourSansSeance({
         {contexte.type_seance_prevu ? typeSeanceMeta(contexte.type_seance_prevu).label : 'Séance'}
       </p>
       <ContexteProgrammeLigne contexte={contexte} />
-      {autoGenerationErreur && (
-        <p className="subtle" style={{ margin: '0 0 14px' }}>
-          La génération automatique n'a pas abouti : {autoGenerationErreur}
-        </p>
+      {autoGenerationErreur ? (
+        <>
+          {/* La génération automatique a échoué : on dit pourquoi, et on propose d'abord de
+              refaire exactement ce qui a échoué (réessayer), puis les autres sorties. */}
+          <p className="subtle" style={{ margin: '0 0 14px' }}>
+            Ta séance n’a pas pu être préparée automatiquement. {autoGenerationErreur}
+          </p>
+          <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onReessayer}>
+            Réessayer
+          </button>
+          <button className="btn btn--ghost" style={{ marginBottom: 8 }} onClick={onGenerer}>
+            Préciser mon état du jour et générer
+          </button>
+          <button className="btn btn--ghost" onClick={onVoirProgramme}>
+            Voir mon programme
+          </button>
+        </>
+      ) : (
+        <button className="btn btn--primary" onClick={onGenerer}>
+          Générer ma séance du jour
+        </button>
       )}
-      <button className="btn btn--primary" onClick={onGenerer}>
-        Générer ma séance du jour
-      </button>
     </section>
   );
 }
@@ -304,6 +387,48 @@ export default function Today() {
   const [zoneSensible, setZoneSensible] = useState('');
   const [resultat, setResultat] = useState<ApiTerminerSeanceResult | null>(null);
 
+  // ---- Actions en cours & erreurs d'action ----
+  // Garde anti double-clic : la référence est mise à jour de façon synchrone, contrairement à
+  // l'état React, donc deux taps rapprochés sur « Valider » ou « Terminer » ne peuvent pas
+  // lancer deux requêtes (et donc créer deux séries, deux historiques, deux fois l'XP).
+  const enCoursRef = useRef<Set<string>>(new Set());
+  const [enCours, setEnCours] = useState<string[]>([]);
+  const [actionErreur, setActionErreur] = useState<string | null>(null);
+  const [quitterOuvert, setQuitterOuvert] = useState(false);
+  const [confirmationReset, setConfirmationReset] = useState(false);
+  const [serieASupprimer, setSerieASupprimer] = useState<{
+    exerciceId: number;
+    serie: ApiSerieLoggee;
+  } | null>(null);
+  const [confirmationRemplacement, setConfirmationRemplacement] = useState<{
+    nouvelExerciceId: number;
+    nbValidees: number;
+    nomActuel: string;
+    nomNouveau: string;
+  } | null>(null);
+
+  const estEnCours = (cle: string) => enCours.includes(cle);
+
+  /**
+   * Exécute une action réseau en garantissant : pas de double exécution, un état visible
+   * pendant l'attente, et une erreur lisible en cas d'échec (jamais un bouton qui ne fait rien).
+   */
+  async function executer<T>(cle: string, fn: () => Promise<T>, secours: string): Promise<T | undefined> {
+    if (enCoursRef.current.has(cle)) return undefined;
+    enCoursRef.current.add(cle);
+    setEnCours((prev) => [...prev, cle]);
+    setActionErreur(null);
+    try {
+      return await fn();
+    } catch (e) {
+      setActionErreur(messageErreur(e, secours));
+      return undefined;
+    } finally {
+      enCoursRef.current.delete(cle);
+      setEnCours((prev) => prev.filter((c) => c !== cle));
+    }
+  }
+
   useEffect(() => {
     void chargerToday();
   }, []);
@@ -335,7 +460,26 @@ export default function Today() {
 
     if (existante) {
       setSeance(existante);
-      setView(existante.statut === 'terminee' ? 'terminee' : 'seance');
+      if (existante.statut === 'terminee') {
+        effacerDebutSeance();
+        setView('terminee');
+        return;
+      }
+      // Séance déjà commencée retrouvée au chargement (app fermée en cours de séance, onglet
+      // rouvert) : on demande explicitement ce qu'il veut en faire, avec sa progression sous
+      // les yeux, au lieu de le replonger dedans sans contexte.
+      let dejaCommencee = false;
+      try {
+        const rows = await getSeriesLoggees(existante.id);
+        dejaCommencee = rows.some((r) => r.coche);
+        const grouped: Record<number, ApiSerieLoggee[]> = {};
+        for (const row of rows) (grouped[row.exercice_id] ??= []).push(row);
+        setSeriesParExercice(grouped);
+      } catch {
+        // Accroc réseau sur les séries seules : on n'empêche pas d'entrer dans la séance, elles
+        // seront rechargées par l'effet de la vue séance.
+      }
+      setView(dejaCommencee ? 'reprise' : 'seance');
       return;
     }
 
@@ -362,9 +506,13 @@ export default function Today() {
         return;
       } catch (e) {
         // Si la génération automatique échoue, on retombe sur le flux manuel (bouton fallback),
-        // mais on garde la raison : sans elle, l'écran affichait un simple bouton "Générer"
-        // qui rejouait le même échec sans que l'utilisateur sache pourquoi.
-        setAutoGenerationErreur(e instanceof Error ? e.message : 'Génération automatique impossible.');
+        // mais on garde la raison, formulée pour un humain : sans elle, l'écran affichait un
+        // simple bouton "Générer" qui rejouait le même échec sans que l'utilisateur sache
+        // pourquoi. Un refus métier (409 : match, repos) n'est pas une panne — le contexte du
+        // jour l'explique déjà correctement, inutile d'y ajouter un message d'erreur.
+        if (!(e instanceof ApiError && e.estRefusMetier)) {
+          setAutoGenerationErreur(messageErreur(e, 'La préparation automatique n’a pas abouti.'));
+        }
       }
     }
 
@@ -379,26 +527,49 @@ export default function Today() {
   useEffect(() => {
     // Également chargé en vue "terminee" : le récapitulatif de fin affiche les séries réellement
     // enregistrées, y compris après un rechargement de la page (où `resultat` est perdu).
-    if ((view !== 'seance' && view !== 'terminee') || !seance) return;
-    getExercicesBibliotheque().then((list) => {
-      const map: Record<number, ApiExerciceBibliotheque> = {};
-      for (const ex of list) map[ex.id] = ex;
-      setBibliotheque(map);
-    });
-    getSeriesLoggees(seance.id).then((rows) => {
-      const grouped: Record<number, ApiSerieLoggee[]> = {};
-      for (const row of rows) {
-        (grouped[row.exercice_id] ??= []).push(row);
-      }
-      setSeriesParExercice(grouped);
-    });
+    if ((view !== 'seance' && view !== 'terminee' && view !== 'reprise') || !seance) return;
+    // Échecs tolérés : ces chargements enrichissent l'affichage (noms d'exercices, séries déjà
+    // enregistrées, performance précédente). Une panne réseau ne doit pas vider la séance en
+    // cours ni provoquer une exception non gérée — l'écran reste utilisable en l'état.
+    getExercicesBibliotheque()
+      .then((list) => {
+        const map: Record<number, ApiExerciceBibliotheque> = {};
+        for (const ex of list) map[ex.id] = ex;
+        setBibliotheque(map);
+      })
+      .catch(() => setActionErreur((prev) => prev ?? 'Les noms des exercices n’ont pas pu être chargés.'));
+    getSeriesLoggees(seance.id)
+      .then((rows) => {
+        const grouped: Record<number, ApiSerieLoggee[]> = {};
+        for (const row of rows) {
+          (grouped[row.exercice_id] ??= []).push(row);
+        }
+        setSeriesParExercice(grouped);
+      })
+      .catch(() => {
+        /* Les séries déjà chargées restent affichées ; la validation d'une nouvelle série
+           remontera une erreur explicite si le serveur est toujours injoignable. */
+      });
     if (view !== 'seance') return;
     for (const item of seance.exercices) {
-      getDernierePerformance(item.exercice_id, seance.id).then((perf) => {
-        setPrecedentParExercice((prev) => ({ ...prev, [item.exercice_id]: perf }));
-      });
+      getDernierePerformance(item.exercice_id, seance.id)
+        .then((perf) => {
+          setPrecedentParExercice((prev) => ({ ...prev, [item.exercice_id]: perf }));
+        })
+        .catch(() => {
+          /* Pas d'historique affichable pour cet exercice : le bloc affiche l'objectif prévu. */
+        });
     }
-    setSessionStart((prev) => prev ?? Date.now());
+    // Chronomètre repris là où il en était si la séance avait déjà été commencée (l'app a pu
+    // être fermée entre-temps), démarré sinon.
+    const debutEnregistre = lireDebutSeance(seance.id);
+    if (debutEnregistre !== null) {
+      setSessionStart(debutEnregistre);
+    } else {
+      const maintenant = Date.now();
+      ecrireDebutSeance(seance.id, maintenant);
+      setSessionStart(maintenant);
+    }
   }, [view, seance]);
 
   useEffect(() => {
@@ -505,15 +676,21 @@ export default function Today() {
     const reps = draft.reps.trim() ? Number(draft.reps) : null;
     const numero = (seriesParExercice[exerciceId]?.length ?? 0) + 1;
 
-    const created = await createSerieLoggee({
-      seance_id: seance.id,
-      exercice_id: exerciceId,
-      numero_serie: numero,
-      poids_kg: poids,
-      repetitions: reps,
-      coche: true,
-      difficulte: draft.difficulte ?? null,
-    });
+    const created = await executer(
+      `serie-${exerciceId}`,
+      () =>
+        createSerieLoggee({
+          seance_id: seance.id,
+          exercice_id: exerciceId,
+          numero_serie: numero,
+          poids_kg: poids,
+          repetitions: reps,
+          coche: true,
+          difficulte: draft.difficulte ?? null,
+        }),
+      "Cette série n’a pas pu être enregistrée."
+    );
+    if (!created) return;
 
     setSeriesParExercice((prev) => ({ ...prev, [exerciceId]: [...(prev[exerciceId] ?? []), created] }));
     setDraft(exerciceId, { poids: '', reps: '', difficulte: undefined });
@@ -527,15 +704,21 @@ export default function Today() {
     const exerciceId = item.exercice_id;
     const numero = (seriesParExercice[exerciceId]?.length ?? 0) + 1;
 
-    const created = await createSerieLoggee({
-      seance_id: seance.id,
-      exercice_id: exerciceId,
-      numero_serie: numero,
-      poids_kg: chargeCible(item.charge_indicative),
-      repetitions: repsCible(item.repetitions),
-      coche: true,
-      difficulte,
-    });
+    const created = await executer(
+      `serie-${exerciceId}`,
+      () =>
+        createSerieLoggee({
+          seance_id: seance.id,
+          exercice_id: exerciceId,
+          numero_serie: numero,
+          poids_kg: chargeCible(item.charge_indicative),
+          repetitions: repsCible(item.repetitions),
+          coche: true,
+          difficulte,
+        }),
+      "Cette série n’a pas pu être enregistrée."
+    );
+    if (!created) return;
 
     setSeriesParExercice((prev) => ({ ...prev, [exerciceId]: [...(prev[exerciceId] ?? []), created] }));
     setRestSecondsLeft(reposPourExercice(item));
@@ -558,20 +741,32 @@ export default function Today() {
 
   async function handleEnregistrerEditionSerie(exerciceId: number, serie: ApiSerieLoggee) {
     const draft = editDraftFor(serie);
-    const updated = await updateSerieLoggee(serie.id, {
-      poids_kg: draft.poids.trim() ? Number(draft.poids) : null,
-      repetitions: draft.reps.trim() ? Number(draft.reps) : null,
-      difficulte: draft.difficulte ?? null,
-    });
+    const updated = await executer(
+      `edit-${serie.id}`,
+      () =>
+        updateSerieLoggee(serie.id, {
+          poids_kg: draft.poids.trim() ? Number(draft.poids) : null,
+          repetitions: draft.reps.trim() ? Number(draft.reps) : null,
+          difficulte: draft.difficulte ?? null,
+        }),
+      "La correction n’a pas pu être enregistrée. Ta série précédente est intacte."
+    );
+    if (!updated) return;
     setSeriesParExercice((prev) => ({
       ...prev,
       [exerciceId]: (prev[exerciceId] ?? []).map((s) => (s.id === updated.id ? updated : s)),
     }));
     setEditingSerieId(null);
+    feedback('Série corrigée');
   }
 
   async function handleToggleSerie(exerciceId: number, serie: ApiSerieLoggee) {
-    const updated = await updateSerieLoggee(serie.id, { coche: !serie.coche });
+    const updated = await executer(
+      `toggle-${serie.id}`,
+      () => updateSerieLoggee(serie.id, { coche: !serie.coche }),
+      "Ce changement n’a pas pu être enregistré."
+    );
+    if (!updated) return;
     setSeriesParExercice((prev) => ({
       ...prev,
       [exerciceId]: (prev[exerciceId] ?? []).map((s) => (s.id === updated.id ? updated : s)),
@@ -593,14 +788,25 @@ export default function Today() {
     });
   }
 
-  async function handleSupprimerSerie(exerciceId: number, serie: ApiSerieLoggee) {
-    if (!window.confirm('Supprimer cette série ?')) return;
-    await deleteSerieLoggee(serie.id);
+  async function confirmerSuppressionSerie() {
+    if (!serieASupprimer) return;
+    const { exerciceId, serie } = serieASupprimer;
+    const ok = await executer(
+      `suppr-${serie.id}`,
+      async () => {
+        await deleteSerieLoggee(serie.id);
+        return true;
+      },
+      "Cette série n’a pas pu être supprimée."
+    );
+    if (!ok) return;
     setSeriesParExercice((prev) => ({
       ...prev,
       [exerciceId]: (prev[exerciceId] ?? []).filter((s) => s.id !== serie.id),
     }));
     if (editingSerieId === serie.id) setEditingSerieId(null);
+    setSerieASupprimer(null);
+    feedback('Série supprimée');
   }
 
   async function ouvrirRemplacement(exerciceId: number) {
@@ -613,7 +819,7 @@ export default function Today() {
       const res = await getAlternativesExercice(seance.id, exerciceId);
       setAlternatives(res.alternatives);
     } catch (e) {
-      setReplaceError(e instanceof Error ? e.message : 'Erreur lors du chargement des alternatives.');
+      setReplaceError(messageErreur(e, "Les alternatives n'ont pas pu être chargées."));
     } finally {
       setLoadingAlternatives(false);
     }
@@ -625,26 +831,30 @@ export default function Today() {
     setReplaceError(null);
   }
 
-  async function choisirAlternative(nouvelExerciceId: number) {
+  /** Étape de confirmation : si des séries ont déjà été réalisées sur l'exercice remplacé,
+   * l'utilisateur doit savoir ce qu'elles deviennent avant de valider (elles restent dans son
+   * historique, elles ne sont jamais transférées ni perdues). Sans série réalisée, il n'y a
+   * rien à expliquer : le remplacement est direct. */
+  function demanderRemplacement(nouvelExerciceId: number) {
     if (!seance || replaceTargetId === null) return;
-    const itemActuel = seance.exercices.find((it) => it.exercice_id === replaceTargetId);
-    // Séries déjà réalisées sur l'exercice actuel du slot (pas l'historique complet du slot :
-    // même périmètre que series_deja_realisees côté backend) -> confirmation explicite si >= 1.
-    const nbValideesActuel = itemActuel
-      ? (seriesParExercice[replaceTargetId] ?? []).filter((s) => s.coche).length
-      : 0;
-    if (nbValideesActuel > 0) {
-      const nomActuel = bibliotheque[replaceTargetId]?.nom ?? `Exercice #${replaceTargetId}`;
-      const nomNouveau =
+    const nbValideesActuel = (seriesParExercice[replaceTargetId] ?? []).filter((s) => s.coche).length;
+    if (nbValideesActuel === 0) {
+      void choisirAlternative(nouvelExerciceId);
+      return;
+    }
+    setConfirmationRemplacement({
+      nouvelExerciceId,
+      nbValidees: nbValideesActuel,
+      nomActuel: bibliotheque[replaceTargetId]?.nom ?? `Exercice #${replaceTargetId}`,
+      nomNouveau:
         bibliotheque[nouvelExerciceId]?.nom ??
         alternatives.find((a) => a.exercice.id === nouvelExerciceId)?.exercice.nom ??
-        `Exercice #${nouvelExerciceId}`;
-      const ok = window.confirm(
-        `${nbValideesActuel} série(s) déjà réalisée(s) sur ${nomActuel} resteront dans l'historique. ` +
-          `Les prochaines séries seront réalisées sur ${nomNouveau}. Continuer ?`
-      );
-      if (!ok) return;
-    }
+        `Exercice #${nouvelExerciceId}`,
+    });
+  }
+
+  async function choisirAlternative(nouvelExerciceId: number) {
+    if (!seance || replaceTargetId === null) return;
 
     setReplacing(true);
     setReplaceError(null);
@@ -662,9 +872,11 @@ export default function Today() {
       // remplacement pris en compte, sans perdre les séries déjà réalisées (cf. cible ajustée
       // via historique_exercice_ids dans le rendu du bloc-exercice).
       setManualOpenId(nouvelExerciceId);
+      setConfirmationRemplacement(null);
       fermerRemplacement();
+      feedback(res.message_confirmation ?? 'Exercice remplacé');
     } catch (e) {
-      setReplaceError(e instanceof Error ? e.message : 'Erreur lors du remplacement.');
+      setReplaceError(messageErreur(e, "Le remplacement n'a pas abouti. L'exercice actuel reste en place."));
     } finally {
       setReplacing(false);
     }
@@ -683,14 +895,25 @@ export default function Today() {
         type_seance_force: typeSeanceForce || null,
         forcer_seance_legere: forcerSeanceLegere,
       };
+      // Idempotent côté backend (voir main.py::generer_seance) : si une séance existe déjà pour
+      // aujourd'hui, elle est renvoyée telle quelle plutôt que dupliquée.
       const generee = await genererSeance(payload);
       setSeance(generee);
+      setAutoGenerationErreur(null);
       setView('seance');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur lors de la génération de la séance.');
+      setError(messageErreur(e, "Ta séance n'a pas pu être générée."));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  /** Rejoue exactement la génération automatique qui a échoué, sans repasser par le
+   * questionnaire : le cas le plus fréquent est un service momentanément indisponible. */
+  async function handleReessayerGeneration() {
+    setAutoGenerationErreur(null);
+    setView('loading');
+    await chargerToday();
   }
 
   // Pré-remplit le RPE à partir des difficultés réellement loguées avant d'ouvrir l'écran de
@@ -699,6 +922,7 @@ export default function Today() {
   function ouvrirFinDeSeance() {
     const toutesSeries = Object.values(seriesParExercice).flat();
     setRpe((actuel) => actuel ?? rpeSuggere(toutesSeries));
+    setActionErreur(null);
     setView('fin-seance');
   }
 
@@ -706,44 +930,72 @@ export default function Today() {
     if (!seance) return;
     setSubmitting(true);
     setError(null);
-    try {
-      const res = await terminerSeanceIA({
-        seance_id: seance.id,
-        rpe,
-        note: note.trim() || null,
-        duree_reelle_min: Math.round(elapsedSec / 60),
-        zone_sensible: zoneSensible || null,
-      });
-      setResultat(res);
-      setView('terminee');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement de la séance.");
-    } finally {
-      setSubmitting(false);
-    }
+    // Clé d'action : un double tap ne peut pas envoyer deux fois la fin de séance (le backend
+    // est également idempotent, voir main.py::terminer_seance — les deux garde-fous se
+    // complètent, celui-ci évite en plus l'aller-retour inutile).
+    const res = await executer(
+      'terminer',
+      () =>
+        terminerSeanceIA({
+          seance_id: seance.id,
+          rpe,
+          note: note.trim() || null,
+          duree_reelle_min: Math.round(elapsedSec / 60),
+          zone_sensible: zoneSensible || null,
+        }),
+      "Ta séance n'a pas pu être enregistrée. Tes séries sont conservées : réessaie."
+    );
+    setSubmitting(false);
+    if (!res) return;
+    setResultat(res);
+    effacerDebutSeance();
+    // XP, streak et historique viennent de changer : l'en-tête et les écrans encore montés
+    // doivent refléter le nouvel état plutôt que celui d'avant la séance.
+    donneesModifiees('seance', 'stats');
+    setView('terminee');
+  }
+
+  /** Quitte la séance en conservant tout ce qui a été enregistré : les séries loguées restent
+   * en base, la séance reste ouverte, et l'écran Aujourd'hui proposera de la reprendre. */
+  function quitterEnConservant() {
+    setQuitterOuvert(false);
+    navigate('/programme');
   }
 
   async function handleReset() {
-    if (!window.confirm('Supprimer la séance du jour et en générer une nouvelle ?')) return;
+    if (!seance) return;
     setSubmitting(true);
     setError(null);
-    try {
-      await deleteTodaySeance();
-      setSeance(null);
-      setForcerSeanceLegere(false);
-      setView('no-seance');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur lors de la réinitialisation.');
-    } finally {
-      setSubmitting(false);
-    }
+    const ok = await executer(
+      'reset',
+      async () => {
+        await deleteTodaySeance();
+        return true;
+      },
+      "La séance n'a pas pu être supprimée."
+    );
+    setSubmitting(false);
+    if (!ok) return;
+    effacerDebutSeance();
+    setSeance(null);
+    setSeriesParExercice({});
+    setSessionStart(null);
+    setElapsedSec(0);
+    setForcerSeanceLegere(false);
+    setConfirmationReset(false);
+    setQuitterOuvert(false);
+    donneesModifiees('seance');
+    setView('no-seance');
   }
 
   if (view === 'loading') {
     return (
       <div className="screen">
         <Header title="Aujourd’hui" />
-        <p className="subtle">Chargement…</p>
+        <h1 className="page-title" style={{ textTransform: 'capitalize' }}>
+          {dateLabel}
+        </h1>
+        <EtatChargement message="LEVEL prépare ta journée…" />
       </div>
     );
   }
@@ -768,19 +1020,18 @@ export default function Today() {
           {/* Réseau indisponible : on ne sait pas ce que prévoit le programme, donc on ne
               prétend pas qu'il n'y a rien de prévu — on propose de réessayer. */}
           {chargementErreur ? (
-            <section className="card">
-              <div className="card__eyebrow">Séance du jour</div>
-              <p className="subtle" style={{ margin: '4px 0 14px' }}>
-                Impossible de charger ton programme (problème réseau). Réessaie, ou génère ta séance
-                manuellement.
-              </p>
-              <button className="btn btn--primary" onClick={() => void chargerToday()} style={{ marginBottom: 8 }}>
-                Réessayer
-              </button>
-              <button className="btn btn--secondary" onClick={() => setView('form')}>
-                Générer ma séance du jour
-              </button>
-            </section>
+            <EtatErreur
+              titre="Ta journée n’a pas pu être chargée"
+              message="LEVEL n’a pas réussi à joindre le serveur, donc il ne sait pas ce que prévoit ton programme aujourd’hui. Rien n’est perdu."
+              action={{
+                label: 'Réessayer',
+                onClick: () => void chargerToday(),
+              }}
+              actionSecondaire={{
+                label: 'Générer ma séance quand même',
+                onClick: () => setView('form'),
+              }}
+            />
           ) : (
             <EtatDuJourSansSeance
               contexte={contexte}
@@ -790,9 +1041,34 @@ export default function Today() {
                 setForcerSeanceLegere(true);
                 setView('form');
               }}
+              onVoirProgramme={() => navigate('/programme')}
+              onVoirProfil={() => navigate('/profil')}
+              onReessayer={() => void handleReessayerGeneration()}
             />
           )}
         </>
+      )}
+
+      {/* Séance retrouvée en cours : l'utilisateur choisit, il ne subit pas. */}
+      {view === 'reprise' && seance && (
+        <section className="card">
+          <div className="card__eyebrow">Séance en cours</div>
+          <h2 className="card__title">{'nom' in seance ? seance.nom : seance.nom_seance}</h2>
+          <p className="subtle" style={{ margin: '8px 0 14px' }}>
+            Tu as déjà enregistré {totaux.nbValidees} série{totaux.nbValidees > 1 ? 's' : ''}
+            {totaux.volume > 0 ? ` · ${Math.round(totaux.volume)} kg` : ''}. Tout est conservé —
+            tu peux reprendre là où tu t’étais arrêté.
+          </p>
+          <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={() => setView('seance')}>
+            Reprendre ma séance
+          </button>
+          <button className="btn btn--ghost" style={{ marginBottom: 8 }} onClick={ouvrirFinDeSeance}>
+            Terminer la séance maintenant
+          </button>
+          <button className="btn btn--ghost" onClick={() => navigate('/programme')}>
+            Plus tard — voir mon programme
+          </button>
+        </section>
       )}
 
       {view === 'form' && (
@@ -896,14 +1172,23 @@ export default function Today() {
             />
           </div>
 
-          {error && (
-            <p className="subtle" style={{ color: 'var(--danger)', margin: '4px 0 12px' }}>
-              {error}
-            </p>
-          )}
+          <LigneErreur message={error} />
 
           <button className="btn btn--primary" disabled={submitting} onClick={handleGenerer}>
             {submitting ? 'Génération en cours…' : 'Générer ma séance du jour'}
+          </button>
+          {/* Sortie explicite : entrer dans ce questionnaire ne doit pas être un aller simple. */}
+          <button
+            className="btn btn--ghost"
+            style={{ marginTop: 8 }}
+            disabled={submitting}
+            onClick={() => {
+              setForcerSeanceLegere(false);
+              setError(null);
+              setView('no-seance');
+            }}
+          >
+            Annuler
           </button>
         </section>
       )}
@@ -993,7 +1278,8 @@ export default function Today() {
                     <button
                       type="button"
                       className="icon-btn"
-                      aria-label="Remplacer cet exercice"
+                      aria-label="Je ne peux pas faire cet exercice — le remplacer"
+                      title="Je ne peux pas faire cet exercice"
                       onClick={() => ouvrirRemplacement(item.exercice_id)}
                     >
                       ⇄
@@ -1145,7 +1431,7 @@ export default function Today() {
                               type="button"
                               className="icon-btn"
                               aria-label="Supprimer la série"
-                              onClick={() => handleSupprimerSerie(item.exercice_id, s)}
+                              onClick={() => setSerieASupprimer({ exerciceId: item.exercice_id, serie: s })}
                             >
                               🗑
                             </button>
@@ -1259,6 +1545,20 @@ export default function Today() {
                         + Ajouter une série
                       </button>
                     )}
+
+                    {!seanceTerminee && !complet && (
+                      // Sortie explicite quand l'exercice est infaisable : sans ce lien, le seul
+                      // accès au remplacement était une icône ⇄, que personne ne cherche quand
+                      // il a mal quelque part.
+                      <button
+                        type="button"
+                        className="link-discreet"
+                        style={{ marginTop: 10 }}
+                        onClick={() => ouvrirRemplacement(item.exercice_id)}
+                      >
+                        Je ne peux pas faire cet exercice
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -1278,6 +1578,7 @@ export default function Today() {
           {(() => {
             const toutTermine = seanceProgress.total > 0 && seanceProgress.faites >= seanceProgress.total;
             const activeItem = seance.exercices.find((it) => it.exercice_id === currentExerciceId) ?? null;
+            const validationEnCours = activeItem ? estEnCours(`serie-${activeItem.exercice_id}`) : false;
             return (
               <div className="editorial-cta">
                 {toutTermine ? (
@@ -1287,27 +1588,21 @@ export default function Today() {
                 ) : (
                   <button
                     className="btn btn--primary"
-                    disabled={!activeItem}
+                    disabled={!activeItem || validationEnCours}
                     onClick={() => activeItem && handleValiderRapide(activeItem, 'comme_prevu')}
                   >
-                    Valider la série →
+                    {validationEnCours ? 'Enregistrement…' : 'Valider la série →'}
                   </button>
                 )}
-                <button
-                  className="session-actions__reset link-discreet"
-                  disabled={submitting}
-                  onClick={handleReset}
-                >
-                  Réinitialiser (générer une nouvelle séance)
+                {/* Toujours une sortie sans perte : quitter n'efface rien, et terminer reste
+                    possible même si la séance n'est pas allée au bout. */}
+                <button className="session-actions__reset link-discreet" onClick={() => setQuitterOuvert(true)}>
+                  Quitter la séance
                 </button>
               </div>
             );
           })()}
-          {error && (
-            <p className="subtle" style={{ color: 'var(--danger)', marginTop: 10 }}>
-              {error}
-            </p>
-          )}
+          <LigneErreur message={actionErreur ?? error} />
         </>
       )}
 
@@ -1355,18 +1650,27 @@ export default function Today() {
               </button>
             ))}
           </div>
-          {error && (
-            <p className="subtle" style={{ color: 'var(--danger)', margin: '4px 0 12px' }}>
-              {error}
-            </p>
-          )}
+          <LigneErreur message={actionErreur ?? error} />
           <button
             className="btn btn--primary"
             style={{ marginTop: 14 }}
-            disabled={submitting}
+            disabled={submitting || estEnCours('terminer')}
             onClick={handleTerminer}
           >
-            {submitting ? 'Enregistrement…' : 'Valider la fin de séance'}
+            {submitting || estEnCours('terminer') ? 'Enregistrement…' : 'Valider la fin de séance'}
+          </button>
+          {/* Changement d'avis : revenir à la séance ne perd rien, tout est déjà enregistré. */}
+          <button
+            className="btn btn--ghost"
+            style={{ marginTop: 8 }}
+            disabled={submitting || estEnCours('terminer')}
+            onClick={() => {
+              setActionErreur(null);
+              setError(null);
+              setView('seance');
+            }}
+          >
+            Revenir à ma séance
           </button>
         </section>
       )}
@@ -1413,19 +1717,34 @@ export default function Today() {
               })()}
           </section>
 
-          {/* « Et ensuite ? » : la séance terminée n'est pas un cul-de-sac. */}
-          {contexte?.prochaine_seance && (
-            <section className="card">
-              <div className="card__eyebrow">Ensuite</div>
-              <p style={{ margin: '4px 0 0', fontWeight: 600 }}>
-                {contexte.prochaine_seance.jour_label} —{' '}
-                {typeSeanceMeta(contexte.prochaine_seance.type_seance_prevu).label}
+          {/* « Et ensuite ? » : la séance terminée n'est jamais un cul-de-sac, même quand le
+              programme ne prévoit rien de précis derrière. */}
+          <section className="card">
+            <div className="card__eyebrow">Ensuite</div>
+            {contexte?.prochaine_seance ? (
+              <>
+                <p style={{ margin: '4px 0 0', fontWeight: 600 }}>
+                  {contexte.prochaine_seance.jour_label} —{' '}
+                  {typeSeanceMeta(contexte.prochaine_seance.type_seance_prevu).label}
+                </p>
+                <p className="subtle" style={{ marginTop: 6 }}>
+                  Cette séance sera adaptée à partir de ce que tu viens de réaliser.
+                </p>
+              </>
+            ) : (
+              <p className="subtle" style={{ margin: '4px 0 0' }}>
+                Récupération jusqu’à ta prochaine séance. Ton programme te dit ce qui vient
+                ensuite dans la semaine.
               </p>
-              <p className="subtle" style={{ marginTop: 6 }}>
-                Cette séance sera adaptée à partir de ce que tu viens de réaliser.
-              </p>
-            </section>
-          )}
+            )}
+            <button
+              className="btn btn--primary"
+              style={{ marginTop: 14 }}
+              onClick={() => navigate('/programme')}
+            >
+              Voir mon programme
+            </button>
+          </section>
 
           <div className="editorial-cta">
             <button className="btn btn--ghost" onClick={() => navigate('/historique')}>
@@ -1433,6 +1752,152 @@ export default function Today() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Quitter la séance : trois sorties explicites, aucune perte silencieuse. */}
+      {quitterOuvert && (
+        <div className="modal-overlay" onClick={() => setQuitterOuvert(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="card__title" style={{ clear: 'both', marginBottom: 8 }}>
+              Quitter la séance ?
+            </h2>
+            <p className="subtle" style={{ marginBottom: 16 }}>
+              {totaux.nbValidees > 0
+                ? `Tes ${totaux.nbValidees} série${totaux.nbValidees > 1 ? 's' : ''} sont déjà enregistrées. Elles sont conservées quoi qu'il arrive.`
+                : 'Rien n’a encore été enregistré sur cette séance.'}
+            </p>
+            <button
+              className="btn btn--primary"
+              style={{ marginBottom: 8 }}
+              onClick={() => setQuitterOuvert(false)}
+            >
+              Continuer ma séance
+            </button>
+            <button className="btn btn--ghost" style={{ marginBottom: 8 }} onClick={quitterEnConservant}>
+              Quitter et conserver ma progression
+            </button>
+            {totaux.nbValidees > 0 && (
+              <button className="btn btn--ghost" style={{ marginBottom: 8 }} onClick={ouvrirFinDeSeance}>
+                Terminer la séance maintenant
+              </button>
+            )}
+            <button
+              className="link-discreet"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => {
+                setQuitterOuvert(false);
+                setConfirmationReset(true);
+              }}
+            >
+              Remplacer par une nouvelle séance
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Suppression de la séance du jour : conséquence annoncée avant, jamais après. */}
+      {confirmationReset && (
+        <div className="modal-overlay" onClick={() => setConfirmationReset(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="card__title" style={{ clear: 'both', marginBottom: 8 }}>
+              Générer une nouvelle séance ?
+            </h2>
+            <p className="subtle" style={{ marginBottom: 16 }}>
+              La séance du jour sera supprimée et remplacée par une nouvelle.
+              {totaux.nbValidees > 0
+                ? ` Les ${totaux.nbValidees} série${totaux.nbValidees > 1 ? 's' : ''} que tu as enregistrées aujourd’hui ne compteront plus dans cette séance.`
+                : ''}
+            </p>
+            <LigneErreur message={actionErreur} />
+            <button
+              className="btn btn--ghost"
+              style={{ marginBottom: 8 }}
+              disabled={estEnCours('reset')}
+              onClick={() => {
+                setConfirmationReset(false);
+                setActionErreur(null);
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              className="btn btn--primary"
+              style={{ background: 'var(--danger)' }}
+              disabled={estEnCours('reset')}
+              onClick={() => void handleReset()}
+            >
+              {estEnCours('reset') ? 'Suppression…' : 'Supprimer et régénérer'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {serieASupprimer && (
+        <div className="modal-overlay" onClick={() => setSerieASupprimer(null)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="card__title" style={{ clear: 'both', marginBottom: 8 }}>
+              Supprimer cette série ?
+            </h2>
+            <p className="subtle" style={{ marginBottom: 16 }}>
+              Série {serieASupprimer.serie.numero_serie} ·{' '}
+              {serieASupprimer.serie.repetitions ?? '–'} reps · {serieASupprimer.serie.poids_kg ?? '–'} kg.
+              Elle ne comptera plus dans ta séance ni dans ta progression.
+            </p>
+            <LigneErreur message={actionErreur} />
+            <button
+              className="btn btn--ghost"
+              style={{ marginBottom: 8 }}
+              disabled={estEnCours(`suppr-${serieASupprimer.serie.id}`)}
+              onClick={() => {
+                setSerieASupprimer(null);
+                setActionErreur(null);
+              }}
+            >
+              Garder cette série
+            </button>
+            <button
+              className="btn btn--primary"
+              style={{ background: 'var(--danger)' }}
+              disabled={estEnCours(`suppr-${serieASupprimer.serie.id}`)}
+              onClick={() => void confirmerSuppressionSerie()}
+            >
+              {estEnCours(`suppr-${serieASupprimer.serie.id}`) ? 'Suppression…' : 'Supprimer'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmationRemplacement && (
+        <div className="modal-overlay" onClick={() => setConfirmationRemplacement(null)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="card__title" style={{ clear: 'both', marginBottom: 8 }}>
+              Remplacer par {confirmationRemplacement.nomNouveau} ?
+            </h2>
+            <p className="subtle" style={{ marginBottom: 16 }}>
+              Tes {confirmationRemplacement.nbValidees} série
+              {confirmationRemplacement.nbValidees > 1 ? 's' : ''} déjà réalisée
+              {confirmationRemplacement.nbValidees > 1 ? 's' : ''} sur{' '}
+              {confirmationRemplacement.nomActuel} restent dans ton historique. Les suivantes se
+              feront sur {confirmationRemplacement.nomNouveau}.
+            </p>
+            <LigneErreur message={replaceError} />
+            <button
+              className="btn btn--ghost"
+              style={{ marginBottom: 8 }}
+              disabled={replacing}
+              onClick={() => setConfirmationRemplacement(null)}
+            >
+              Annuler
+            </button>
+            <button
+              className="btn btn--primary"
+              disabled={replacing}
+              onClick={() => void choisirAlternative(confirmationRemplacement.nouvelExerciceId)}
+            >
+              {replacing ? 'Remplacement…' : 'Remplacer'}
+            </button>
+          </div>
+        </div>
       )}
 
       {detailExercice && (
@@ -1467,17 +1932,22 @@ export default function Today() {
               Fermer
             </button>
             <h2 className="card__title" style={{ clear: 'both', marginBottom: 8 }}>
-              Remplacer {bibliotheque[replaceTargetId]?.nom ?? `Exercice #${replaceTargetId}`}
+              Je ne peux pas faire {bibliotheque[replaceTargetId]?.nom ?? `Exercice #${replaceTargetId}`}
             </h2>
+            <p className="subtle" style={{ marginBottom: 12 }}>
+              Douleur, matériel pris, mouvement impossible aujourd’hui : choisis un exercice
+              équivalent. LEVEL ne propose que des alternatives compatibles avec ton matériel,
+              ton niveau et le groupe musculaire prévu.
+            </p>
             {loadingAlternatives && <p className="subtle">Recherche d’alternatives…</p>}
             {!loadingAlternatives && !replaceError && alternatives.length === 0 && (
-              <p className="subtle">Aucune alternative disponible avec ton matériel actuel.</p>
-            )}
-            {replaceError && (
-              <p className="subtle" style={{ color: 'var(--danger)' }}>
-                {replaceError}
+              <p className="subtle">
+                Aucune alternative compatible avec ton matériel actuel. Tu peux passer cet
+                exercice et continuer la séance : il ne sera pas compté comme réalisé, et ta
+                prochaine séance en tiendra compte.
               </p>
             )}
+            <LigneErreur message={replaceError} />
             {!loadingAlternatives &&
               alternatives.map((alt) => (
                 <button
@@ -1486,7 +1956,7 @@ export default function Today() {
                   className="btn btn--ghost"
                   style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 8 }}
                   disabled={replacing}
-                  onClick={() => choisirAlternative(alt.exercice.id)}
+                  onClick={() => demanderRemplacement(alt.exercice.id)}
                 >
                   <strong>{alt.exercice.nom}</strong>
                   <div className="subtle">

@@ -24,6 +24,7 @@ COLONNES_A_AJOUTER = [
     ("series_loggees", "reps_prevues", "INTEGER"),
     ("series_loggees", "charge_prevue_kg", "FLOAT"),
     ("historique_seances", "decision_adaptation", "JSON"),
+    ("historique_seances", "seance_id", "INTEGER"),
     ("seances", "etat_declare_avant", "JSON"),
     ("seances", "decision_adaptation", "JSON"),
     ("exercices_bibliotheque", "pattern_mouvement", "VARCHAR"),
