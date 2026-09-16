@@ -12,7 +12,7 @@ Lancer avec : python3 -m unittest backend.test_etape6 -v
 """
 
 import unittest
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -20,7 +20,12 @@ from sqlalchemy.orm import sessionmaker
 
 import main as main_module
 import models
-from main import ZONES_SENSIBLES_VALIDES, _appliquer_calibrage_temps, _construire_contexte_historique
+from main import (
+    JOURS_VALIDITE_ZONE_SENSIBLE,
+    ZONES_SENSIBLES_VALIDES,
+    _appliquer_calibrage_temps,
+    _construire_contexte_historique,
+)
 from regles_seance import appliquer_garde_fous
 
 
@@ -202,8 +207,24 @@ class TestFluxZonesSensibles(unittest.TestCase):
         self.client.post("/api/seance/terminer", json={"seance_id": 1, "zone_sensible": "épaules"})
 
         with self.TestSessionLocal() as db:
-            contexte = _construire_contexte_historique(db)
+            contexte = _construire_contexte_historique(db, date(2026, 8, 1))
         self.assertIn("épaules", contexte["zones_sensibles_recentes"])
+
+    def test_zone_signalee_expire_apres_la_fenetre_de_validite(self):
+        """Une gêne signalée une fois ne doit pas exclure son groupe musculaire indéfiniment :
+        passé JOURS_VALIDITE_ZONE_SENSIBLE jours, elle sort de zones_sensibles_recentes."""
+        with self.TestSessionLocal() as db:
+            self._creer_seance_et_series(db)
+        self.client.post("/api/seance/terminer", json={"seance_id": 1, "zone_sensible": "épaules"})
+        signalee_le = date(2026, 8, 1)
+
+        with self.TestSessionLocal() as db:
+            dernier_jour_valide = signalee_le + timedelta(days=JOURS_VALIDITE_ZONE_SENSIBLE)
+            contexte = _construire_contexte_historique(db, dernier_jour_valide)
+            self.assertIn("épaules", contexte["zones_sensibles_recentes"])
+
+            contexte = _construire_contexte_historique(db, dernier_jour_valide + timedelta(days=1))
+            self.assertEqual(contexte["zones_sensibles_recentes"], [])
 
     def test_exclusion_generee_pour_type_de_seance_concerne(self):
         # "force" sollicite notamment "épaules" (regles_seance.GROUPES_PAR_TYPE_SEANCE) :
@@ -241,7 +262,7 @@ class TestFluxZonesSensibles(unittest.TestCase):
         self.client.post("/api/seance/terminer", json={"seance_id": 1, "zone_sensible": "jambes"})
 
         with self.TestSessionLocal() as db:
-            contexte = _construire_contexte_historique(db)
+            contexte = _construire_contexte_historique(db, date(2026, 8, 1))
 
         recommandation = {"type_seance_suggere": "force", "ajustement_volume_pct": 0.0}
         reco, _ = appliquer_garde_fous(

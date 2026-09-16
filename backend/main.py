@@ -569,10 +569,18 @@ def list_historique_seances(db: Session = Depends(get_db)):
 # ---------- Génération de séance assistée (moteur de règles + Mistral) ----------
 
 
-def _construire_contexte_historique(db: Session) -> dict:
+# Fenêtre de validité d'une zone sensible signalée en fin de séance. Au-delà, la zone n'est
+# plus considérée comme sensible : sans cette borne, une gêne signalée une seule fois excluait
+# son groupe musculaire de TOUTES les séances suivantes tant qu'elle restait dans les 30
+# dernières entrées d'historique — plusieurs mois pour un joueur régulier, alors que le
+# garde-fou annonce une zone « déclarée » (voir regles_seance.appliquer_garde_fous).
+JOURS_VALIDITE_ZONE_SENSIBLE = 14
+
+
+def _construire_contexte_historique(db: Session, today: date) -> dict:
     """Construit le contexte d'historique attendu par regles_seance.generer_recommandation :
     les 3 dernières séances par type, les 3 dernières toutes confondues, et les zones
-    sensibles signalées récemment.
+    sensibles signalées récemment (dans les JOURS_VALIDITE_ZONE_SENSIBLE derniers jours).
 
     Note : type_seance n'est renseigné avec les catégories canoniques (force,
     explosivité_vitesse, esthétique, décharge) que pour les séances créées via
@@ -603,7 +611,8 @@ def _construire_contexte_historique(db: Session) -> dict:
         par_type.setdefault(r.type_seance, []).append(entry)
         if len(recent) < 3:
             recent.append(entry)
-        if r.zone_sensible_signalee and r.zone_sensible_signalee not in zones_sensibles_recentes:
+        zone_encore_valide = (today - r.date).days <= JOURS_VALIDITE_ZONE_SENSIBLE
+        if r.zone_sensible_signalee and zone_encore_valide and r.zone_sensible_signalee not in zones_sensibles_recentes:
             zones_sensibles_recentes.append(r.zone_sensible_signalee)
         # Non tronqué à 3 comme `recent`/`par_type` : sert uniquement à _resoudre_chaine_remplacement
         # (voir plus bas), qui doit pouvoir remonter au-delà des 3 dernières séances pour retrouver
@@ -1243,7 +1252,7 @@ def generer_seance(
         )
 
     profil_dict = schemas.ProfilOut.model_validate(profil).model_dump(mode="json")
-    historique_ctx = _construire_contexte_historique(db)
+    historique_ctx = _construire_contexte_historique(db, today)
     etat_du_jour = payload.model_dump()
 
     # ---- Programme actif : cadre hebdomadaire (gabarit + trajectoire + phase) ----

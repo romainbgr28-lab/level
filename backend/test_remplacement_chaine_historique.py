@@ -207,7 +207,7 @@ class TestChaineRemplacementEntreSeances(unittest.TestCase):
         seance4_id = reponse4.json()["id"]
 
         with self.TestSessionLocal() as db:
-            historique_ctx = main_module._construire_contexte_historique(db)
+            historique_ctx = main_module._construire_contexte_historique(db, date(2026, 8, 13))
         chaine = main_module._resoudre_chaine_remplacement(3, historique_ctx["toutes"])
         self.assertIn(2, chaine, "C doit retrouver B comme prédécesseur immédiat")
         self.assertIn(1, chaine, "C doit retrouver A transitivement via B")
@@ -245,7 +245,7 @@ class TestChaineRemplacementEntreSeances(unittest.TestCase):
         self._terminer(seance2_id)
 
         with self.TestSessionLocal() as db:
-            historique_ctx = main_module._construire_contexte_historique(db)
+            historique_ctx = main_module._construire_contexte_historique(db, date(2026, 8, 13))
         chaine_d = main_module._resoudre_chaine_remplacement(4, historique_ctx["toutes"])
         self.assertEqual(chaine_d, [], "D est indépendant du remplacement A -> B : sa chaîne doit rester vide")
 

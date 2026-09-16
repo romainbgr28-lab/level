@@ -109,7 +109,7 @@ class TestAdaptationRepsBoutEnBout(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
 
         with self.TestSessionLocal() as db:
-            contexte = main_module._construire_contexte_historique(db)
+            contexte = main_module._construire_contexte_historique(db, date(2026, 8, 20))
             entry = contexte["par_type"]["force"][0]
             self.assertIn("exercices_realises", entry)
 
