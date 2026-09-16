@@ -1752,7 +1752,10 @@ def terminer_seance(payload: schemas.TerminerSeancePayload, db: Session = Depend
         today_streak.sport_fait = 1
     db.commit()
 
-    xp_gagne = _calculer_xp(rpe, pourcentage_complete, _current_streak(db))
+    # Streak arrêté à la date de la séance terminée, et non à la date système : c'est la même
+    # référence temporelle que le reste de terminer_seance (phase calendaire, niveau observé),
+    # et c'est ce qui rend l'XP correcte quand la séance est clôturée sous date simulée.
+    xp_gagne = _calculer_xp(rpe, pourcentage_complete, _current_streak(db, seance.date))
 
     profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
     calendrier = profil.calendrier_matchs if profil else None
@@ -1903,7 +1906,11 @@ _valider_gabarit_contre_structure = moteur_decision.valider_gabarit_contre_struc
 
 
 @app.post("/api/programme/generer", response_model=schemas.ProgrammeOut)
-def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = Depends(get_db)):
+def generer_programme(
+    payload: schemas.ProgrammeGenererPayload,
+    db: Session = Depends(get_db),
+    today: date = Depends(get_current_date),
+):
     profil = db.query(models.Profil).order_by(models.Profil.id.desc()).first()
     if not profil:
         raise HTTPException(status_code=400, detail="Aucun profil enregistré : termine l'onboarding avant de générer un programme.")
@@ -1986,7 +1993,7 @@ def generer_programme(payload: schemas.ProgrammeGenererPayload, db: Session = De
 
     programme = models.Programme(
         utilisateur_id=utilisateur_id,
-        date_debut=date.today(),
+        date_debut=today,
         duree_semaines=DUREE_SEMAINES_PROGRAMME_DEFAUT,
         phases=data["phases"],
         gabarit_hebdomadaire=data["gabarit_hebdomadaire"],
@@ -2013,8 +2020,10 @@ def get_programme_actif(db: Session = Depends(get_db)):
 # ---------- Streaks ----------
 
 @app.get("/api/streaks", response_model=list[schemas.StreakOut])
-def list_streaks(days: int = 35, db: Session = Depends(get_db)):
-    since = date.today() - timedelta(days=days - 1)
+def list_streaks(
+    days: int = 35, db: Session = Depends(get_db), today: date = Depends(get_current_date)
+):
+    since = today - timedelta(days=days - 1)
     rows = db.query(models.Streak).filter(models.Streak.date >= since).order_by(models.Streak.date.asc()).all()
     by_date = {r.date: r for r in rows}
     result = []
@@ -2038,10 +2047,10 @@ def _active_streak_dates(db: Session) -> set[date]:
     return {r.date for r in rows}
 
 
-def _current_streak(db: Session) -> int:
+def _current_streak(db: Session, today: date) -> int:
     active_dates = _active_streak_dates(db)
     current_streak = 0
-    cursor = date.today()
+    cursor = today
     while cursor in active_dates:
         current_streak += 1
         cursor -= timedelta(days=1)
@@ -2049,14 +2058,14 @@ def _current_streak(db: Session) -> int:
 
 
 @app.get("/api/stats", response_model=schemas.StatsOut)
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(db: Session = Depends(get_db), today: date = Depends(get_current_date)):
     total_seances = db.query(models.Seance).filter(models.Seance.statut == "terminee").count()
     total_modules = db.query(models.SessionApprentissage).count()
 
     rpe_avg = db.query(func.avg(models.Seance.rpe)).filter(models.Seance.rpe.isnot(None)).scalar()
 
     active_dates = _active_streak_dates(db)
-    current_streak = _current_streak(db)
+    current_streak = _current_streak(db, today)
 
     record_streak = 0
     running = 0
