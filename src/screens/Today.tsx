@@ -85,7 +85,7 @@ const DIFFICULTE_OPTIONS: { value: ApiDifficulte; label: string }[] = [
 // Vues de l'écran Aujourd'hui. `reprise` : une séance déjà commencée a été retrouvée au
 // chargement (l'app a été fermée en cours de séance) — on demande à l'utilisateur ce qu'il veut
 // en faire plutôt que de le replonger dedans sans prévenir, ou pire, de repartir de zéro.
-type View = 'loading' | 'no-seance' | 'form' | 'reprise' | 'seance' | 'fin-seance' | 'terminee';
+type View = 'loading' | 'no-seance' | 'form' | 'reprise' | 'apercu' | 'seance' | 'fin-seance' | 'terminee';
 
 // Début de séance persisté : sans ça, fermer puis rouvrir l'app remettait le chronomètre à
 // zéro et la durée réelle envoyée en fin de séance était fausse. Une seule séance à la fois,
@@ -126,6 +126,22 @@ function effacerDebutSeance(): void {
 // 1..10. Renvoie null si aucune série n'a été validée avec une difficulté (rien à déduire).
 const RPE_PAR_DIFFICULTE: Record<ApiDifficulte, number> = { facile: 5, comme_prevu: 7, dur: 9 };
 
+// Fin de séance : quatre ressentis suffisent à recueillir un RPE exploitable — la grille 1-10
+// n'apportait rien à l'utilisateur, seulement au backend qui n'en a de toute façon besoin que
+// comme signal approximatif (cf. RPE_PAR_DIFFICULTE, déjà une approximation à 3 valeurs).
+const RESSENTI_OPTIONS: { label: string; rpe: number }[] = [
+  { label: 'Facile', rpe: 3 },
+  { label: 'Bien', rpe: 6 },
+  { label: 'Difficile', rpe: 8 },
+  { label: 'Très difficile', rpe: 10 },
+];
+
+function ressentiProche(rpeValue: number): string {
+  return RESSENTI_OPTIONS.reduce((best, o) =>
+    Math.abs(o.rpe - rpeValue) < Math.abs(best.rpe - rpeValue) ? o : best
+  ).label;
+}
+
 export function rpeSuggere(series: ApiSerieLoggee[]): number | null {
   const notes = series
     .filter((s) => s.coche && s.difficulte)
@@ -134,6 +150,14 @@ export function rpeSuggere(series: ApiSerieLoggee[]): number | null {
   if (notes.length === 0) return null;
   const moyenne = notes.reduce((a, b) => a + b, 0) / notes.length;
   return Math.min(10, Math.max(1, Math.round(moyenne)));
+}
+
+function nomSeance(s: ApiSeance | ApiSeanceGeneree): string {
+  return 'nom' in s ? s.nom : s.nom_seance;
+}
+
+function dureeSeanceMin(s: ApiSeance | ApiSeanceGeneree): number | null {
+  return 'duree_min' in s ? s.duree_min : s.duree_prevue;
 }
 
 function formatDuree(totalSeconds: number): string {
@@ -160,16 +184,6 @@ function chargeCible(chargeIndicative?: string | null): number | null {
 // doit toujours savoir ce qu'il fait aujourd'hui et pourquoi, y compris quand la réponse est
 // « rien ». Aucune donnée n'est inventée ici : tout vient du contexte, et l'absence de contexte
 // est affichée comme telle.
-function ProchaineSeanceLigne({ contexte }: { contexte: ApiContexteJour }) {
-  const prochaine = contexte.prochaine_seance;
-  if (!prochaine) return null;
-  return (
-    <p className="subtle" style={{ margin: '0 0 14px' }}>
-      Prochaine séance : {prochaine.jour_label} — {typeSeanceMeta(prochaine.type_seance_prevu).label}
-    </p>
-  );
-}
-
 function ContexteProgrammeLigne({ contexte }: { contexte: ApiContexteJour }) {
   if (contexte.semaine_programme == null) return null;
   return (
@@ -184,7 +198,7 @@ function EtatDuJourSansSeance({
   contexte,
   autoGenerationErreur,
   onGenerer,
-  onSeanceLegere,
+  onAdapter,
   onVoirProgramme,
   onVoirProfil,
   onReessayer,
@@ -192,7 +206,7 @@ function EtatDuJourSansSeance({
   contexte: ApiContexteJour | null;
   autoGenerationErreur: string | null;
   onGenerer: () => void;
-  onSeanceLegere: () => void;
+  onAdapter: () => void;
   onVoirProgramme: () => void;
   onVoirProfil: () => void;
   onReessayer: () => void;
@@ -235,19 +249,17 @@ function EtatDuJourSansSeance({
 
   if (contexte.statut === 'match') {
     return (
-      <section className="card">
-        <div className="card__eyebrow">Aujourd’hui</div>
-        <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour de match</p>
-        <p className="subtle" style={{ margin: '0 0 6px' }}>
-          Aucune séance LEVEL aujourd’hui : rien ne doit compromettre ta performance du jour.
+      <section className="apercu apercu--repos">
+        <div className="apercu__eyebrow">Aujourd’hui</div>
+        <h2 className="apercu__title">Jour de match</h2>
+        <p className="apercu__lead">
+          Rien ne doit compromettre ta performance du jour.
         </p>
-        <ContexteProgrammeLigne contexte={contexte} />
-        <ProchaineSeanceLigne contexte={contexte} />
-        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProgramme}>
-          Voir mon programme
+        <button className="btn btn--primary apercu__cta" onClick={onVoirProgramme}>
+          Voir ma semaine →
         </button>
-        <button className="btn btn--ghost" onClick={onSeanceLegere}>
-          Faire quand même une activation très légère
+        <button type="button" className="link-discreet apercu__adapter" onClick={onAdapter}>
+          Adapter
         </button>
       </section>
     );
@@ -255,22 +267,17 @@ function EtatDuJourSansSeance({
 
   if (contexte.statut === 'indisponible') {
     return (
-      <section className="card">
-        <div className="card__eyebrow">Aujourd’hui</div>
-        <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Jour non disponible</p>
-        <p className="subtle" style={{ margin: '0 0 6px' }}>
-          Tu n’as pas déclaré de disponibilité le {contexte.jour_label.toLowerCase()} : LEVEL ne
-          place donc rien aujourd’hui.
+      <section className="apercu apercu--repos">
+        <div className="apercu__eyebrow">Aujourd’hui</div>
+        <h2 className="apercu__title">Jour non disponible</h2>
+        <p className="apercu__lead">
+          Aucune disponibilité déclarée le {contexte.jour_label.toLowerCase()}.
         </p>
-        <ProchaineSeanceLigne contexte={contexte} />
-        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProfil}>
+        <button className="btn btn--primary apercu__cta" onClick={onVoirProfil}>
           Modifier mes disponibilités
         </button>
-        <button className="btn btn--ghost" style={{ marginBottom: 8 }} onClick={onSeanceLegere}>
-          Je veux quand même faire une séance légère
-        </button>
-        <button className="btn btn--ghost" onClick={onVoirProgramme}>
-          Voir mon programme
+        <button type="button" className="link-discreet apercu__adapter" onClick={onAdapter}>
+          Adapter
         </button>
       </section>
     );
@@ -278,21 +285,19 @@ function EtatDuJourSansSeance({
 
   if (contexte.statut === 'repos') {
     return (
-      <section className="card">
-        <div className="card__eyebrow">Aujourd’hui</div>
-        <p style={{ margin: '4px 0 14px', fontWeight: 600 }}>Repos prévu</p>
-        <p className="subtle" style={{ margin: '0 0 6px' }}>
+      <section className="apercu apercu--repos">
+        <div className="apercu__eyebrow">Aujourd’hui</div>
+        <h2 className="apercu__title">Jour de repos</h2>
+        <p className="apercu__lead">
           {contexte.phase_calendaire === 'lendemain_match'
-            ? 'Lendemain de match : récupération prioritaire.'
-            : 'Aucune séance programmée aujourd’hui : la récupération fait partie du programme.'}
+            ? 'Lendemain de match : récupère aujourd’hui.'
+            : 'Tu as suffisamment chargé cette semaine. Récupère aujourd’hui.'}
         </p>
-        <ContexteProgrammeLigne contexte={contexte} />
-        <ProchaineSeanceLigne contexte={contexte} />
-        <button className="btn btn--primary" style={{ marginBottom: 8 }} onClick={onVoirProgramme}>
-          Voir mon programme
+        <button className="btn btn--primary apercu__cta" onClick={onVoirProgramme}>
+          Voir ma semaine →
         </button>
-        <button className="btn btn--ghost" onClick={onSeanceLegere}>
-          Je veux quand même faire une séance légère
+        <button type="button" className="link-discreet apercu__adapter" onClick={onAdapter}>
+          Adapter
         </button>
       </section>
     );
@@ -395,6 +400,12 @@ export default function Today() {
   const [enCours, setEnCours] = useState<string[]>([]);
   const [actionErreur, setActionErreur] = useState<string | null>(null);
   const [quitterOuvert, setQuitterOuvert] = useState(false);
+  // ---- Adapter (mécanisme universel : quelque chose a changé -> Adapter) ----
+  const [adapterOuvert, setAdapterOuvert] = useState(false);
+  const [adapterEtape, setAdapterEtape] = useState<'menu' | 'temps' | 'autre'>('menu');
+  const [adapterTexte, setAdapterTexte] = useState('');
+  const [adapterEnCours, setAdapterEnCours] = useState(false);
+  const [adapterErreur, setAdapterErreur] = useState<string | null>(null);
   const [confirmationReset, setConfirmationReset] = useState(false);
   const [serieASupprimer, setSerieASupprimer] = useState<{
     exerciceId: number;
@@ -479,7 +490,7 @@ export default function Today() {
         // Accroc réseau sur les séries seules : on n'empêche pas d'entrer dans la séance, elles
         // seront rechargées par l'effet de la vue séance.
       }
-      setView(dejaCommencee ? 'reprise' : 'seance');
+      setView(dejaCommencee ? 'reprise' : 'apercu');
       return;
     }
 
@@ -502,7 +513,7 @@ export default function Today() {
           forcer_seance_legere: false,
         });
         setSeance(generee);
-        setView('seance');
+        setView('apercu');
         return;
       } catch (e) {
         // Si la génération automatique échoue, on retombe sur le flux manuel (bouton fallback),
@@ -527,7 +538,7 @@ export default function Today() {
   useEffect(() => {
     // Également chargé en vue "terminee" : le récapitulatif de fin affiche les séries réellement
     // enregistrées, y compris après un rechargement de la page (où `resultat` est perdu).
-    if ((view !== 'seance' && view !== 'terminee' && view !== 'reprise') || !seance) return;
+    if ((view !== 'seance' && view !== 'terminee' && view !== 'reprise' && view !== 'apercu') || !seance) return;
     // Échecs tolérés : ces chargements enrichissent l'affichage (noms d'exercices, séries déjà
     // enregistrées, performance précédente). Une panne réseau ne doit pas vider la séance en
     // cours ni provoquer une exception non gérée — l'écran reste utilisable en l'état.
@@ -882,6 +893,59 @@ export default function Today() {
     }
   }
 
+  function ouvrirAdapter() {
+    setAdapterEtape('menu');
+    setAdapterTexte('');
+    setAdapterErreur(null);
+    setAdapterOuvert(true);
+  }
+
+  function fermerAdapter() {
+    if (adapterEnCours) return;
+    setAdapterOuvert(false);
+    setAdapterEtape('menu');
+    setAdapterTexte('');
+    setAdapterErreur(null);
+  }
+
+  /** Applique une adaptation via le moteur de décision existant (genererSeance) : jamais de
+   * logique de recommandation côté frontend. Si une séance du jour existe déjà et n'a pas été
+   * commencée, elle est supprimée avant régénération — sinon le backend, idempotent, renverrait
+   * l'ancienne séance inchangée. */
+  async function appliquerAdaptation(patch: Partial<ApiEtatDuJour>) {
+    setAdapterEnCours(true);
+    setAdapterErreur(null);
+    try {
+      if (seance) {
+        await deleteTodaySeance();
+        effacerDebutSeance();
+      }
+      const payload: ApiEtatDuJour = {
+        sommeil: null,
+        motivation: null,
+        temps_dispo: null,
+        envie_texte: null,
+        entrainement_club_semaine: null,
+        type_seance_force: null,
+        forcer_seance_legere: false,
+        ...patch,
+      };
+      const generee = await genererSeance(payload);
+      setSeance(generee);
+      setSeriesParExercice({});
+      setAutoGenerationErreur(null);
+      donneesModifiees('seance');
+      setAdapterOuvert(false);
+      setAdapterEtape('menu');
+      setAdapterTexte('');
+      setView('apercu');
+    } catch (e) {
+      setAdapterErreur(messageErreur(e, "Cette adaptation n'a pas pu être appliquée."));
+    } finally {
+      setAdapterEnCours(false);
+    }
+  }
+
   async function handleGenerer() {
     setSubmitting(true);
     setError(null);
@@ -900,7 +964,7 @@ export default function Today() {
       const generee = await genererSeance(payload);
       setSeance(generee);
       setAutoGenerationErreur(null);
-      setView('seance');
+      setView('apercu');
     } catch (e) {
       setError(messageErreur(e, "Ta séance n'a pas pu être générée."));
     } finally {
@@ -1011,7 +1075,7 @@ export default function Today() {
 
       {/* Repère de semaine : utile pour se situer avant/après la séance, retiré pendant
           l'effort où seule l'action en cours compte. */}
-      {contexte && contexte.semaine.length > 0 && view !== 'seance' && view !== 'fin-seance' && (
+      {contexte && contexte.semaine.length > 0 && view !== 'seance' && view !== 'fin-seance' && view !== 'apercu' && (
         <SemaineStrip jours={contexte.semaine} />
       )}
 
@@ -1037,10 +1101,7 @@ export default function Today() {
               contexte={contexte}
               autoGenerationErreur={autoGenerationErreur}
               onGenerer={() => setView('form')}
-              onSeanceLegere={() => {
-                setForcerSeanceLegere(true);
-                setView('form');
-              }}
+              onAdapter={ouvrirAdapter}
               onVoirProgramme={() => navigate('/programme')}
               onVoirProfil={() => navigate('/profil')}
               onReessayer={() => void handleReessayerGeneration()}
@@ -1189,6 +1250,49 @@ export default function Today() {
             }}
           >
             Annuler
+          </button>
+        </section>
+      )}
+
+      {/* Aperçu minimal avant d'entrer dans la séance : LEVEL a déjà décidé, l'utilisateur n'a
+          qu'à comprendre quoi et combien de temps, pas à parcourir toute la séance. */}
+      {view === 'apercu' && seance && (
+        <section className="apercu">
+          <div className="apercu__eyebrow">
+            {contexte?.phase_calendaire === 'veille_match'
+              ? 'Match demain'
+              : typeSeancePrevu
+                ? typeSeanceMeta(typeSeancePrevu).label
+                : 'Séance du jour'}
+          </div>
+          <h2 className="apercu__title">{nomSeance(seance)}</h2>
+          {dureeSeanceMin(seance) != null && <div className="apercu__duree">{dureeSeanceMin(seance)} min</div>}
+
+          {seance.exercices[0] && (
+            <div className="apercu__preview">
+              <div className="apercu__preview-name">
+                {bibliotheque[seance.exercices[0].exercice_id]?.nom ?? '…'}
+              </div>
+              <div className="apercu__preview-meta">
+                {seance.exercices[0].charge_indicative ? `${seance.exercices[0].charge_indicative} · ` : ''}
+                {seance.exercices[0].series} × {seance.exercices[0].repetitions}
+              </div>
+            </div>
+          )}
+
+          <button className="btn btn--primary apercu__cta" onClick={() => setView('seance')}>
+            Commencer →
+          </button>
+
+          {'explication' in seance && seance.explication && (
+            <details className="editorial-why apercu__why">
+              <summary>Pourquoi ?</summary>
+              <p>{seance.explication}</p>
+            </details>
+          )}
+
+          <button type="button" className="link-discreet apercu__adapter" onClick={ouvrirAdapter}>
+            Adapter
           </button>
         </section>
       )}
@@ -1607,62 +1711,65 @@ export default function Today() {
       )}
 
       {view === 'fin-seance' && seance && (
-        <section className="card">
-          <div className="card__eyebrow">Fin de séance</div>
-          <p className="subtle" style={{ margin: '4px 0 12px' }}>
-            {totaux.nbValidees} séries validées · {Math.round(totaux.volume)} kg de volume total ·{' '}
-            {formatDuree(elapsedSec)} écoulées
+        <section className="apercu">
+          <div className="apercu__eyebrow">Séance terminée</div>
+          <h2 className="apercu__title">{formatDuree(elapsedSec)}</h2>
+          <p className="apercu__lead">
+            {totaux.nbValidees} série{totaux.nbValidees > 1 ? 's' : ''}
           </p>
-          <div className="section-title">
-            {rpe === null
-              ? 'RPE ressenti sur la séance'
-              : 'RPE (déduit de tes validations rapides — ajuste si besoin)'}
-          </div>
-          <div className="rpe-grid">
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+
+          <div className="section-title">Comment c’était ?</div>
+          <div className="ressenti-grid">
+            {RESSENTI_OPTIONS.map((o) => (
               <button
-                key={n}
+                key={o.label}
                 type="button"
-                className={`rpe-btn ${rpe === n ? 'selected' : ''}`}
-                onClick={() => setRpe(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          <div className="section-title">Ressenti général (optionnel)</div>
-          <textarea
-            className="textarea"
-            placeholder="Un mot sur la séance…"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          <div className="section-title">Zone sensible ressentie pendant la séance (optionnel)</div>
-          <div className="tag-row">
-            {ZONE_SENSIBLE_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                className={`tag tag--selectable ${zoneSensible === o.value ? 'tag--active' : ''}`}
-                onClick={() => setZoneSensible(o.value)}
+                className={`btn btn--ghost ressenti-btn ${rpe !== null && ressentiProche(rpe) === o.label ? 'ressenti-btn--active' : ''}`}
+                onClick={() => setRpe(o.rpe)}
               >
                 {o.label}
               </button>
             ))}
           </div>
+
+          <details className="editorial-why" style={{ margin: '20px 0 0' }}>
+            <summary>Plus de détails</summary>
+            <div style={{ marginTop: 14 }}>
+              <div className="section-title">Ressenti général (optionnel)</div>
+              <textarea
+                className="textarea"
+                placeholder="Un mot sur la séance…"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <div className="section-title">Zone sensible ressentie pendant la séance (optionnel)</div>
+              <div className="tag-row">
+                {ZONE_SENSIBLE_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    className={`tag tag--selectable ${zoneSensible === o.value ? 'tag--active' : ''}`}
+                    onClick={() => setZoneSensible(o.value)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </details>
+
           <LigneErreur message={actionErreur ?? error} />
           <button
-            className="btn btn--primary"
-            style={{ marginTop: 14 }}
-            disabled={submitting || estEnCours('terminer')}
+            className="btn btn--primary apercu__cta"
+            disabled={submitting || estEnCours('terminer') || rpe === null}
             onClick={handleTerminer}
           >
-            {submitting || estEnCours('terminer') ? 'Enregistrement…' : 'Valider la fin de séance'}
+            {submitting || estEnCours('terminer') ? 'Enregistrement…' : 'Valider'}
           </button>
           {/* Changement d'avis : revenir à la séance ne perd rien, tout est déjà enregistré. */}
           <button
-            className="btn btn--ghost"
-            style={{ marginTop: 8 }}
+            type="button"
+            className="link-discreet apercu__adapter"
             disabled={submitting || estEnCours('terminer')}
             onClick={() => {
               setActionErreur(null);
@@ -1791,6 +1898,124 @@ export default function Today() {
             >
               Remplacer par une nouvelle séance
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Adapter : le mécanisme universel de LEVEL. Options contextuelles et courtes, jamais une
+          liste exhaustive — « Autre » ouvre la porte au langage naturel pour le reste. */}
+      {adapterOuvert && (
+        <div className="modal-overlay" onClick={fermerAdapter}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="card__title" style={{ clear: 'both', marginBottom: 12 }}>
+              Adapter la séance
+            </h2>
+
+            {adapterEtape === 'menu' && (
+              <>
+                {adapterEnCours && (
+                  <p className="subtle" style={{ margin: '0 0 12px' }}>
+                    Adaptation en cours…
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--ghost adapter-option"
+                  disabled={adapterEnCours}
+                  onClick={() => void appliquerAdaptation({ motivation: 'Faible' })}
+                >
+                  Je suis fatigué
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost adapter-option"
+                  disabled={adapterEnCours}
+                  onClick={() => setAdapterEtape('temps')}
+                >
+                  Je manque de temps
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost adapter-option"
+                  disabled={adapterEnCours}
+                  onClick={() => void appliquerAdaptation({ forcer_seance_legere: true })}
+                >
+                  Je ne peux pas faire cette séance
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost adapter-option"
+                  disabled={adapterEnCours}
+                  onClick={() => setAdapterEtape('autre')}
+                >
+                  Autre
+                </button>
+              </>
+            )}
+
+            {adapterEtape === 'temps' && (
+              <>
+                <p className="subtle" style={{ margin: '0 0 12px' }}>
+                  Combien de temps as-tu aujourd’hui ?
+                </p>
+                {['15 min', '30 min', '45 min'].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className="btn btn--ghost adapter-option"
+                    disabled={adapterEnCours}
+                    onClick={() => void appliquerAdaptation({ temps_dispo: t })}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </>
+            )}
+
+            {adapterEtape === 'autre' && (
+              <>
+                <textarea
+                  className="textarea"
+                  placeholder="Ex : je pars en vacances vendredi, j’ai mal à l’épaule, je n’ai que des haltères…"
+                  value={adapterTexte}
+                  onChange={(e) => setAdapterTexte(e.target.value)}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  style={{ marginTop: 10 }}
+                  disabled={adapterEnCours || !adapterTexte.trim()}
+                  onClick={() => void appliquerAdaptation({ envie_texte: adapterTexte.trim() })}
+                >
+                  {adapterEnCours ? 'Adaptation…' : 'Envoyer'}
+                </button>
+              </>
+            )}
+
+            <LigneErreur message={adapterErreur} />
+
+            {adapterEtape !== 'menu' ? (
+              <button
+                type="button"
+                className="link-discreet"
+                style={{ marginTop: 12 }}
+                disabled={adapterEnCours}
+                onClick={() => setAdapterEtape('menu')}
+              >
+                ← Retour
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="link-discreet"
+                style={{ marginTop: 12 }}
+                disabled={adapterEnCours}
+                onClick={fermerAdapter}
+              >
+                Annuler
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -1836,3 +1836,102 @@ p {
   text-align: center;
   font-size: 13px;
 }
+
+/* Aperçu Today : « LEVEL a déjà réfléchi. » Une seule idée par écran, beaucoup de vide, une
+   seule action principale visible. Réutilisé pour repos/match (aucune séance) et fin de séance
+   pour la même sobriété. */
+.apercu {
+  padding: 24px 0 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.apercu__eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.apercu__title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: 10px;
+}
+
+.apercu__duree {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.apercu__preview {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.apercu__preview-name {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.apercu__preview-meta {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.apercu__lead {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-top: 16px;
+  line-height: 1.5;
+}
+
+.apercu__cta {
+  margin-top: 36px;
+}
+
+.apercu--repos .apercu__cta {
+  margin-top: 28px;
+}
+
+.apercu__why {
+  margin-top: 18px;
+}
+
+.apercu__adapter {
+  align-self: center;
+  margin-top: 14px;
+}
+
+/* Bottom sheet « Adapter » : options contextuelles courtes, empilées, pas de grille dense. */
+.adapter-option {
+  display: block;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+/* Fin de séance : quatre ressentis, un seul mot chacun. */
+.ressenti-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ressenti-btn {
+  width: 100%;
+}
+
+.ressenti-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
