@@ -197,5 +197,30 @@ class TestVolumeParSemaine(unittest.TestCase):
         self.assertEqual(points[0]["date"], "2026-03-09")
 
 
+
+class TestBornesDesParametres(unittest.TestCase):
+    """Les fenêtres viennent de paramètres de requête : aucune valeur ne doit produire une
+    fenêtre vide, négative ou démesurée."""
+
+    def test_jours_zero_ou_negatif_ramene_a_une_journee(self):
+        for jours in (0, -5):
+            b = bilan.construire_bilan([_seance(0)], [], AUJOURDHUI, jours=jours)
+            self.assertEqual(b["jours_fenetre"], 1)
+            self.assertEqual(b["periode_debut"], b["periode_fin"])
+            self.assertEqual(b["seances_realisees"], 1)
+
+    def test_jours_demesure_plafonne(self):
+        b = bilan.construire_bilan([], [], AUJOURDHUI, jours=10_000)
+        self.assertEqual(b["jours_fenetre"], bilan.JOURS_FENETRE_MAX)
+
+    def test_semaines_zero_ou_negatif_ramene_a_une_semaine(self):
+        points = bilan.volume_par_semaine([_serie(0, "Bench")], AUJOURDHUI, semaines=0)
+        self.assertEqual(len(points), 1)
+
+    def test_semaines_demesure_plafonne(self):
+        points = bilan.volume_par_semaine([_serie(0, "Bench")], AUJOURDHUI, semaines=100_000)
+        self.assertLessEqual(len(points), bilan.SEMAINES_MAX)
+
+
 if __name__ == "__main__":
     unittest.main()

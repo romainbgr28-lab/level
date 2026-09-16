@@ -23,6 +23,11 @@ SEUIL_PROGRESSION_PCT = 2.0
 # et lisible, pas exhaustif.
 MAX_EXERCICES_LISTES = 3
 
+# Bornes appliquées aux paramètres de fenêtre exposés par l'API (voir main.py) : un paramètre de
+# requête ne doit jamais produire une fenêtre vide, négative, ou assez large pour être coûteuse.
+JOURS_FENETRE_MAX = 366
+SEMAINES_MAX = 104
+
 
 def _fenetre(debut: date, fin: date, valeur: date) -> bool:
     return debut <= valeur <= fin
@@ -91,6 +96,10 @@ def construire_bilan(
                 "repetitions": int|None, "coche": bool}] — séries loguées, toutes fenêtres
               confondues (le filtrage temporel est fait ici).
     """
+    # `jours` vient d'un paramètre de requête : on le borne pour qu'une valeur absurde (0,
+    # négative, ou énorme) ne produise pas une fenêtre incohérente ou une requête coûteuse.
+    jours = max(1, min(int(jours), JOURS_FENETRE_MAX))
+
     fin = aujourdhui
     debut = aujourdhui - timedelta(days=jours - 1)
     fin_prec = debut - timedelta(days=1)
@@ -174,6 +183,7 @@ def volume_par_semaine(series: list[dict], aujourdhui: date, semaines: int = 8) 
     Les semaines antérieures à la toute première série loguée sont écartées : elles diraient
     "0 kg" pour une période où l'utilisateur n'utilisait simplement pas encore l'application.
     """
+    semaines = max(1, min(int(semaines), SEMAINES_MAX))
     cochees = [s for s in series if s.get("coche") and s.get("date")]
     if not cochees:
         return []

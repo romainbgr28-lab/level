@@ -2203,9 +2203,12 @@ def _prochaine_adaptation(db: Session) -> Optional[str]:
         .order_by(models.HistoriqueSeance.date.desc(), models.HistoriqueSeance.id.desc())
         .first()
     )
-    decision = (dernier.decision_adaptation if dernier else None) or {}
+    decision = dernier.decision_adaptation if dernier else None
+    if not isinstance(decision, dict):
+        # Colonne JSON : une entrée ancienne ou malformée ne doit pas faire échouer le bilan.
+        return None
     raisons = decision.get("raisons") or []
-    return raisons[0] if raisons else None
+    return raisons[0] if isinstance(raisons, list) and raisons else None
 
 
 @app.get("/api/bilan/hebdomadaire", response_model=schemas.BilanOut)
